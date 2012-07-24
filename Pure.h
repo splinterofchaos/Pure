@@ -99,13 +99,34 @@ constexpr auto find_if( const F& f, Container&& cont )
 template< typename Container, typename F >
 constexpr bool all( const F& f, const Container& cont )
 {
-    return std::all_of( begin(cont), end(cont), f );
+    return std::all_of( std::begin(cont), std::end(cont), f );
 }
 
 template< typename Container, typename Value, typename F >
-constexpr Value fold( const F& f, const Value& val, const Container& cont )
+constexpr Value foldl( const F& f, const Value& val, const Container& cont )
 {
-    return std::accumulate( begin(cont), end(cont), val, f );
+    return std::accumulate( std::begin(cont), std::end(cont), val, f );
+}
+
+template< typename Value, typename F, typename Container >
+constexpr Value foldl( F&& f, const Container& cont )
+{
+    return std::accumulate( std::next(std::begin(cont)), std::end(cont), 
+                            cont.front(), f );
+}
+
+template< typename F, typename Value, typename Container >
+constexpr Value foldr( F&& f, Value&& val, const Container& cont )
+{
+    return std::accumulate ( cont.rbegin(), cont.rend(), 
+                             std::forward<Value>(val), std::forward<F>(f) );
+}
+
+template< typename Value, typename F, typename Container >
+constexpr Value foldr( F&& f, const Container& cont )
+{
+    return std::accumulate ( std::next(cont.rbegin()), cont.rend(), 
+                             cont.back(), std::forward<F>(f) );
 }
 
 template< typename Container, typename F >
