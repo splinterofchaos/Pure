@@ -2,15 +2,11 @@
 #pragma once
 
 #include <algorithm>
+#include <numeric>
 #include <functional>
 #include <iterator>
 #include <array>
-
-#ifdef __clang__
-// GCC allows all the fallowing functions to be considered constexpr, clang
-// does not.
-#define constexpr 
-#endif
+#include <vector>
 
 #include <iostream>
 template< typename Container >
@@ -23,8 +19,10 @@ void print( const char* const msg, const Container& v )
 
 namespace pure {
 
+using namespace std;
+
 template< typename C1, typename C2 >
-constexpr C1 concat( C1 a, const C2& b )
+C1 concat( C1 a, const C2& b )
 {
     a.reserve( a.size() + b.size() );
     std::copy( std::begin(b), std::end(b), std::back_inserter(a) );
@@ -32,7 +30,7 @@ constexpr C1 concat( C1 a, const C2& b )
 }
 
 template< typename Cx1, typename Cx2, typename ... Cxs >
-constexpr Cx1 concat( Cx1&& a, const Cx2& b, const Cxs& ... c )
+Cx1 concat( Cx1&& a, const Cx2& b, const Cxs& ... c )
 {
     return concat( concat(std::forward<Cx1>(a), b), c... );
 }
@@ -70,7 +68,7 @@ Container map( F&& f, Container cont )
 // TODO: Similar problem as with map. The optimal solution for lvalues should
 // do a copy-if.
 template< typename Container, typename F >
-constexpr Container filter( const F& f, Container cont )
+Container filter( const F& f, Container cont )
 {
     typedef typename std::remove_reference<Container>::type::value_type T;
     cont.erase ( 
@@ -106,27 +104,27 @@ constexpr bool all( const F& f, const Container& cont )
 template< typename Container, typename Value, typename F >
 constexpr Value foldl( const F& f, const Value& val, const Container& cont )
 {
-    return std::accumulate( std::begin(cont), std::end(cont), val, f );
+    return accumulate( std::begin(cont), std::end(cont), val, f );
 }
 
 template< typename Value, typename F, typename Container >
 constexpr Value foldl( F&& f, const Container& cont )
 {
-    return std::accumulate( std::next(std::begin(cont)), std::end(cont), 
+    return accumulate( std::next(std::begin(cont)), std::end(cont), 
                             cont.front(), f );
 }
 
 template< typename F, typename Value, typename Container >
 constexpr Value foldr( F&& f, Value&& val, const Container& cont )
 {
-    return std::accumulate ( cont.rbegin(), cont.rend(), 
+    return accumulate ( cont.rbegin(), cont.rend(), 
                              std::forward<Value>(val), std::forward<F>(f) );
 }
 
 template< typename Value, typename F, typename Container >
 constexpr Value foldr( F&& f, const Container& cont )
 {
-    return std::accumulate ( std::next(cont.rbegin()), cont.rend(), 
+    return accumulate ( std::next(cont.rbegin()), cont.rend(), 
                              cont.back(), std::forward<F>(f) );
 }
 
@@ -167,16 +165,15 @@ constexpr std::array<X,sizeof...(Fs)+1> cleave( X x, const F& f, const Fs& ... f
 }
 
 template< class T, unsigned int N, class F >
-constexpr std::array<T,N> generate( F f )
+std::array<T,N> generate( F f )
 {
     std::array<T,N> cont;
     std::generate( std::begin(cont), std::end(cont), f );
     return cont;
 }
 
-#include <vector>
 template< class T, class F >
-constexpr std::vector<T> generate( F f, unsigned int n )
+std::vector<T> generate( F f, unsigned int n )
 {
     std::vector<T> c; c.reserve(n);
     while( n-- )
