@@ -6,8 +6,18 @@
 #include <vector>
 #include <array>
 
+#include <iostream>
+
 using namespace std;
 using namespace pure;
+
+template< typename Container >
+void print( const char* const msg, const Container& v )
+{
+    cout << msg << "\n";
+    copy( v.begin(), v.end(), ostream_iterator<float>(cout, " ") );
+    cout << endl;
+}
 
 typedef array<int,2> Vec;
 

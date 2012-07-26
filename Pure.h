@@ -8,14 +8,6 @@
 #include <array>
 #include <vector>
 
-#include <iostream>
-template< typename Container >
-void print( const char* const msg, const Container& v )
-{
-    std::cout << msg << "\n";
-    std::copy( v.begin(), v.end(), std::ostream_iterator<float>(std::cout, " ") );
-    std::cout << std::endl;
-}
 
 namespace pure {
 
@@ -25,32 +17,32 @@ template< typename C1, typename C2 >
 C1 concat( C1 a, const C2& b )
 {
     a.reserve( a.size() + b.size() );
-    std::copy( std::begin(b), std::end(b), std::back_inserter(a) );
+    copy( begin(b), end(b), back_inserter(a) );
     return a;
 }
 
 template< typename Cx1, typename Cx2, typename ... Cxs >
 Cx1 concat( Cx1&& a, const Cx2& b, const Cxs& ... c )
 {
-    return concat( concat(std::forward<Cx1>(a), b), c... );
+    return concat( concat(forward<Cx1>(a), b), c... );
 }
 
 template< typename Container >
 constexpr bool ordered( const Container& c )
 {
     return c.size() <= 1
-        or std::mismatch ( 
-            std::begin(c), std::end(c)-1, 
-            std::begin(c)+1, 
-            std::less_equal<int>() 
-        ).second == std::end(c);
+        or mismatch ( 
+            begin(c), end(c)-1, 
+            begin(c)+1, 
+            less_equal<int>() 
+        ).second == end(c);
 }
 
 //template< typename Container, typename F >
 //constexpr Container map( const F& f, const Container& cont ) 
 //{
 //    Container cont2; cont2.reserve( cont.size() );
-//    std::transform( std::begin(cont), std::end(cont), std::back_inserter(cont2), f );
+//    transform( begin(cont), end(cont), back_inserter(cont2), f );
 //    return cont2;
 //}
 
@@ -60,8 +52,8 @@ constexpr bool ordered( const Container& c )
 template< typename Container, typename F >
 Container map( F&& f, Container cont ) 
 {
-    std::transform( std::begin(cont), std::end(cont), std::begin(cont), 
-                    std::forward<F>(f) );
+    transform( begin(cont), end(cont), begin(cont), 
+                    forward<F>(f) );
     return cont;
 }
 
@@ -70,47 +62,47 @@ Container map( F&& f, Container cont )
 template< typename Container, typename F >
 Container filter( const F& f, Container cont )
 {
-    typedef typename std::remove_reference<Container>::type::value_type T;
+    typedef typename remove_reference<Container>::type::value_type T;
     cont.erase ( 
-        std::remove_if ( 
-            std::begin(cont), std::end(cont), 
+        remove_if ( 
+            begin(cont), end(cont), 
             [&](const T& t){ return not f(t); } 
         ),
-        std::end( cont )
+        end( cont )
     );
     return cont;
 }
 
 template< typename Container, typename T >
 constexpr auto find( const T& value, Container&& cont )
-    -> decltype( std::begin(cont) )
+    -> decltype( begin(cont) )
 {
-    return std::find( std::begin(cont), std::end(cont), value );
+    return find( begin(cont), end(cont), value );
 }
 
 template< typename Container, typename F >
 constexpr auto find_if( const F& f, Container&& cont )
-    -> decltype( std::begin(cont) )
+    -> decltype( begin(cont) )
 {
-    return std::find_if( std::begin(cont), std::end(cont), f );
+    return find_if( begin(cont), end(cont), f );
 }
 
 template< typename Container, typename F >
 constexpr bool all( const F& f, const Container& cont )
 {
-    return std::all_of( std::begin(cont), std::end(cont), f );
+    return all_of( begin(cont), end(cont), f );
 }
 
 template< typename Container, typename Value, typename F >
 constexpr Value foldl( const F& f, const Value& val, const Container& cont )
 {
-    return accumulate( std::begin(cont), std::end(cont), val, f );
+    return accumulate( begin(cont), end(cont), val, f );
 }
 
 template< typename Value, typename F, typename Container >
 constexpr Value foldl( F&& f, const Container& cont )
 {
-    return accumulate( std::next(std::begin(cont)), std::end(cont), 
+    return accumulate( next(begin(cont)), end(cont), 
                             cont.front(), f );
 }
 
@@ -118,20 +110,20 @@ template< typename F, typename Value, typename Container >
 constexpr Value foldr( F&& f, Value&& val, const Container& cont )
 {
     return accumulate ( cont.rbegin(), cont.rend(), 
-                             std::forward<Value>(val), std::forward<F>(f) );
+                             forward<Value>(val), forward<F>(f) );
 }
 
 template< typename Value, typename F, typename Container >
 constexpr Value foldr( F&& f, const Container& cont )
 {
-    return accumulate ( std::next(cont.rbegin()), cont.rend(), 
-                             cont.back(), std::forward<F>(f) );
+    return accumulate ( next(cont.rbegin()), cont.rend(), 
+                             cont.back(), forward<F>(f) );
 }
 
 template< typename Container, typename F >
 void for_each( const F& f, const Container& cont )
 {
-    std::for_each( std::begin(cont), std::end(cont), f );
+    for_each( begin(cont), end(cont), f );
 }
 
 template< class F, class I, class J >
@@ -153,29 +145,29 @@ void for_ij( const F& f, const I& imax, const J& jmax )
 template< typename Container, typename F >
 Container zip_with( F&& f, const Container& a, Container b )
 {
-    std::transform( std::begin(a), std::end(a), std::begin(b), 
-                    std::begin(b), std::forward<F>(f) );
+    transform( begin(a), end(a), begin(b), 
+                    begin(b), forward<F>(f) );
     return b;
 }
 
 template< typename X, typename F, typename ... Fs >
-constexpr std::array<X,sizeof...(Fs)+1> cleave( X x, const F& f, const Fs& ... fs ) 
+constexpr array<X,sizeof...(Fs)+1> cleave( X x, const F& f, const Fs& ... fs ) 
 {
     return {{ f(x), fs(x)... }};
 }
 
 template< class T, unsigned int N, class F >
-std::array<T,N> generate( F f )
+array<T,N> generate( F f )
 {
-    std::array<T,N> cont;
-    std::generate( std::begin(cont), std::end(cont), f );
+    array<T,N> cont;
+    generate( begin(cont), end(cont), f );
     return cont;
 }
 
 template< class T, class F >
-std::vector<T> generate( F f, unsigned int n )
+vector<T> generate( F f, unsigned int n )
 {
-    std::vector<T> c; c.reserve(n);
+    vector<T> c; c.reserve(n);
     while( n-- )
         c.push_back( f() );
     return c;
@@ -183,30 +175,30 @@ std::vector<T> generate( F f, unsigned int n )
 
 template< class Cmp, class Container >
 constexpr auto max( const Cmp& cmp, Container&& cont )
-    -> decltype( std::begin(cont) )
+    -> decltype( begin(cont) )
 {
-    return std::max_element( std::begin(cont), std::end(cont), cmp );
+    return max_element( begin(cont), end(cont), cmp );
 }
 
 template< class Container >
 constexpr auto max( Container&& cont )
-    -> decltype( std::begin(cont) )
+    -> decltype( begin(cont) )
 {
-    return std::max_element( std::begin(cont), std::end(cont) );
+    return max_element( begin(cont), end(cont) );
 }
 
 template< class Cmp, class Container >
 constexpr auto min( const Cmp& cmp, Container&& cont )
-    -> decltype( std::begin(cont) )
+    -> decltype( begin(cont) )
 {
-    return std::min_element( std::begin(cont), std::end(cont), cmp );
+    return min_element( begin(cont), end(cont), cmp );
 }
 
 template< class Container >
 constexpr auto min( Container&& cont )
-    -> decltype( std::begin(cont) )
+    -> decltype( begin(cont) )
 {
-    return std::min_element( std::begin(cont), std::end(cont) );
+    return min_element( begin(cont), end(cont) );
 }
 
 } // namespace pure
