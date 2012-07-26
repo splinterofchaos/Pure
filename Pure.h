@@ -60,9 +60,10 @@ constexpr bool ordered( const Container& c )
 // efficient for lvalues. Enabling both causes ambiguity and making this one
 // take an rval-ref would cause the other to never get called.
 template< typename Container, typename F >
-constexpr Container map( const F& f, Container cont ) 
+Container map( F&& f, Container cont ) 
 {
-    std::transform( std::begin(cont), std::end(cont), std::begin(cont), f );
+    std::transform( std::begin(cont), std::end(cont), std::begin(cont), 
+                    std::forward<F>(f) );
     return cont;
 }
 
@@ -151,19 +152,18 @@ void for_ij( const F& f, const I& imax, const J& jmax )
             f( i, j );
 }
 
-
 template< typename Container, typename F >
-Container zip_with( const F& f, Container a, const Container& b )
+Container zip_with( F&& f, const Container& a, Container b )
 {
     std::transform( std::begin(a), std::end(a), std::begin(b), 
-                    std::begin(a), f );
-    return a;
+                    std::begin(b), std::forward<F>(f) );
+    return b;
 }
 
 template< typename X, typename F, typename ... Fs >
 constexpr std::array<X,sizeof...(Fs)+1> cleave( X x, const F& f, const Fs& ... fs ) 
 {
-    return std::array<X,sizeof...(Fs)+1>{ f(x), fs(x)... };
+    return {{ f(x), fs(x)... }};
 }
 
 template< class T, unsigned int N, class F >
