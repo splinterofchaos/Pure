@@ -13,6 +13,10 @@ namespace pure {
 
 using namespace std;
 
+/* 
+ * Concatenation.
+ * concat({1},{2,3},{4}) = {1,2,3,4}
+ */
 template< typename C1, typename C2 >
 C1 concat( C1 a, const C2& b )
 {
@@ -38,17 +42,7 @@ constexpr bool ordered( const Container& c )
         ).second == end(c);
 }
 
-//template< typename Container, typename F >
-//constexpr Container map( const F& f, const Container& cont ) 
-//{
-//    Container cont2; cont2.reserve( cont.size() );
-//    transform( begin(cont), end(cont), back_inserter(cont2), f );
-//    return cont2;
-//}
-
-// TODO: The is optimal for rvalues, but the above should be slightly more
-// efficient for lvalues. Enabling both causes ambiguity and making this one
-// take an rval-ref would cause the other to never get called.
+/* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< typename Container, typename F >
 Container map( F&& f, Container cont ) 
 {
@@ -57,8 +51,7 @@ Container map( F&& f, Container cont )
     return cont;
 }
 
-// TODO: Similar problem as with map. The optimal solution for lvalues should
-// do a copy-if.
+/* filter f C -> { x for x in C such that f(x) is true. } */
 template< typename Container, typename F >
 Container filter( const F& f, Container cont )
 {
@@ -73,6 +66,7 @@ Container filter( const F& f, Container cont )
     return cont;
 }
 
+/* find x in C -> iterator to x or end(C) */
 template< typename Container, typename T >
 constexpr auto find( const T& value, Container&& cont )
     -> decltype( begin(cont) )
@@ -87,12 +81,14 @@ constexpr auto find_if( const F& f, Container&& cont )
     return find_if( begin(cont), end(cont), f );
 }
 
+/* all f C -> true when f(x) is true for all x in C; otherwise false. */
 template< typename Container, typename F >
 constexpr bool all( const F& f, const Container& cont )
 {
     return all_of( begin(cont), end(cont), f );
 }
 
+/* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
 template< typename Container, typename Value, typename F >
 constexpr Value foldl( const F& f, const Value& val, const Container& cont )
 {
@@ -106,6 +102,7 @@ constexpr Value foldl( F&& f, const Container& cont )
                             cont.front(), f );
 }
 
+/* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
 template< typename F, typename Value, typename Container >
 constexpr Value foldr( F&& f, Value&& val, const Container& cont )
 {
@@ -142,6 +139,7 @@ void for_ij( const F& f, const I& imax, const J& jmax )
             f( i, j );
 }
 
+/* zip_with f A B -> { f(a,b) for a in A and b in B } */
 template< typename Container, typename F >
 Container zip_with( F&& f, const Container& a, Container b )
 {
@@ -150,6 +148,10 @@ Container zip_with( F&& f, const Container& a, Container b )
     return b;
 }
 
+/*
+ * cleave x f g h -> { f(x), g(x), h(x) }
+ * Inspired by Factor, the stack-based language.
+ */
 template< typename X, typename F, typename ... Fs >
 constexpr array<X,sizeof...(Fs)+1> cleave( X x, const F& f, const Fs& ... fs ) 
 {
