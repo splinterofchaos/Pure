@@ -26,17 +26,39 @@ Vec operator + ( Vec&& a, Vec&& b )
     return zip_with( plus<int>(), forward<Vec>(a), forward<Vec>(b) );
 }
 
+/*
+ * In order to write a constexpr qroot solver, we need a constexpr helper that
+ * partially applies a and b, accepts sqrt(b^2-4ac) as its parameter. The same
+ * affect could be achieved with a lambda, but would not be constexpr.
+ */
+struct QrootHelper
+{
+    float a, b;
+
+    // Instead of writing two versions, one for positive root and one for
+    // negative, just remember which you are.
+    bool negate;
+
+    constexpr QrootHelper( float a, float b, bool negate ) 
+        : a(a), b(b), negate(negate)
+    {}
+    constexpr float operator() ( float root ) 
+    {
+        return (-b + (negate ? -root:root)) / (2 * a); 
+    }
+};
+
 /* 
  * quadratic root(a,b,c) = x or y.
  * pure:: functions prefer to work with sequences, so this returns an array
  * containing just the two possible values of x.
  */
-std::array<float,2> quadratic_root( float a, float b, float c )
+constexpr std::array<float,2> quadratic_root( float a, float b, float c )
 {
     return cleave ( 
-        sqrt(b*b - 4*a*c), // -> root
-        [&]( float root ){ return (-b + root) / (2 * a); },
-        [&]( float root ){ return (-b - root) / (2 * a); }
+        sqrt(b*b - 4*a*c),
+        QrootHelper( a, b, false ),
+        QrootHelper( a, b, true )
     );
 }
 
