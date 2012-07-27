@@ -7,15 +7,49 @@
 #include <iterator>
 #include <array>
 #include <vector>
-
+#include <utility>
 
 namespace pure {
 
 using namespace std;
 
+/* Partial application helper. */
+template< class F, class Arg >
+struct PartialApplication
+{
+    F f;
+    Arg arg;
+
+    constexpr PartialApplication( F&& f, Arg&& arg )
+        : f(forward<F>(f)), arg(forward<Arg>(arg))
+    {
+    }
+
+    /* 
+     * The return type of F only gets deduced based on the number of arguments
+     * supplied. PartialApplication otherwise has no idea whether f takes 1 or 10 args.
+     */
+    template< class ... Args >
+    constexpr auto operator() ( Args&& ...args )
+        -> decltype( f(arg,declval<Args>()...) )
+    {
+        return f( arg, forward<Args>(args)... );
+    }
+};
+
+/* 
+ * Partial application.
+ * partial( f(_,_), x ) -> g(_) = f(x,_)
+ */
+template< class F, class Arg >
+constexpr PartialApplication<F,Arg> partial( F&& f, Arg&& arg )
+{
+    return PartialApplication<F,Arg>( forward<F>(f), forward<Arg>(arg) );
+}
+
 /* 
  * Concatenation.
- * concat({1},{2,3},{4}) = {1,2,3,4}
+ * concat({1},{2,3},{4}) -> {1,2,3,4}
  */
 template< typename C1, typename C2 >
 C1 concat( C1 a, const C2& b )
