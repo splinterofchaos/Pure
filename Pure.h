@@ -8,6 +8,7 @@
 #include <array>
 #include <vector>
 #include <utility>
+#include <tuple>
 
 namespace pure {
 
@@ -16,7 +17,8 @@ using namespace std;
 /* 
  * Partial application.
  * g(y) = f( x, y )
- * partial( f, x ) -> g
+ * partial( f, x ) -> g(y)
+ * partial( f, x, y ) -> g()
  */
 template< class F, class Arg >
 struct PartialApplication
@@ -41,10 +43,27 @@ struct PartialApplication
     }
 };
 
-template< class F, class Arg >
-constexpr PartialApplication<F,Arg> partial( F&& f, Arg&& arg )
+template< class F, class A >
+constexpr PartialApplication<F,A> partial( F&& f, A&& a )
 {
-    return PartialApplication<F,Arg>( forward<F>(f), forward<Arg>(arg) );
+    return PartialApplication<F,A>( forward<F>(f), forward<A>(a) );
+}
+
+template< class F, class A, class B >
+constexpr auto partial( F&& f, A&& a, B&& b )
+    -> decltype( partial(partial(declval<F>(),declval<A>()),
+                         declval<B>()) )
+{
+    return partial( partial(forward<F>(f),forward<A>(a)), forward<B>(b) );
+}
+
+template< class F, class A, class B, class ...C >
+constexpr auto partial( F&& f, A&& a, B&& b, C&& ...c )
+    -> decltype( partial(partial(declval<F>(),declval<A>()),
+                         declval<B>(),declval<C>()...) )
+{
+    return partial( partial(forward<F>(f),forward<A>(a)), 
+                    forward<B>(b), forward<C>(c)... );
 }
 
 /* 
@@ -77,6 +96,22 @@ constexpr Composition<F,G> compose( F&& f, G&& g )
 {
     return Composition<F,G>( forward<F>(f), forward<G>(g) );
 }
+
+template< class F, class G, class H >
+constexpr auto compose( F&& f, G&& g, H&& h )
+    -> decltype( compose(compose(declval<F>(),declval<G>()),declval<H>()) )
+{
+    return compose( compose(forward<F>(f),forward<G>(g)), forward<H>(h) );
+}
+
+template< class F, class G, class H, class ...I >
+constexpr auto compose( F&& f, G&& g, H&& h, I&& ...i )
+    -> decltype( compose(compose(declval<F>(),declval<G>()),declval<H>(),declval<I>()...) )
+{
+    return compose( compose(forward<F>(f),forward<G>(g)), forward<H>(h), forward<I>(i)... );
+}
+
+
 
 /* 
  * Concatenation.
