@@ -56,8 +56,6 @@ struct QrootHelper
     }
 };
 
-
-
 /* 
  * quadratic root(a,b,c) = x or y.
  * pure:: functions prefer to work with sequences, so this returns an array
@@ -75,6 +73,7 @@ constexpr std::array<float,2> quadratic_root( float a, float b, float c )
 int five() { return 5; }
 int times_two(int x) { return x * 2; }
 int times(int x,int y) { return x*y; }
+int square( int x ) { return times(x,x); }
 
 int main()
 {
@@ -98,7 +97,7 @@ int main()
         roots[0], roots[1]
     );
 
-    // partial works on unary functions, too!
-    printf( "3 * 2 = %d\n", partial(times_two,3)() );
+    constexpr auto fourthPower = compose( square, square );
+    printf( "3^4 = 9^2 = %d\n", fourthPower(3) );
 
 }

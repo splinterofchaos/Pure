@@ -13,7 +13,11 @@ namespace pure {
 
 using namespace std;
 
-/* Partial application helper. */
+/* 
+ * Partial application.
+ * g(y) = f( x, y )
+ * partial( f, x ) -> g
+ */
 template< class F, class Arg >
 struct PartialApplication
 {
@@ -37,14 +41,41 @@ struct PartialApplication
     }
 };
 
-/* 
- * Partial application.
- * partial( f(_,_), x ) -> g(_) = f(x,_)
- */
 template< class F, class Arg >
 constexpr PartialApplication<F,Arg> partial( F&& f, Arg&& arg )
 {
     return PartialApplication<F,Arg>( forward<F>(f), forward<Arg>(arg) );
+}
+
+/* 
+ * Composition. 
+ * normal notation:  h = f( g() )
+ * Haskell notation: h = f . g
+ * compose(f,g) -> f . g
+ * compose(f,g,h...) -> f . g . h ...
+ */
+template< class F, class G >
+struct Composition
+{
+    F f; G g;
+
+    constexpr Composition( F&& f, G&& g ) 
+        : f(forward<F>(f)), g(forward<G>(g)) 
+    {
+    }
+
+    template< class ...Args >
+    constexpr auto operator() ( Args&& ...args )
+        -> decltype( f(g(declval<Args>()...)) )
+    {
+        return f( g(forward<Args>(args)...) );
+    }
+};
+
+template< class F, class G >
+constexpr Composition<F,G> compose( F&& f, G&& g )
+{
+    return Composition<F,G>( forward<F>(f), forward<G>(g) );
 }
 
 /* 
