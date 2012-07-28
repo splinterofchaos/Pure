@@ -20,8 +20,11 @@ using namespace std;
  * partial( f, x ) -> g(y)
  * partial( f, x, y ) -> g()
  */
+template< class F, class ...Arg >
+struct PartialApplication;
+
 template< class F, class Arg >
-struct PartialApplication
+struct PartialApplication< F, Arg >
 {
     F f;
     Arg arg;
@@ -43,27 +46,24 @@ struct PartialApplication
     }
 };
 
-template< class F, class A >
-constexpr PartialApplication<F,A> partial( F&& f, A&& a )
+/* Recursive, variadic version. */
+template< class F, class Arg1, class ...Args >
+struct PartialApplication< F, Arg1, Args... > 
+    : public PartialApplication< PartialApplication<F,Arg1>, Args... >
 {
-    return PartialApplication<F,A>( forward<F>(f), forward<A>(a) );
-}
+    constexpr PartialApplication( F&& f, Arg1&& arg1, Args&& ...args )
+        : PartialApplication< PartialApplication<F,Arg1>, Args... > (
+            PartialApplication<F,Arg1>( forward<F>(f), forward<Arg1>(arg1) ),
+            forward<Args>(args)...
+        )
+    {
+    }
+};
 
-template< class F, class A, class B >
-constexpr auto partial( F&& f, A&& a, B&& b )
-    -> decltype( partial(partial(declval<F>(),declval<A>()),
-                         declval<B>()) )
+template< class F, class ...A >
+constexpr PartialApplication<F,A...> partial( F&& f, A&& ...a )
 {
-    return partial( partial(forward<F>(f),forward<A>(a)), forward<B>(b) );
-}
-
-template< class F, class A, class B, class ...C >
-constexpr auto partial( F&& f, A&& a, B&& b, C&& ...c )
-    -> decltype( partial(partial(declval<F>(),declval<A>()),
-                         declval<B>(),declval<C>()...) )
-{
-    return partial( partial(forward<F>(f),forward<A>(a)), 
-                    forward<B>(b), forward<C>(c)... );
+    return PartialApplication<F,A...>( forward<F>(f), forward<A>(a)... );
 }
 
 /* 
@@ -73,8 +73,12 @@ constexpr auto partial( F&& f, A&& a, B&& b, C&& ...c )
  * compose(f,g) -> f . g
  * compose(f,g,h...) -> f . g . h ...
  */
+
+template< class F, class ...G >
+struct Composition;
+
 template< class F, class G >
-struct Composition
+struct Composition<F,G>
 {
     F f; G g;
 
@@ -87,28 +91,28 @@ struct Composition
     constexpr auto operator() ( Args&& ...args )
         -> decltype( f(g(declval<Args>()...)) )
     {
-        return f( g(forward<Args>(args)...) );
+        return g( f(forward<Args>(args)...) );
     }
 };
 
-template< class F, class G >
-constexpr Composition<F,G> compose( F&& f, G&& g )
+template< class F, class G, class ...H >
+struct Composition<F,G,H...> : Composition<F,Composition<G,H...>>
 {
-    return Composition<F,G>( forward<F>(f), forward<G>(g) );
-}
+    typedef Composition<G,H...> Comp;
 
-template< class F, class G, class H >
-constexpr auto compose( F&& f, G&& g, H&& h )
-    -> decltype( compose(compose(declval<F>(),declval<G>()),declval<H>()) )
-{
-    return compose( compose(forward<F>(f),forward<G>(g)), forward<H>(h) );
-}
+    constexpr Composition( F&& f, G&& g, H&& ...h )
+        : Composition<F,Composition<G,H...>> ( 
+            forward<F>(f), 
+            Comp( forward<G>(g), forward<H>(h)... )
+        )
+    {
+    }
+};
 
-template< class F, class G, class H, class ...I >
-constexpr auto compose( F&& f, G&& g, H&& h, I&& ...i )
-    -> decltype( compose(compose(declval<F>(),declval<G>()),declval<H>(),declval<I>()...) )
+template< class F, class ...G >
+constexpr Composition<F,G...> compose( F&& f, G&& ...g )
 {
-    return compose( compose(forward<F>(f),forward<G>(g)), forward<H>(h), forward<I>(i)... );
+    return Composition<F,G...>( forward<F>(f), forward<G>(g)... );
 }
 
 /* 

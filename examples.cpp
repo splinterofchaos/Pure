@@ -75,6 +75,7 @@ constexpr std::array<float,2> quadratic_root2( float a, float b, float c )
 
 int five() { return 5; }
 int times_two(int x) { return x * 2; }
+int plus_two(int x) { return x + 2; }
 int times(int x,int y) { return x*y; }
 int square( int x ) { return times(x,x); }
 
@@ -105,9 +106,9 @@ int main()
         roots[0], roots[1]
     );
 
-    constexpr auto fourthPower = compose( square, square );
-    printf( "3^4 = 9^2 = %d\n", fourthPower(3) );
+    constexpr auto sqrDoublePlus2 = compose( square, times_two, plus_two );
+    printf( "3^2 * 2 = 9 * 2 = %d\n", sqrDoublePlus2(3) );
 
-        printf( "5 * 2 = %d\n", partial(times,5)(2) );
-        printf( "5 * 2 = %d\n", partial(times,5,2)() );
+    printf( "5 * 2 = %d\n", partial(times,5)(2) );
+    printf( "5 * 2 = %d\n", partial(times,5,2)() );
 }
