@@ -111,8 +111,6 @@ constexpr auto compose( F&& f, G&& g, H&& h, I&& ...i )
     return compose( compose(forward<F>(f),forward<G>(g)), forward<H>(h), forward<I>(i)... );
 }
 
-
-
 /* 
  * Concatenation.
  * concat({1},{2,3},{4}) -> {1,2,3,4}
@@ -256,6 +254,14 @@ template< typename X, typename F, typename ... Fs >
 constexpr array<X,sizeof...(Fs)+1> cleave( X x, const F& f, const Fs& ... fs ) 
 {
     return {{ f(x), fs(x)... }};
+}
+
+/* split f x y z =  { f(x), f(y), f(z) } */
+template< class F, class A, class ...B >
+constexpr auto split( F&& f, A&& a, B&& ...b )
+    -> array< decltype( declval<F>()(declval<A>()) ), sizeof...(B)+1 > 
+{
+    return {{ f(forward<A>(a)), f(forward<B>(b))... }};
 }
 
 template< class T, unsigned int N, class F >

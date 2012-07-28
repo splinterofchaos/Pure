@@ -49,8 +49,27 @@ constexpr std::array<float,2> quadratic_root( float a, float b, float c )
 {
     return cleave ( 
         sqrt(b*b - 4*a*c),
-        partial( _qroot, a, b, true ),
-        partial( _qroot, a, b, false )
+        partial( _qroot, a, b, false ),
+        partial( _qroot, a, b, true  )
+    );
+}
+
+constexpr float _qroot2( float a, float b, float root )
+{
+    return (-b + root) / (2 * a);
+}
+
+constexpr float _qroot_root( float a, float b, float c )
+{
+    return sqrt( b*b - 4*a*c );
+}
+
+constexpr std::array<float,2> quadratic_root2( float a, float b, float c )
+{
+    return split (
+        partial( _qroot2, a, b ),
+        _qroot_root(a,b,c),
+        - _qroot_root(a,b,c)
     );
 }
 
@@ -80,8 +99,15 @@ int main()
         "quadratic root of x^2 + 3x - 4 = 0 : %f or %f\n",
         roots[0], roots[1]
     );
+    roots = quadratic_root2( 1, 3, -4 );
+    printf (
+        "quadratic root of x^2 + 3x - 4 = 0 : %f or %f\n",
+        roots[0], roots[1]
+    );
 
     constexpr auto fourthPower = compose( square, square );
     printf( "3^4 = 9^2 = %d\n", fourthPower(3) );
 
+        printf( "5 * 2 = %d\n", partial(times,5)(2) );
+        printf( "5 * 2 = %d\n", partial(times,5,2)() );
 }
