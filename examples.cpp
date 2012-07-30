@@ -86,10 +86,9 @@ void print_x_y_z( int x, int y, int z )
 
 void test_rot()
 {
-    int x, y, z;
-    cin >> x >> y >> z;
-
+    int x=1, y=2, z=3;
     rot( print_x_y_z )(x,y,z);
+    nrot<2>( print_x_y_z )(x,y,z);
 }
 
 int main()
