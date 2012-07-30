@@ -115,6 +115,99 @@ constexpr Composition<F,G...> compose( F&& f, G&& ...g )
     return Composition<F,G...>( forward<F>(f), forward<G>(g)... );
 }
 
+/*
+ * Rotation.
+ * f(x,y...) = g(y...,x)
+ * rot f = g
+ * rrot g = f
+ * rrot( rot f ) = f
+ *
+ * In stack-based (or concatenative languages) rotation applies to the top
+ * three elements on the stack. Here, the function's arguments are treated as a
+ * stack and rotated. The entire stack gets rotated, rather than the top three
+ * elements.
+ */
+template< class F, class ...Args >
+struct PartialLast; // Apply the last argument.
+
+template< class F, class Last >
+struct PartialLast< F, Last > : public PartialApplication< F, Last > 
+{ 
+    constexpr PartialLast( F&& f, Last&& last )
+        : PartialApplication<F,Last>( forward<F>(f), forward<Last>(last) )
+    {
+    }
+};
+
+// Remove one argument each recursion.
+template< class F, class Arg1, class ...Args >
+struct PartialLast< F, Arg1, Args... > : public PartialLast< F, Args... > 
+{
+    constexpr PartialLast( F&& f, Arg1&&, Args&& ...args )
+        : PartialLast<F,Args...>( forward<F>(f), forward<Args>(args)... )
+    {
+    }
+};
+
+template< class F, class ...Args >
+struct PartialInitial; // Apply all but the last argument.
+
+template< class F, class Arg1, class Arg2 >
+struct PartialInitial< F, Arg1, Arg2 > : public PartialApplication< F, Arg1 >
+{
+    constexpr PartialInitial( F&& f, Arg1&& arg1, Arg2&& )
+        : PartialApplication<F,Arg1>( forward<F>(f), forward<Arg1>(arg1) )
+    {
+    }
+};
+
+template< class F, class Arg1, class ...Args >
+struct PartialInitial< F, Arg1, Args... > 
+    : public PartialInitial< PartialApplication<F,Arg1>, Args... >
+{
+    PartialInitial( F&& f, Arg1&& arg1, Args&& ...args )
+        : PartialInitial<PartialApplication<F,Arg1>,Args...> (
+            partial( forward<F>(f), forward<Arg1>(arg1) ),
+            forward<Args>(args)...
+        )
+    {
+    }
+};
+
+template< class F >
+struct Rot
+{
+    F f;
+
+    constexpr Rot( F&& f )
+        : f( forward<F>(f) )
+    {
+    }
+
+    template< class ...Args >
+    constexpr auto operator() ( Args&& ...args )
+        -> decltype ( 
+            declval< PartialInitial<PartialLast<F,Args...>,Args...> >()() 
+        )
+    {
+        /* We can't just (to my knowledge) pull the initial and final args
+         * apart, so first reverse-apply the last argument, then apply each
+         * argument forward until the last. The result is a zero-arity function
+         * to invoke.
+         */
+        return PartialInitial< PartialLast<F,Args...>, Args... > (
+            PartialLast< F, Args... >( f, forward<Args>(args)... ),
+            forward<Args>( args )...
+        )();
+    }
+};
+
+template< class F >
+constexpr Rot<F> rot( F&& f )
+{
+    return Rot<F>( forward<F>(f) );
+}
+
 /* 
  * Concatenation.
  * concat({1},{2,3},{4}) -> {1,2,3,4}

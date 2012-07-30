@@ -79,6 +79,19 @@ int plus_two(int x) { return x + 2; }
 int times(int x,int y) { return x*y; }
 int square( int x ) { return times(x,x); }
 
+void print_x_y_z( int x, int y, int z )
+{
+    printf( "x = %d\ny = %d\nz = %d\n", x, y, z );
+}
+
+void test_rot()
+{
+    int x, y, z;
+    cin >> x >> y >> z;
+
+    rot( print_x_y_z )(x,y,z);
+}
+
 int main()
 {
     printf (
@@ -111,4 +124,6 @@ int main()
 
     printf( "5 * 2 = %d\n", partial(times,5)(2) );
     printf( "5 * 2 = %d\n", partial(times,5,2)() );
+
+    test_rot();
 }
