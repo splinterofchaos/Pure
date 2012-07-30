@@ -88,7 +88,7 @@ void test_rot()
 {
     int x=1, y=2, z=3;
     rot( print_x_y_z )(x,y,z);
-    nrot<2>( print_x_y_z )(x,y,z);
+    rnrot<2>( print_x_y_z )(x,y,z);
 }
 
 int main()

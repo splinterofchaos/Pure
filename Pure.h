@@ -121,7 +121,7 @@ constexpr Composition<F,G...> compose( F&& f, G&& ...g )
 
 /*
  * Rotation.
- * f(x,y...) = g(y...,x)
+ * f(x...,y) = g(y,x...)
  * rot f = g
  * rrot g = f
  * rrot( rot f ) = f
@@ -209,11 +209,34 @@ struct Rot
 };
 
 template< class F >
+struct RRot // Reverse Rotate
+{
+    F f;
+
+    template< class _F >
+    constexpr RRot( _F&& f ) : f( forward<_F>(f) ) { }
+
+    template< class Arg1, class ...Args >
+    constexpr auto operator() ( Arg1&& arg1, Args&& ...args )
+        -> decltype( f(declval<Args>()..., arg1) )
+    {
+        return f( forward<Args>(args)..., arg1 );
+    }
+};
+
+template< class F >
 constexpr Rot<F> rot( F&& f )
 {
     return Rot<F>( forward<F>(f) );
 }
 
+template< class F >
+constexpr RRot<F> rrot( F&& f )
+{
+    return RRot<F>( forward<F>(f) );
+}
+
+/* Rotate F by N times. */
 template< unsigned int N, class F >
 struct NRot;
 
@@ -232,9 +255,32 @@ struct NRot : public NRot< N-1, Rot<F> >
 };
 
 template< unsigned int N, class F >
+struct RNRot; // Reverse nrot.
+
+template< class F >
+struct RNRot< 1, F > : public RRot<F>
+{
+    template< class _F >
+    RNRot( _F&& f ) : RRot<F>( forward<_F>(f) ) { }
+};
+
+template< unsigned int N, class F >
+struct RNRot : public RNRot< N-1, RRot<F> >
+{
+    template< class _F >
+    RNRot( _F&& f ) : RNRot<N-1,RRot<F>>( rrot(forward<_F>(f)) ) { }
+};
+
+template< unsigned int N, class F >
 constexpr NRot<N,F> nrot( F&& f )
 {
     return NRot<N,F>( forward<F>(f) );
+}
+
+template< unsigned int N, class F >
+constexpr RNRot<N,F> rnrot( F&& f )
+{
+    return RNRot<N,F>( forward<F>(f) );
 }
 
 /* 
