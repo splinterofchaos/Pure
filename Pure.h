@@ -260,9 +260,9 @@ constexpr array<X,sizeof...(Fs)+1> cleave( X x, const F& f, const Fs& ... fs )
     return {{ f(x), fs(x)... }};
 }
 
-/* split f x y z =  { f(x), f(y), f(z) } */
+/* cleave_with f x y z =  { f(x), f(y), f(z) } */
 template< class F, class A, class ...B >
-constexpr auto split( F&& f, A&& a, B&& ...b )
+constexpr auto cleave_with( F&& f, A&& a, B&& ...b )
     -> array< decltype( declval<F>()(declval<A>()) ), sizeof...(B)+1 > 
 {
     return {{ f(forward<A>(a)), f(forward<B>(b))... }};

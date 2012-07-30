@@ -66,7 +66,7 @@ constexpr float _qroot_root( float a, float b, float c )
 
 constexpr std::array<float,2> quadratic_root2( float a, float b, float c )
 {
-    return split (
+    return cleave_with (
         partial( _qroot2, a, b ),
         _qroot_root(a,b,c),
         - _qroot_root(a,b,c)
