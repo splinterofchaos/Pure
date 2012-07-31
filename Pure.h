@@ -140,6 +140,38 @@ constexpr Squash<F> squash( F&& f )
 }
 
 /* 
+ * f( x, y ) = f( l(z), r(z) ) = g(z)
+ *  where x = l(z) and y = r(z)
+ * join( f, l, r ) = g
+ */
+template< class F, class Left, class Right >
+struct Join
+{
+    F f;
+    Left l;
+    Right r;
+
+    template< class _F, class _L, class _R >
+    constexpr Join( _F&& f, _L&& l, _R&& r )
+        : f(forward<_F>(f)), l(forward<_L>(l)), r(forward<_R>(r))
+    {
+    }
+
+    template< class A, class ...AS >
+    constexpr auto operator() ( A&& a, AS&& ...as )
+        -> decltype( f(l(declval<A>()),r(declval<A>()),declval<AS>()...) )
+    {
+        return f( l(forward<A>(a)), r(forward<A>(a)), forward<AS>(as)... );
+    }
+};
+
+template< class F, class L, class R >
+constexpr Join<F,L,R> join( F&& f, L&& l, R&& r )
+{
+    return Join<F,L,R>( forward<F>(f), forward<L>(l), forward<R>(r) );
+}
+
+/* 
  * Concatenation.
  * concat({1},{2,3},{4}) -> {1,2,3,4}
  */

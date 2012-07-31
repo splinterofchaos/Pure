@@ -21,16 +21,23 @@ void print( const char* const msg, const Container& v )
 
 typedef array<int,2> Vec;
 
-Vec operator + ( Vec&& a, Vec&& b )
+constexpr int get_x( const Vec& v ) { return v[0]; } 
+constexpr int get_y( const Vec& v ) { return v[1]; }
+
+Vec operator + ( const Vec& a, Vec&& b )
 { 
-    return zip_with( plus<int>(), forward<Vec>(a), forward<Vec>(b) ); 
+    return zip_with( plus<int>(), a, move(b) ); 
 }
+
+Vec operator + ( Vec&& a, const Vec& b )      { return b + move(a); } 
+Vec operator + ( const Vec& a, const Vec& b ) { return a + Vec(b); }
+
 
 Vec operator * ( Vec&& a, int x )
 {
-    return map( partial(multiplies<int>(),x), forward<Vec>(a) ); 
+    return map( partial(multiplies<int>(),x), move(a) ); 
 }
-Vec operator * ( int x, Vec&& a )      { return forward<Vec>(a) * x; }
+Vec operator * ( int x, Vec&& a )      { return move(a) * x; }
 Vec operator * ( const Vec& a, int x ) { return Vec(a) * x; }
 Vec operator * ( int x, const Vec& a ) { return Vec(a) * x; }
 
@@ -95,7 +102,13 @@ int main()
         foldr<int>( std::plus<int>(), vector<int>{1,2,3,4} )
     );
 
-    auto sevens = Vec{{2,5}} + Vec{{5,2}};
+    Vec fiveTwo = {{5,2}}, twoFive = {{2,5}};
+
+    // Join lets us adapt an N-ary function to an (N-1) one.
+    printf( "\t5 * 2 = %d\n", join(times, get_x, get_y)(fiveTwo) );
+    // is the same as times(get_x(fiveTwo),get_y(fiveTwo)).
+
+    auto sevens = fiveTwo + twoFive;
     printf( "<5,2> + <2,5> = <%d,%d>\n", sevens[0], sevens[1] );
     auto fourteens = sevens * 2;
     printf( "<7,7> * 2 = <%d,%d>\n", fourteens[0], fourteens[1] );
