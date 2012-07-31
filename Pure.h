@@ -115,6 +115,30 @@ constexpr Composition<F,G...> compose( F&& f, G&& ...g )
     return Composition<F,G...>( forward<F>(f), forward<G>(g)... );
 }
 
+/* squash[ f(x,x) ] = g(x) */
+template< class F >
+struct Squash
+{
+    F f;
+
+    template< class _F >
+    constexpr Squash( _F&& f ) : f( forward<_F>(f) ) { }
+
+    template< class Arg1, class ...Args >
+    constexpr auto operator() ( Arg1&& arg1, Args&& ...args )
+        -> decltype( f(declval<Arg1>(),declval<Arg1>(),declval<Args>()...) )
+    {
+        return f( forward<Arg1>(arg1), forward<Arg1>(arg1), 
+                  forward<Args>(args)... );
+    }
+};
+
+template< class F >
+constexpr Squash<F> squash( F&& f )
+{
+    return Squash<F>( forward<F>(f) );
+}
+
 /* 
  * Concatenation.
  * concat({1},{2,3},{4}) -> {1,2,3,4}

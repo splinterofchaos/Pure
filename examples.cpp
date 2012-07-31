@@ -76,11 +76,16 @@ constexpr std::array<float,2> quadratic_root2( float a, float b, float c )
 int five() { return 5; }
 int times_two(int x) { return x * 2; }
 int plus_two(int x) { return x + 2; }
-int times(int x,int y) { return x*y; }
-int square( int x ) { return times(x,x); }
+constexpr int times(int x,int y) { return x*y; }
+
+// squash(f) returns a functor that duplicates its first argument.
+constexpr auto square = squash( times );
+// square(x) = times(x,x)
 
 int main()
 {
+    printf( "3^2 = %d\n", square(3) );
+
     printf (
         "sum of (1,2,3,4) = %d\n", // = 10
         foldl<int>( std::plus<int>(), vector<int>{1,2,3,4} )
