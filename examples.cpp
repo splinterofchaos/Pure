@@ -5,6 +5,7 @@
 #include <cmath>
 #include <vector>
 #include <array>
+#include <list>
 
 #include <iostream>
 
@@ -78,6 +79,7 @@ int times_two(int x) { return x * 2; }
 int plus_two(int x) { return x + 2; }
 int times(int x,int y) { return x*y; }
 int square( int x ) { return times(x,x); }
+float to_float( int x ) { return x; }
 
 int main()
 {
@@ -118,4 +120,7 @@ int main()
     auto pair = fmap( plus_two, std::make_pair(1,2) );
     printf( "fmap (+2) (Pair 1 2) --> (Pair %d %d)\n", 
             pair.first, pair.second );
+
+    auto oneTwo = fmap( plus_two, std::list<int>{1,2} );
+    printf( "fmap (+2) [1,2] = [%d %d]\n", oneTwo.front(), oneTwo.back() );
 }

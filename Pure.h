@@ -89,7 +89,7 @@ struct Composition<F,G>
 
     template< class ...Args >
     constexpr auto operator() ( Args&& ...args )
-        -> decltype( f(g(declval<Args>()...)) )
+        -> decltype( g(f(declval<Args>()...)) )
     {
         return g( f(forward<Args>(args)...) );
     }
@@ -180,16 +180,52 @@ struct Functor< F, Pure<X> >
 template< class F, class X, class Y >
 struct Functor< F, std::pair<X,Y> > : public std::pair<X,Y>
 {
-    template< class _F, class _P >
-    constexpr Functor( _F&& f, _P&& p )
-        : std::pair<X,Y>( f( forward<_P>(p).first  ), 
-                          f( forward<_P>(p).second ) )
+    template< class _F, class P >
+    constexpr Functor( _F&& f, P&& p )
+        : std::pair<X,Y>( f( forward<P>(p).first  ), 
+                          f( forward<P>(p).second ) )
     {
     }
 };
 
+/* map f {1,2,3} -> { f(1), f(2), f(3) } */
+template< typename Sequence, typename F >
+Sequence map( F&& f, Sequence cont ) 
+{
+    transform( begin(cont), end(cont), begin(cont), 
+               forward<F>(f) );
+    return cont;
+}
+
+template< class C > struct IsSeqImpl {
+    // Can only be supported on STL-like sequence types, not pointers.
+    template< class _C > static true_type f(typename _C::iterator*);
+    template< class _C > static false_type f(...);
+    typedef decltype( f<C>(0) ) type;
+};
+
+template< class C > struct IsSeq : public IsSeqImpl<C>::type { };
+
+/* Enable if is an STL-like sequence. */
+template< class C, class R > struct ESeq : enable_if<IsSeq<C>::value,R> { };
+
+/* Disable if is sequence. */
+template< class C, class R > struct XSeq : enable_if<not IsSeq<C>::value,R> { };
+
+/* fmap f {...} = map f {...} where {...} is any sequence. */
+template< class F, class C >
+constexpr auto fmap( F&& f, C&& c )
+    -> typename ESeq <
+        C, decltype( map(forward<F>(f),forward<C>(c)) ) 
+    >::type
+{
+    return map( forward<F>(f), forward<C>(c) );
+}
+
 template< class F, class G >
-constexpr Functor<F,G> fmap( F&& f, G&& g )
+constexpr auto fmap( F&& f, G&& g )
+    // Disallow on sequences.
+    -> typename XSeq< G, Functor<F,G> >::type
 {
     return Functor<F,G>( forward<F>(f), forward<G>(g) );
 }
@@ -221,15 +257,6 @@ constexpr bool ordered( const Container& c )
             begin(c)+1, 
             less_equal<int>() 
         ).second == end(c);
-}
-
-/* map f {1,2,3} -> { f(1), f(2), f(3) } */
-template< typename Container, typename F >
-Container map( F&& f, Container cont ) 
-{
-    transform( begin(cont), end(cont), begin(cont), 
-                    forward<F>(f) );
-    return cont;
 }
 
 /* filter f C -> { x for x in C such that f(x) is true. } */
