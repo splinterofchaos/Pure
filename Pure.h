@@ -115,6 +115,85 @@ constexpr Composition<F,G...> compose( F&& f, G&& ...g )
     return Composition<F,G...>( forward<F>(f), forward<G>(g)... );
 }
 
+/*
+ * In category theory, a functor is a mapping between categories.
+ * Pure provides the minimal wrappings to lift X to a higher category.
+ *
+ * pure(x) -> F(x) where F(_) = x
+ */
+template< class X >
+struct Pure
+{
+    X x;
+
+    template< class Y >
+    constexpr Pure( Y y ) : x( forward<Y>(y) ) { }
+
+    template< class ...Args >
+    constexpr X operator() ( Args&& ...args ) { return x; }
+};
+
+template< class X >
+constexpr Pure<X> pure( X&& x )
+{
+    return Pure<X>( forward<X>(x) );
+}
+
+/* 
+ * fmap maps a function, f, to a functor, F such that for each f:X->Y, there
+ * exists an F(f):F(X)->F(Y). 
+ *
+ * fmap f F(x) = F(f x) 
+ *
+ * In Haskell, each mappable type class must be specialized with a Functor
+ * instance. Likewise, here, we must use template specialization for each type
+ * we want mappable.
+ */
+template< class ...F > struct Functor;
+
+/* fmap f g = compose( f, g ) */
+template< class F, class G >
+struct Functor<F,G> : public Composition<F,G>
+{
+    template< class _F, class _G >
+    constexpr Functor( _F&& f, _G&& g )
+        : Composition<F,G>( forward<_F>(f), forward<_G>(g) )
+    {
+    }
+};
+
+/* fmap f Pure(x) = Pure( f x ) */
+template< class F, class X >
+struct Functor< F, Pure<X> >  
+    : public Pure< decltype( declval<F>()( declval<X>() ) ) >
+{
+    template< class _F, class G >
+    constexpr Functor( _F&& f, G&& g )
+        : Pure< decltype( declval<F>()( declval<X>() ) ) > (
+            f( g() )
+        )
+    {
+    }
+};
+
+/* fmap f Pair(x,y) = Pair( f x, f y ) */
+template< class F, class X, class Y >
+struct Functor< F, std::pair<X,Y> > : public std::pair<X,Y>
+{
+    template< class _F, class _P >
+    constexpr Functor( _F&& f, _P&& p )
+        : std::pair<X,Y>( f( forward<_P>(p).first  ), 
+                          f( forward<_P>(p).second ) )
+    {
+    }
+};
+
+template< class F, class G >
+constexpr Functor<F,G> fmap( F&& f, G&& g )
+{
+    return Functor<F,G>( forward<F>(f), forward<G>(g) );
+}
+
 /* 
  * Concatenation.
  * concat({1},{2,3},{4}) -> {1,2,3,4}

@@ -111,4 +111,11 @@ int main()
 
     printf( "5 * 2 = %d\n", partial(times,5)(2) );
     printf( "5 * 2 = %d\n", partial(times,5,2)() );
+
+    printf( "fmap (+2) (pure 1) --> %d\n", fmap(plus_two,pure::pure(1))() );
+    printf( "fmap (+2) (+2) (1) --> %d\n", fmap(plus_two,plus_two)(1) );
+
+    auto pair = fmap( plus_two, std::make_pair(1,2) );
+    printf( "fmap (+2) (Pair 1 2) --> (Pair %d %d)\n", 
+            pair.first, pair.second );
 }
