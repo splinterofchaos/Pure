@@ -108,16 +108,21 @@ int main()
         roots[0], roots[1]
     );
 
-    constexpr auto sqrDoublePlus2 = compose( square, times_two, plus_two );
-    printf( "3^2 * 2 = 9 * 2 = %d\n", sqrDoublePlus2(3) );
+    constexpr auto sqrDoublePlus2 = compose( plus_two, times_two, square );
+    printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", sqrDoublePlus2(3) );
 
     printf( "5 * 2 = %d\n", partial(times,5)(2) );
     printf( "5 * 2 = %d\n", partial(times,5,2)() );
 
-    printf( "fmap (+2) (pure 1) --> %d\n", fmap(plus_two,pure::pure(1))() );
+    int x = 1;
+    auto p = pure::pure(x); // Evaluates to Pure<int&>.
+    auto fthree = fmap( plus_two, p ); 
+    printf( "fmap (+2) (pure x=1) --> %d\n", fthree() );
+    x = 2; 
+    printf( "fmap (+2) (pure x=2) --> %d\n", fthree() );
     printf( "fmap (+2) (+2) (1) --> %d\n", fmap(plus_two,plus_two)(1) );
 
-    auto pair = fmap( plus_two, std::make_pair(1,2) );
+    auto pair = fmap( plus_two, std::make_pair(1,x) );
     printf( "fmap (+2) (Pair 1 2) --> (Pair %d %d)\n", 
             pair.first, pair.second );
 

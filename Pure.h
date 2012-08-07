@@ -9,6 +9,7 @@
 #include <vector>
 #include <utility>
 #include <tuple>
+#include <memory>
 
 namespace pure {
 
@@ -89,9 +90,9 @@ struct Composition<F,G>
 
     template< class ...Args >
     constexpr auto operator() ( Args&& ...args )
-        -> decltype( g(f(declval<Args>()...)) )
+        -> decltype( f(g(declval<Args>()...)) )
     {
-        return g( f(forward<Args>(args)...) );
+        return f( g(forward<Args>(args)...) );
     }
 };
 
@@ -126,11 +127,11 @@ struct Pure
 {
     X x;
 
-    template< class Y >
-    constexpr Pure( Y y ) : x( forward<Y>(y) ) { }
+    constexpr Pure( X x ) : x( x ) { }
+    constexpr Pure( Pure&& ) = default;
 
     template< class ...Args >
-    constexpr X operator() ( Args&& ...args ) { return x; }
+    constexpr X operator() ( Args ... ) { return x; }
 };
 
 template< class X >
@@ -158,20 +159,6 @@ struct Functor<F,G> : public Composition<F,G>
     template< class _F, class _G >
     constexpr Functor( _F&& f, _G&& g )
         : Composition<F,G>( forward<_F>(f), forward<_G>(g) )
-    {
-    }
-};
-
-/* fmap f Pure(x) = Pure( f x ) */
-template< class F, class X >
-struct Functor< F, Pure<X> >  
-    : public Pure< decltype( declval<F>()( declval<X>() ) ) >
-{
-    template< class _F, class G >
-    constexpr Functor( _F&& f, G&& g )
-        : Pure< decltype( declval<F>()( declval<X>() ) ) > (
-            f( g() )
-        )
     {
     }
 };
