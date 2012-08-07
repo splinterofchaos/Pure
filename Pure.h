@@ -16,6 +16,60 @@ namespace pure {
 using namespace std;
 
 /* 
+ * Maybe x = Just x | Nothing 
+ * A simple type to hold a possible value. Similar to a bool that holds nothing
+ * when false and any value when true.
+ */
+template< class T >
+class Maybe 
+{
+    unique_ptr<T> val; // A pointer fits the definition of 'possible value'.
+
+  public:
+    struct Just;    // Holds a definite value.
+    struct Nothing; // Definitely holds nothing.
+
+    Maybe( typename Maybe::Just j ) : val( new  T(move(j.val)) ) { }
+    constexpr Maybe( Nothing ) { }
+
+    // It does not make sense to copy a Maybe.
+    Maybe( const Maybe& m ) = delete;
+    constexpr Maybe( Maybe&& ) = default;
+
+    constexpr explicit operator bool () { return (bool)val; }
+
+    // Use at own risk.
+    constexpr decltype(*val) operator() () { return *val; }
+
+    struct Just {
+        T val;
+        constexpr Just( T u ) : val( std::move(u) ) { }
+    };
+
+    struct Nothing { constexpr Nothing() {} };
+};
+
+template< class T >
+Maybe<T> Just( T&& t )
+{
+    typedef Maybe<T> M;
+    return M( typename M::Just(forward<T>(t)) ); 
+}
+
+template< class T >
+Maybe<T> Nothing()
+{
+    typedef Maybe<T> M;
+    return M( typename M::Nothing() );
+}
+
+template< class R, class F, class T >
+R maybe( R&& r, F f, const Maybe<T>& m )
+{
+    return m ? f(m()) : forward<R>(r);
+}
+
+/* 
  * Partial application.
  * g(y) = f( x, y )
  * partial( f, x ) -> g(y)
@@ -173,6 +227,17 @@ struct Functor< F, std::pair<X,Y> > : public std::pair<X,Y>
                           f( forward<P>(p).second ) )
     {
     }
+};
+
+template< class F, class T >
+struct Functor< F, Maybe<T> > 
+    : Maybe< decltype( declval<F>()(declval<T>()) ) >
+{
+    typedef decltype( declval<F>()(declval<T>()) ) R;
+    typedef Maybe< R > M;
+
+    template< class _F, class _M >
+    Functor( _F&& f, _M&& m ) : M( m ? Just<R>( f(m()) ) : Nothing<R>() ) { }
 };
 
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */

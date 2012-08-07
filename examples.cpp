@@ -81,6 +81,20 @@ int times(int x,int y) { return x*y; }
 int square( int x ) { return times(x,x); }
 float to_float( int x ) { return x; }
 
+string show( int x )
+{
+    char digits[20];
+    sprintf( digits, "%d", x );
+    return digits;
+}
+
+template< class T >
+string show( const Maybe<T>& m )
+{
+    constexpr string (*showIt)(T) = show;
+    return maybe( string("Nothing"), showIt, m );
+}
+
 int main()
 {
     printf (
@@ -128,4 +142,9 @@ int main()
 
     auto oneTwo = fmap( plus_two, std::list<int>{1,2} );
     printf( "fmap (+2) [1,2] = [%d %d]\n", oneTwo.front(), oneTwo.back() );
+
+    auto justFour = fmap( plus_two, Just(2) );
+    printf( "fmap (+2) (Just 2) = (%s)\n", show(justFour).c_str() );
+    auto notFour = fmap( plus_two, Nothing<int>() );
+    printf( "fmap (+2) (Just 2) = (%s)\n", show(notFour).c_str() );
 }
