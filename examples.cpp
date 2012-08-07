@@ -81,18 +81,18 @@ int times(int x,int y) { return x*y; }
 int square( int x ) { return times(x,x); }
 float to_float( int x ) { return x; }
 
-string show( int x )
-{
+string show( int x ) {
     char digits[20];
     sprintf( digits, "%d", x );
     return digits;
 }
 
-template< class T >
-string show( const Maybe<T>& m )
-{
-    constexpr string (*showIt)(T) = show;
-    return maybe( string("Nothing"), showIt, m );
+template< class X > string showJust( X x ) {
+    return "Just " + show( x );
+}
+
+template< class T > string show( const Maybe<T>& m ) {
+    return maybe( string("Nothing"), showJust<T>, m );
 }
 
 int main()
@@ -147,4 +147,14 @@ int main()
     printf( "fmap (+2) (Just 2) = (%s)\n", show(justFour).c_str() );
     auto notFour = fmap( plus_two, Nothing<int>() );
     printf( "fmap (+2) (Just 2) = (%s)\n", show(notFour).c_str() );
+
+    vector<int> N = {1,2,3,4,5,6,7,8};
+    int n = 5;
+    auto equalsN = partial( equal_to<int>(), n );
+    auto maybeNum = find( equalsN, N );
+    printf( "find (==(x=5)) [1,2,3,4,5,6,7,8] = %s\n", 
+            show( find(equalsN, N) ).c_str() );
+    n = 9;
+    printf( "find (==(x=9)) [1,2,3,4,5,6,7,8] = %s\n", 
+            show( find(equalsN, N) ).c_str() );
 }

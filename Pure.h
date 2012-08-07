@@ -32,8 +32,7 @@ class Maybe
     Maybe( typename Maybe::Just j ) : val( new  T(move(j.val)) ) { }
     constexpr Maybe( Nothing ) { }
 
-    // It does not make sense to copy a Maybe.
-    Maybe( const Maybe& m ) = delete;
+    Maybe( const Maybe& m )    = delete;
     constexpr Maybe( Maybe&& ) = default;
 
     constexpr explicit operator bool () { return (bool)val; }
@@ -43,17 +42,20 @@ class Maybe
 
     struct Just {
         T val;
-        constexpr Just( T u ) : val( std::move(u) ) { }
+        constexpr Just( T val ) : val( std::move(val) ) { }
     };
 
     struct Nothing { constexpr Nothing() {} };
 };
 
 template< class T >
-Maybe<T> Just( T&& t )
+class Maybe<T&> : public Maybe<T> { };
+
+template< class T >
+Maybe<T> Just( T t )
 {
     typedef Maybe<T> M;
-    return M( typename M::Just(forward<T>(t)) ); 
+    return M( typename M::Just(move(t)) ); 
 }
 
 template< class T >
@@ -326,16 +328,31 @@ Container filter( const F& f, Container cont )
     return cont;
 }
 
+/* find predicate in sequence(x) -> Maybe x */
+template < 
+    class F, class Sequence, 
+    // Cannot create Maybe<T&>.
+    class R = typename remove_reference <
+        decltype( declval<Sequence>().front() )
+    >::type
+>
+auto find( F f, const Sequence& s )
+    -> Maybe< R >
+{
+    auto it = find_if( begin(s), end(s), f );
+    return it != end(s) ? Just<R>(*it) : Nothing<R>();
+}
+
 /* find x in C -> iterator to x or end(C) */
 template< typename Container, typename T >
-constexpr auto find( const T& value, Container&& cont )
+constexpr auto cfind( const T& value, Container&& cont )
     -> decltype( begin(cont) )
 {
     return find( begin(cont), end(cont), value );
 }
 
 template< typename Container, typename F >
-constexpr auto find_if( const F& f, Container&& cont )
+constexpr auto cfind_if( const F& f, Container&& cont )
     -> decltype( begin(cont) )
 {
     return find_if( begin(cont), end(cont), f );
