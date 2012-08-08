@@ -18,7 +18,7 @@ using namespace std;
 /* 
  * Maybe x : Just x | Nothing 
  * A simple type to hold a possible value. Similar to a bool that holds nothing
- * when false and any value when true.
+ * when false and any value when true. By default, owns its value.
  */
 template< class T, class Ptr=unique_ptr<T>, class Value=decltype(*Ptr()) > 
 struct BasicMaybe
@@ -32,8 +32,11 @@ struct BasicMaybe
     BasicMaybe( pointer ptr ) : ptr( ptr ) { }
   public:
 
-    struct Just;        // Holds a definite value.
     struct Nothing { }; // Definitely holds nothing.
+    struct Just { // Holds a definite value.
+        T value;
+        constexpr Just( T value ) : value( std::move(value) ) { }
+    };
 
     BasicMaybe( typename BasicMaybe::Just j ) : ptr( new  T(move(j.value)) ) { }
     constexpr BasicMaybe( Nothing ) : ptr( nullptr ) { }
@@ -43,16 +46,10 @@ struct BasicMaybe
 
     constexpr explicit operator bool () { return ptr != nullptr; }
 
-    // Use at own risk.
-    constexpr value_type operator() () { return *ptr; }
+    constexpr value_type operator* () { return *ptr; }
 
-    struct Just {
-        T value;
-        constexpr Just( T value ) : value( std::move(value) ) { }
-    };
 };
 
-/* Maybe x* : Like above, but does not take ownership. */
 template< class T >
 struct Maybe : public BasicMaybe< T > 
 { 
@@ -66,7 +63,11 @@ struct Maybe : public BasicMaybe< T >
     constexpr Maybe( Nothing ) : M( Nothing() ) { }
 };
 
-/* Maybe pointer. Does not own what it references. */
+/* 
+ * Maybe x* 
+ * A C-style pointer doesn't define ownership properties, but we can assume any
+ * non-null value valid for the scope of this object.
+ */
 template< class T > 
 struct Maybe<T*> : public BasicMaybe< T*, T* >
 {
@@ -80,20 +81,33 @@ struct Maybe<T*> : public BasicMaybe< T*, T* >
     constexpr Maybe( Nothing ) : M( Nothing() ) { }
 };
 
-template< class T > Maybe<T> Just( T t ) {
+/* 
+ * Just  x -> Maybe (Just x) | with a definite value.
+ * Nothing -> Maybe Nothing  | with definitely no value.
+ * Mightbe pred x -> Maybe x | possible with a value.
+ */
+template< class T > Maybe<T> constexpr Just( T t ) {
     typedef Maybe<T> M;
     return M( typename M::Just(move(t)) ); 
 }
 
-template< class T > Maybe<T> Nothing() {
+template< class T > Maybe<T> constexpr Nothing() {
     typedef Maybe<T> M;
     return M( typename M::Nothing() );
 }
 
+// A simple short hand for constructing a Maybe based on a predicate.
+template< class T > Maybe<T> constexpr mightbe( bool p, T&& t ) {
+    typedef Maybe<T> M;
+    return p ? M( typename M::Just(forward<T>(t)) )
+             : M( typename M::Nothing() );
+}
+
+/* maybe b (a->b) (Maybe a) -> b */
 template< class R, class F, class T >
-R maybe( R&& r, F f, const Maybe<T>& m )
+constexpr R maybe( R&& nothingVal, F f, const Maybe<T>& m )
 {
-    return m ? f(m()) : forward<R>(r);
+    return m ? f( *m ) : forward<R>( nothingVal );
 }
 
 /* 
@@ -264,7 +278,7 @@ struct Functor< F, Maybe<T> >
     typedef Maybe< R > M;
 
     template< class _F, class _M >
-    Functor( _F&& f, _M&& m ) : M( m ? Just<R>( f(m()) ) : Nothing<R>() ) { }
+    Functor( _F&& f, _M&& m ) : M( m ? Just<R>( f(*m) ) : Nothing<R>() ) { }
 };
 
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
@@ -356,15 +370,13 @@ Container filter( const F& f, Container cont )
 /* find pred xs -> Maybe x */
 template< class F, class Sequence,
           class Val = decltype(&declval<Sequence>().front()) >
-auto find( F&& f, Sequence&& s )
-    -> Maybe< Val >
+Maybe<Val> find( F&& f, Sequence&& s )
 {
     const auto e = end( s ), b = begin( s );
     const auto it = find_if( b, e, forward<F>(f) );
 
     typedef Maybe< Val > M;
-    return it != e ? M( typename M::Just( &(*it) ) ) 
-                   : M( typename M::Nothing() );
+    return mightbe( it != e, &(*it) ); 
 }
 
 /* cfind x C -> C::iterator */

@@ -129,15 +129,10 @@ int main()
     printf( "5 * 2 = %d\n", partial(times,5)(2) );
     printf( "5 * 2 = %d\n", partial(times,5,2)() );
 
-    int x = 1;
-    auto p = pure::pure(x); // Evaluates to Pure<int&>.
-    auto fthree = fmap( plus_two, p ); 
-    printf( "fmap (+2) (pure x=1) --> %d\n", fthree() );
-    x = 2; 
-    printf( "fmap (+2) (pure x=2) --> %d\n", fthree() );
+    printf( "fmap (+2) (pure 1) --> %d\n", fmap(plus_two,pure::pure(1))() );
     printf( "fmap (+2) (+2) (1) --> %d\n", fmap(plus_two,plus_two)(1) );
 
-    auto pair = fmap( plus_two, std::make_pair(1,x) );
+    auto pair = fmap( plus_two, std::make_pair(1,2) );
     printf( "fmap (+2) (Pair 1 2) --> (Pair %d %d)\n", 
             pair.first, pair.second );
 
