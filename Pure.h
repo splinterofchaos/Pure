@@ -29,8 +29,9 @@ struct PartialApplication< F, Arg >
     F f;
     Arg arg;
 
-    constexpr PartialApplication( F&& f, Arg&& arg )
-        : f(forward<F>(f)), arg(forward<Arg>(arg))
+    template< class _F, class _Arg >
+    constexpr PartialApplication( _F&& f, _Arg&& arg )
+        : f(forward<_F>(f)), arg(forward<_Arg>(arg))
     {
     }
 
@@ -51,10 +52,11 @@ template< class F, class Arg1, class ...Args >
 struct PartialApplication< F, Arg1, Args... > 
     : public PartialApplication< PartialApplication<F,Arg1>, Args... >
 {
-    constexpr PartialApplication( F&& f, Arg1&& arg1, Args&& ...args )
+    template< class _F, class _Arg1, class ..._Args >
+    constexpr PartialApplication( _F&& f, _Arg1&& arg1, _Args&& ...args )
         : PartialApplication< PartialApplication<F,Arg1>, Args... > (
-            PartialApplication<F,Arg1>( forward<F>(f), forward<Arg1>(arg1) ),
-            forward<Args>(args)...
+            PartialApplication<F,Arg1>( forward<_F>(f), forward<_Arg1>(arg1) ),
+            forward<_Args>(args)...
         )
     {
     }
@@ -82,8 +84,9 @@ struct Composition<F,G>
 {
     F f; G g;
 
-    constexpr Composition( F&& f, G&& g ) 
-        : f(forward<F>(f)), g(forward<G>(g)) 
+    template< class _F, class _G >
+    constexpr Composition( _F&& f, _G&& g ) 
+        : f(forward<_F>(f)), g(forward<_G>(g)) 
     {
     }
 
@@ -100,10 +103,11 @@ struct Composition<F,G,H...> : Composition<F,Composition<G,H...>>
 {
     typedef Composition<G,H...> Comp;
 
-    constexpr Composition( F&& f, G&& g, H&& ...h )
-        : Composition<F,Composition<G,H...>> ( 
-            forward<F>(f), 
-            Comp( forward<G>(g), forward<H>(h)... )
+    template< class _F, class _G, class ..._H >
+    constexpr Composition( _F&& f, _G&& g, _H&& ...h )
+        : Composition<_F,Composition<_G,_H...>> ( 
+            forward<_F>(f), 
+            Comp( forward<_G>(g), forward<_H>(h)... )
         )
     {
     }
@@ -113,6 +117,170 @@ template< class F, class ...G >
 constexpr Composition<F,G...> compose( F&& f, G&& ...g )
 {
     return Composition<F,G...>( forward<F>(f), forward<G>(g)... );
+}
+
+/*
+ * Rotation.
+ * f(x...,y) = g(y,x...)
+ * rot f = g
+ * rrot g = f
+ * rrot( rot f ) = f
+ *
+ * In stack-based (or concatenative languages) rotation applies to the top
+ * three elements on the stack. Here, the function's arguments are treated as a
+ * stack and rotated. The entire stack gets rotated, rather than the top three
+ * elements.
+ */
+template< class F, class ...Args >
+struct PartialLast; // Apply the last argument.
+
+template< class F, class Last >
+struct PartialLast< F, Last > : public PartialApplication< F, Last > 
+{ 
+    template< class _F, class _Last >
+    constexpr PartialLast( _F&& f, _Last&& last )
+        : PartialApplication<F,Last>( forward<_F>(f), forward<_Last>(last) )
+    {
+    }
+};
+
+// Remove one argument each recursion.
+template< class F, class Arg1, class ...Args >
+struct PartialLast< F, Arg1, Args... > : public PartialLast< F, Args... > 
+{
+    template< class _F, class _Arg1, class ..._Args >
+    constexpr PartialLast( _F&& f, _Arg1&&, _Args&& ...args )
+        : PartialLast<F,Args...>( forward<_F>(f), forward<_Args>(args)... )
+    {
+    }
+};
+
+template< class F, class ...Args >
+struct PartialInitial; // Apply all but the last argument.
+
+template< class F, class Arg1, class Arg2 >
+struct PartialInitial< F, Arg1, Arg2 > : public PartialApplication< F, Arg1 >
+{
+    template< class _F, class _Arg1, class _Arg2 >
+    constexpr PartialInitial( _F&& f, _Arg1&& arg1, _Arg2&& )
+        : PartialApplication<F,Arg1>( forward<_F>(f), forward<_Arg1>(arg1) )
+    {
+    }
+};
+
+template< class F, class Arg1, class ...Args >
+struct PartialInitial< F, Arg1, Args... > 
+    : public PartialInitial< PartialApplication<F,Arg1>, Args... >
+{
+    template< class _F, class _Arg1, class ..._Args >
+    PartialInitial( _F&& f, _Arg1&& arg1, _Args&& ...args )
+        : PartialInitial<PartialApplication<F,Arg1>,Args...> (
+            partial( forward<_F>(f), forward<_Arg1>(arg1) ),
+            forward<_Args>(args)...
+        )
+    {
+    }
+};
+
+template< class F >
+struct Rot
+{
+    F f;
+
+    template< class _F >
+    constexpr Rot( _F&& f ) : f( forward<_F>(f) ) { }
+
+    template< class ...Args >
+    constexpr auto operator() ( Args&& ...args )
+        -> decltype ( 
+            declval< PartialInitial<PartialLast<F,Args...>,Args...> >()() 
+        )
+    {
+        /* We can't just (to my knowledge) pull the initial and final args
+         * apart, so first reverse-apply the last argument, then apply each
+         * argument forward until the last. The result is a zero-arity function
+         * to invoke.
+         */
+        return PartialInitial< PartialLast<F,Args...>, Args... > (
+            PartialLast< F, Args... >( f, forward<Args>(args)... ),
+            forward<Args>( args )...
+        )();
+    }
+};
+
+template< class F >
+struct RRot // Reverse Rotate
+{
+    F f;
+
+    template< class _F >
+    constexpr RRot( _F&& f ) : f( forward<_F>(f) ) { }
+
+    template< class Arg1, class ...Args >
+    constexpr auto operator() ( Arg1&& arg1, Args&& ...args )
+        -> decltype( f(declval<Args>()..., arg1) )
+    {
+        return f( forward<Args>(args)..., arg1 );
+    }
+};
+
+template< class F >
+constexpr Rot<F> rot( F&& f )
+{
+    return Rot<F>( forward<F>(f) );
+}
+
+template< class F >
+constexpr RRot<F> rrot( F&& f )
+{
+    return RRot<F>( forward<F>(f) );
+}
+
+/* Rotate F by N times. */
+template< unsigned int N, class F >
+struct NRot;
+
+template< class F >
+struct NRot< 1, F > : public Rot<F>
+{
+    template< class _F >
+    constexpr NRot( _F&& f ) : Rot<F>( forward<_F>(f) ) { }
+};
+
+template< unsigned int N, class F >
+struct NRot : public NRot< N-1, Rot<F> >
+{
+    template< class _F >
+    constexpr NRot( _F&& f ) : NRot< N-1, Rot<F> >( rot(forward<_F>(f)) ) { }
+};
+
+template< unsigned int N, class F >
+struct RNRot; // Reverse nrot.
+
+template< class F >
+struct RNRot< 1, F > : public RRot<F>
+{
+    template< class _F >
+    RNRot( _F&& f ) : RRot<F>( forward<_F>(f) ) { }
+};
+
+template< unsigned int N, class F >
+struct RNRot : public RNRot< N-1, RRot<F> >
+{
+    template< class _F >
+    RNRot( _F&& f ) : RNRot<N-1,RRot<F>>( rrot(forward<_F>(f)) ) { }
+};
+
+template< unsigned int N, class F >
+constexpr NRot<N,F> nrot( F&& f )
+{
+    return NRot<N,F>( forward<F>(f) );
+}
+
+template< unsigned int N, class F >
+constexpr RNRot<N,F> rnrot( F&& f )
+{
+    return RNRot<N,F>( forward<F>(f) );
 }
 
 /* 
