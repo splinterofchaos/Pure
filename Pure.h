@@ -16,51 +16,76 @@ namespace pure {
 using namespace std;
 
 /* 
- * Maybe x = Just x | Nothing 
+ * Maybe x : Just x | Nothing 
  * A simple type to hold a possible value. Similar to a bool that holds nothing
  * when false and any value when true.
  */
-template< class T >
-class Maybe 
+template< class T, class Ptr=unique_ptr<T>, class Value=decltype(*Ptr()) > 
+struct BasicMaybe
 {
-    unique_ptr<T> val; // A pointer fits the definition of 'possible value'.
+    typedef Ptr pointer;
+    typedef Value value_type;
 
+    pointer ptr; // A pointer fits the definition of 'possible value'.
+
+  protected:
+    BasicMaybe( pointer ptr ) : ptr( ptr ) { }
   public:
-    struct Just;    // Holds a definite value.
-    struct Nothing; // Definitely holds nothing.
 
-    Maybe( typename Maybe::Just j ) : val( new  T(move(j.val)) ) { }
-    constexpr Maybe( Nothing ) { }
+    struct Just;        // Holds a definite value.
+    struct Nothing { }; // Definitely holds nothing.
 
-    Maybe( const Maybe& m )    = delete;
-    constexpr Maybe( Maybe&& ) = default;
+    BasicMaybe( typename BasicMaybe::Just j ) : ptr( new  T(move(j.value)) ) { }
+    constexpr BasicMaybe( Nothing ) : ptr( nullptr ) { }
 
-    constexpr explicit operator bool () { return (bool)val; }
+    BasicMaybe( const BasicMaybe& m )    = delete;
+    constexpr BasicMaybe( BasicMaybe&& ) = default;
+
+    constexpr explicit operator bool () { return ptr != nullptr; }
 
     // Use at own risk.
-    constexpr decltype(*val) operator() () { return *val; }
+    constexpr value_type operator() () { return *ptr; }
 
     struct Just {
-        T val;
-        constexpr Just( T val ) : val( std::move(val) ) { }
+        T value;
+        constexpr Just( T value ) : value( std::move(value) ) { }
     };
-
-    struct Nothing { constexpr Nothing() {} };
 };
 
+/* Maybe x* : Like above, but does not take ownership. */
 template< class T >
-class Maybe<T&> : public Maybe<T> { };
+struct Maybe : public BasicMaybe< T > 
+{ 
+    typedef BasicMaybe< T > M;
+    using typename M::value_type;
+    using typename M::pointer;
+    using typename M::Just;
+    using typename M::Nothing;
 
-template< class T >
-Maybe<T> Just( T t )
+    constexpr Maybe( Just j ) : M( move(j) ) { }
+    constexpr Maybe( Nothing ) : M( Nothing() ) { }
+};
+
+/* Maybe pointer. Does not own what it references. */
+template< class T > 
+struct Maybe<T*> : public BasicMaybe< T*, T* >
 {
+    typedef BasicMaybe< T*, T*, T& > M;
+    using typename M::value_type;
+    using typename M::pointer;
+    using typename M::Just;
+    using typename M::Nothing;
+
+    constexpr Maybe( Just j ) : M( j.value ) { }
+    constexpr Maybe( Nothing ) : M( Nothing() ) { }
+};
+
+template< class T > Maybe<T> Just( T t ) {
     typedef Maybe<T> M;
     return M( typename M::Just(move(t)) ); 
 }
 
-template< class T >
-Maybe<T> Nothing()
-{
+template< class T > Maybe<T> Nothing() {
     typedef Maybe<T> M;
     return M( typename M::Nothing() );
 }
@@ -328,22 +353,21 @@ Container filter( const F& f, Container cont )
     return cont;
 }
 
-/* find predicate in sequence(x) -> Maybe x */
-template < 
-    class F, class Sequence, 
-    // Cannot create Maybe<T&>.
-    class R = typename remove_reference <
-        decltype( declval<Sequence>().front() )
-    >::type
->
-auto find( F f, const Sequence& s )
-    -> Maybe< R >
+/* find pred xs -> Maybe x */
+template< class F, class Sequence,
+          class Val = decltype(&declval<Sequence>().front()) >
+auto find( F&& f, Sequence&& s )
+    -> Maybe< Val >
 {
-    auto it = find_if( begin(s), end(s), f );
-    return it != end(s) ? Just<R>(*it) : Nothing<R>();
+    const auto e = end( s ), b = begin( s );
+    const auto it = find_if( b, e, forward<F>(f) );
+
+    typedef Maybe< Val > M;
+    return it != e ? M( typename M::Just( &(*it) ) ) 
+                   : M( typename M::Nothing() );
 }
 
-/* find x in C -> iterator to x or end(C) */
+/* cfind x C -> C::iterator */
 template< typename Container, typename T >
 constexpr auto cfind( const T& value, Container&& cont )
     -> decltype( begin(cont) )

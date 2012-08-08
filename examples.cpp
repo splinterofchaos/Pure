@@ -92,7 +92,8 @@ template< class X > string showJust( X x ) {
 }
 
 template< class T > string show( const Maybe<T>& m ) {
-    return maybe( string("Nothing"), showJust<T>, m );
+    typedef typename Maybe<T>::value_type V;
+    return maybe( string("Nothing"), showJust<V>, m );
 }
 
 int main()
@@ -143,18 +144,17 @@ int main()
     auto oneTwo = fmap( plus_two, std::list<int>{1,2} );
     printf( "fmap (+2) [1,2] = [%d %d]\n", oneTwo.front(), oneTwo.back() );
 
-    auto justFour = fmap( plus_two, Just(2) );
-    printf( "fmap (+2) (Just 2) = (%s)\n", show(justFour).c_str() );
-    auto notFour = fmap( plus_two, Nothing<int>() );
-    printf( "fmap (+2) (Just 2) = (%s)\n", show(notFour).c_str() );
+    printf( "fmap (+2) (Just 2) = (%s)\n", 
+            show( fmap(plus_two, Just(2)) ).c_str() );
+    printf( "fmap (+2) (Nothing) = (%s)\n", 
+            show( fmap(plus_two, Nothing<int>()) ).c_str() );
 
     vector<int> N = {1,2,3,4,5,6,7,8};
     int n = 5;
     auto equalsN = partial( equal_to<int>(), n );
-    auto maybeNum = find( equalsN, N );
-    printf( "find (==(x=5)) [1,2,3,4,5,6,7,8] = %s\n", 
+    printf( "find (==5) [1,2,3,4,5,6,7,8] = %s\n", 
             show( find(equalsN, N) ).c_str() );
     n = 9;
-    printf( "find (==(x=9)) [1,2,3,4,5,6,7,8] = %s\n", 
+    printf( "find (==9) [1,2,3,4,5,6,7,8] = %s\n", 
             show( find(equalsN, N) ).c_str() );
 }
