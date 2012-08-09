@@ -29,7 +29,7 @@ struct BasicMaybe
     pointer ptr; // A pointer fits the definition of 'possible value'.
 
   protected:
-    BasicMaybe( pointer ptr ) : ptr( ptr ) { }
+    constexpr BasicMaybe( pointer ptr ) : ptr( ptr ) { }
   public:
 
     struct Nothing { }; // Definitely holds nothing.
@@ -110,6 +110,30 @@ constexpr R maybe( R&& nothingVal, F f, const Maybe<T>& m )
     return m ? f( *m ) : forward<R>( nothingVal );
 }
 
+/* 
+ * Just f  * Just x  = Just (f x)
+ * _       * _       = Nothing
+ * Just x  | _       = Just x
+ * Nothing | Just x  = Just x
+ * Nothing | Nothing = Nothing
+ */
+template< class F, class T, 
+          class Ret = decltype( declval<F>()(declval<T>()) ) >
+const auto operator* ( const Maybe<F>& a, const Maybe<T>& b )
+    -> Maybe< Ret >
+{
+    return a and b ? Maybe<Ret>( (*a)(*b) ) : Nothing<Ret>();
+}
+
+template< class T >
+const Maybe<T>& operator| ( const Maybe<T>& a, const Maybe<T>& b )
+{ return a ? a : b; }
+
+template< class T >
+Maybe<T> operator| ( Maybe<T>&& a, Maybe<T>&& b )
+{ return a ? move(a) : move(b); }
+
+/* Either a b : Left a | Right b */
 template< class L, class R >
 struct Either
 {
@@ -133,17 +157,38 @@ struct Either
     constexpr Either( Right x ) : right( new right_type(move(x.value)) ) { }
 };
 
+/* 
+ * Left<b>  a -> Either a b
+ * Right<a> b -> Either a b
+ * Since an Either cannot be constructed without two type arguments, the
+ * 'other' type must be explicitly declared when called. It is, for
+ * convenience, the first type argument in both.
+ */
 template< class R, class L, class E = Either<L,R> >
 constexpr E Left( L x ) { return E( typename E::Left(move(x)) ); }
 
 template< class L, class R, class E = Either<L,R> >
 constexpr E Right( R x ) { return E( typename E::Right(move(x)) ); }
 
-template< class F, class G, class L, class R, 
-          class Ret = decltype( declval<F>()(declval<L>()) ) >
-constexpr Ret either( F&& f, G&& g, const Either<L,R>& e )
+/* either (a->c) (b->c) (Either a b) -> c */
+template< class F, class G, class L, class R >
+constexpr auto either( F&& f, G&& g, const Either<L,R>& e )
+    -> decltype( f(*e.right) )
 {
-    return e.left ? f(*e.left) : g(*e.right);
+    return e.right ? f(*e.right) : g(*e.left);
+}
+
+/*
+ * Right f * Right x = Right (f x)
+ * _       * _       = Left _
+ */
+template< class L, class F, class T, 
+          class Ret = decltype( declval<F>()(declval<T>()) ) >
+constexpr Either<L,Ret> operator* ( const Either<L,F>& a, 
+                                    const Either<L,T>& b )
+{
+    return a.right and b.right ? Right<L>( (*a.right)(*b.right) )
+        : a.left ? Left<Ret>( *a.left ) : Left<Ret>( *b.left );
 }
 
 /* 
