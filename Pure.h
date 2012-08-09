@@ -59,6 +59,7 @@ struct Maybe : public BasicMaybe< T >
     using typename M::Just;
     using typename M::Nothing;
 
+    constexpr Maybe( Maybe&& ) = default;
     constexpr Maybe( Just j ) : M( move(j) ) { }
     constexpr Maybe( Nothing ) : M( Nothing() ) { }
 };
@@ -77,6 +78,7 @@ struct Maybe<T*> : public BasicMaybe< T*, T* >
     using typename M::Just;
     using typename M::Nothing;
 
+    constexpr Maybe( Maybe&& ) = default;
     constexpr Maybe( Just j ) : M( j.value ) { }
     constexpr Maybe( Nothing ) : M( Nothing() ) { }
 };
@@ -86,13 +88,11 @@ struct Maybe<T*> : public BasicMaybe< T*, T* >
  * Nothing -> Maybe Nothing  | with definitely no value.
  * Mightbe pred x -> Maybe x | possible with a value.
  */
-template< class T > Maybe<T> constexpr Just( T t ) {
-    typedef Maybe<T> M;
+template< class T, class M = Maybe<T> > constexpr M Just( T t ) {
     return M( typename M::Just(move(t)) ); 
 }
 
-template< class T > Maybe<T> constexpr Nothing() {
-    typedef Maybe<T> M;
+template< class T, class M = Maybe<T> > constexpr M Nothing() {
     return M( typename M::Nothing() );
 }
 
@@ -108,6 +108,42 @@ template< class R, class F, class T >
 constexpr R maybe( R&& nothingVal, F f, const Maybe<T>& m )
 {
     return m ? f( *m ) : forward<R>( nothingVal );
+}
+
+template< class L, class R >
+struct Either
+{
+    typedef L left_type;
+    typedef R right_type;
+
+    unique_ptr<left_type> left;
+    unique_ptr<right_type> right;
+
+    struct Left { 
+        left_type value;
+        constexpr Left( left_type value ) : value(move(value)) { }
+    };
+
+    struct Right { 
+        right_type value;
+        constexpr Right( right_type value ) : value(move(value)) { }
+    };
+
+    constexpr Either( Left x )  : left(  new left_type (move(x.value)) ) { }
+    constexpr Either( Right x ) : right( new right_type(move(x.value)) ) { }
+};
+
+template< class R, class L, class E = Either<L,R> >
+constexpr E Left( L x ) { return E( typename E::Left(move(x)) ); }
+
+template< class L, class R, class E = Either<L,R> >
+constexpr E Right( R x ) { return E( typename E::Right(move(x)) ); }
+
+template< class F, class G, class L, class R, 
+          class Ret = decltype( declval<F>()(declval<L>()) ) >
+constexpr Ret either( F&& f, G&& g, const Either<L,R>& e )
+{
+    return e.left ? f(*e.left) : g(*e.right);
 }
 
 /* 
@@ -277,8 +313,25 @@ struct Functor< F, Maybe<T> >
     typedef decltype( declval<F>()(declval<T>()) ) R;
     typedef Maybe< R > M;
 
-    template< class _F, class _M >
-    Functor( _F&& f, _M&& m ) : M( m ? Just<R>( f(*m) ) : Nothing<R>() ) { }
+    template< class _F >
+    Functor( _F&& f, const M& m ) 
+        : M( m ? Just<R>( f(*m) ) : Nothing<R>() ) 
+    { 
+    }
+};
+
+template< class F, class L, class R >
+struct Functor< F, Either<L,R> > 
+    : public Either< L, decltype( declval<F>()(declval<R>()) ) >
+{
+    typedef decltype( declval<F>()(declval<R>()) ) R2;
+    typedef Either< L, R2 > E;
+    template< class _F >
+    constexpr Functor( _F&& f, const Either<L,R>& e )
+        : Either<L,R2>( e.right ? 
+                        Right<L>( f(*e.right) ) : Left<R2>( *e.left ) )
+    {
+    }
 };
 
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */

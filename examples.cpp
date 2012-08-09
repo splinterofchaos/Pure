@@ -87,6 +87,10 @@ string show( int x ) {
     return digits;
 }
 
+string show( string s ) {
+    return "\"" + s + "\"";
+}
+
 template< class X > string showJust( X x ) {
     return "Just " + show( x );
 }
@@ -94,6 +98,15 @@ template< class X > string showJust( X x ) {
 template< class T > string show( const Maybe<T>& m ) {
     typedef typename Maybe<T>::value_type V;
     return maybe( string("Nothing"), showJust<V>, m );
+}
+
+template< class L > string showLeft( const L& l ) 
+{ return "Left "  + show( l ); }
+template< class R > string showRight( const R& r ) 
+{ return "Right " + show( r ); }
+
+template< class L, class R > string show( const Either<L,R>& e ) {
+    return either( showLeft<L>, showRight<R>, e );
 }
 
 int main()
@@ -143,6 +156,11 @@ int main()
             show( fmap(plus_two, Just(2)) ).c_str() );
     printf( "fmap (+2) (Nothing) = (%s)\n", 
             show( fmap(plus_two, Nothing<int>()) ).c_str() );
+
+    printf( "fmap (+2) (Left \"yawn\") = %s\n", 
+            show( fmap(plus_two,Left<int>("yawn")) ).c_str() );
+    printf( "fmap (+2) (Right 5) = %s\n",
+            show( fmap(plus_two,Right<string>(5)) ).c_str() );
 
     vector<int> N = {1,2,3,4,5,6,7,8};
     int n = 5;
