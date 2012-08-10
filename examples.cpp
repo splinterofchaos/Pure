@@ -43,48 +43,33 @@ Vec operator * ( const Vec& a, int x ) { return Vec(a) * x; }
 Vec operator * ( int x, const Vec& a ) { return Vec(a) * x; }
 
 /* Complete the quadratic equation with a pre-calculated square root. */
-constexpr float _qroot( float a, float b, bool negate, float root )
-{
-    return (-b + (negate ? -root:root)) / (2 * a);
-}
-
-/* 
- * quadratic root(a,b,c) = x or y.
- * pure:: functions prefer to work with sequences, so this returns an array
- * containing just the two possible values of x.
- */
-constexpr std::array<float,2> quadratic_root( float a, float b, float c )
-{
-    return cleave ( 
-        sqrt(b*b - 4*a*c),
-        partial( _qroot, a, b, false ),
-        partial( _qroot, a, b, true  )
-    );
-}
-
-constexpr float _qroot2( float a, float b, float root )
+constexpr float _qroot( float a, float b, float root )
 {
     return (-b + root) / (2 * a);
 }
 
-constexpr float _qroot_root( float a, float b, float c )
+constexpr pair<float,float> _split_qroot( float a, float b,float root )
 {
-    return sqrt( b*b - 4*a*c );
+    return make_pair( _qroot(a,b,root), _qroot(a,b,-root) );
 }
 
-constexpr std::array<float,2> quadratic_root2( float a, float b, float c )
+/* 
+ * quadratic root(a,b,c) = Maybe [x,y]
+ * pure:: functions prefer to work with sequences, so this returns an array
+ * containing just the two possible values of x.
+ */
+Maybe<pair<float,float>> quadratic_root( float a, float b, float c )
 {
-    return cleave_with (
-        partial( _qroot2, a, b ),
-        _qroot_root(a,b,c),
-        - _qroot_root(a,b,c)
-    );
+    // Return split(a,b,root) 
+    return Just( partial(_split_qroot, a, b) ) * 
+        // IFF root>=0; else Nothing.
+        (b*b >= 4*a*c ? Just( sqrt(b*b-4*a*c) ) : Nothing<float>());
 }
 
 int five() { return 5; }
-int times_two(int x) { return x * 2; }
-int plus_two(int x) { return x + 2; }
 constexpr int times(int x,int y) { return x*y; }
+auto times_two = partial( times, 2 );
+constexpr int plus_two(int x) { return x + 2; }
 
 // squash(f) returns a functor that duplicates its first argument.
 constexpr auto square = squash( times );
@@ -98,12 +83,35 @@ string show( int x ) {
     return digits;
 }
 
+string show( float x ) {
+    char digits[20];
+    sprintf( digits, "%.1f", x );
+    return digits;
+}
+
 string show( string s ) {
     return "\"" + s + "\"";
 }
 
-template< class X > string showJust( X x ) {
-    return "Just " + show( x );
+template< class S > typename ESeq<S,string>::type show( S s ) {
+    string str = "[";
+    for( const auto& x : s ) {
+        str += show( x ) + " ";
+    }
+    if( str.size() > 1 )
+        str.back() = ']';
+    else 
+        str.push_back( ']' );
+
+    return str;
+}
+
+template< class X, class Y > string show( const pair<X,Y>& p ) {
+    return "Pair (" + show(p.first) + ") (" + show(p.second) + ")";
+}
+
+template< class X > string showJust( const X& x ) {
+    return "Just (" + show( x ) + ")";
 }
 
 template< class T > string show( const Maybe<T>& m ) {
@@ -112,9 +120,9 @@ template< class T > string show( const Maybe<T>& m ) {
 }
 
 template< class R > string showRight( const R& r ) 
-{ return "Right " + show( r ); }
+{ return "Right (" + show( r ) + ")"; }
 template< class L > string showLeft( const L& l ) 
-{ return "Left "  + show( l ); }
+{ return "Left  (" + show( l ) + ")"; }
 
 template< class L, class R > 
 string show( const Either<L,R>& e ) {
@@ -131,7 +139,7 @@ int main()
         "sum of (1,2,3,4) = %d\n", // = 10
         foldl<int>( std::plus<int>(), vector<int>{1,2,3,4} )
     );
-    printf (
+    printf(
         "sum of (4,3,2,1) = %d\n", // = 10
         foldr<int>( std::plus<int>(), vector<int>{1,2,3,4} )
     );
@@ -148,15 +156,10 @@ int main()
     printf( "<7,7> * 2 = <%d,%d>\n", fourteens[0], fourteens[1] );
 
     auto roots = quadratic_root( 1, 3, -4 );
-    printf (
-        "quadratic root of x^2 + 3x - 4 = 0 : %f or %f\n",
-        roots[0], roots[1]
-    );
-    roots = quadratic_root2( 1, 3, -4 );
-    printf (
-        "quadratic root of x^2 + 3x - 4 = 0 : %f or %f\n",
-        roots[0], roots[1]
-    );
+    printf( "quadratic root of x^2 + 3x - 4 = 0 : %s\n",
+            show( quadratic_root(1,3,-4) ).c_str() );
+    printf( "quadratic root of x^2 + 4 = 0 : %s\n",
+            show( quadratic_root(1,0,4) ).c_str() );
 
     constexpr auto sqrDoublePlus2 = compose( plus_two, times_two, square );
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", sqrDoublePlus2(3) );
@@ -167,12 +170,11 @@ int main()
     printf( "fmap (+2) (pure 1) = %d\n", fmap(plus_two,pure::pure(1))() );
     printf( "fmap (+2) (+2) 1   = %d\n", fmap(plus_two,plus_two)(1) );
 
-    auto pair = fmap( plus_two, std::make_pair(1,2) );
-    printf( "fmap (+2) (Pair 1 2) = Pair %d %d\n", 
-            pair.first, pair.second );
+    printf( "fmap (+2) (Pair 1 2) = %s\n", 
+            show( fmap(plus_two, std::make_pair(1,2)) ).c_str() );
 
-    auto oneTwo = fmap( plus_two, std::list<int>{1,2} );
-    printf( "fmap (+2) [1,2] = [%d,%d]\n", oneTwo.front(), oneTwo.back() );
+    printf( "fmap (+2) [1,2] = %s\n", 
+            show( fmap(plus_two, std::list<int>{1,2}) ).c_str() );
 
     printf( "fmap (+2) (Just 2)  = %s\n", 
             show( fmap(plus_two, Just(2)) ).c_str() );

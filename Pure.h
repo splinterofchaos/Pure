@@ -119,7 +119,7 @@ constexpr R maybe( R&& nothingVal, F f, const Maybe<T>& m )
  */
 template< class F, class T, 
           class Ret = decltype( declval<F>()(declval<T>()) ) >
-const auto operator* ( const Maybe<F>& a, const Maybe<T>& b )
+auto operator* ( const Maybe<F>& a, const Maybe<T>& b )
     -> Maybe< Ret >
 {
     return a and b ? Maybe<Ret>( (*a)(*b) ) : Nothing<Ret>();
