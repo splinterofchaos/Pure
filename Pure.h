@@ -809,10 +809,10 @@ array<T,N> generate( F f )
     return cont;
 }
 
-template< class T, class F >
-vector<T> generate( F f, unsigned int n )
+template< class F, class V = vector< decltype(declval<F>()()) > >
+V generate( F f, unsigned int n )
 {
-    vector<T> c; c.reserve(n);
+    V c; c.reserve(n);
     while( n-- )
         c.push_back( f() );
     return c;
