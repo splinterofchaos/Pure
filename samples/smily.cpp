@@ -97,13 +97,20 @@ I incf( F&& f, Val&& step ) {
 }
 
 typedef std::pair<float,float> Vec;
+constexpr Vec vec( float x, float y ) { return Vec(x,y); }
 constexpr float get_x( const Vec& v ) { return v.first; }
 constexpr float get_y( const Vec& v ) { return v.second; }
+void set_x( Vec& v, float x ) { v.first = x; }
+void set_y( Vec& v, float y ) { v.second = y; }
 
 float times( float x, float y ) { return x * y; }
 
 Vec operator* ( const Vec& v, float x ) {
     return pure::fmap( pure::partial(times,x), Vec(v) );
+}
+
+constexpr Vec operator+ ( const Vec& a, const Vec& b ) {
+    return Vec( a.first+b.first, a.second+b.second );
 }
 
 constexpr Vec vecFromAngle( float a ) {
@@ -128,6 +135,37 @@ std::string show( const Vec& v ) {
 
 constexpr auto vert = pure::join( glVertex2f, get_x, get_y );
 
+constexpr float CIRCUMFERENCE = 2 * 3.145; // with r=1.
+constexpr unsigned int STEPS = 31;
+auto unitCircle = 
+    pure::generate( incf(vecFromAngle,CIRCUMFERENCE/STEPS), STEPS+1 ); 
+
+void paint_face( const Vec& v, float scale = 1 )
+{
+    glBegin( GL_TRIANGLE_STRIP );
+    for( const auto& p : unitCircle ) {
+        vert( p*scale + v );
+        vert( p*0.98f*scale + v );
+    }
+    glEnd(); 
+
+    glBegin( GL_TRIANGLE_STRIP );
+    for( float x = -0.7f; x < 0.7f; x += 0.1f ) {
+        float y = -(x*x)*0.8 + 0.75;
+        vert( Vec(x,y)*scale + v );
+        vert( Vec(x,y*1.2)*scale + v );
+    }
+    glEnd(); 
+
+    float diameter = scale * 2;
+    if( diameter > 0.01 ) {
+        Vec off = vec(0.45,-0.15) * scale;
+        paint_face( v + off, scale*0.45 );
+        set_x( off, -get_x(off) );
+        paint_face( v + off, scale*0.45 );
+    }
+}
+
 int main()
 {
 
@@ -138,11 +176,6 @@ int main()
     enum KeyState{ NOT_PRESSED=0, PRESSED=1 };
     auto keys = pure::generate( pure::pure(NOT_PRESSED), (unsigned)SDLK_LAST );
     
-    constexpr float CIRCUMFERENCE = 2 * 3.145; // with r=1.
-    constexpr unsigned int STEPS = 21;
-    auto unitCircle = 
-        pure::generate( incf(vecFromAngle,CIRCUMFERENCE/STEPS), STEPS+1 ); 
-
     while( not quit )
     {
         Uint8* keyEvents = SDL_GetKeyState( 0 );
@@ -163,12 +196,8 @@ int main()
                 break;
             }
         }
-         glBegin( GL_TRIANGLE_STRIP );
-         for( auto& p : unitCircle ) {
-             vert( p );
-             vert( p*0.5f );
-         }
-         glEnd(); 
+
+        paint_face( Vec(0,0) );
 
         update_screen();
     }
