@@ -9,10 +9,187 @@
 #include <vector>
 #include <utility>
 #include <tuple>
+#include <memory>
 
 namespace pure {
 
 using namespace std;
+
+/* 
+ * Maybe x : Just x | Nothing 
+ * A simple type to hold a possible value. Similar to a bool that holds nothing
+ * when false and any value when true. By default, owns its value.
+ */
+template< class T, class Ptr=unique_ptr<T>, class Value=decltype(*Ptr()) > 
+struct BasicMaybe
+{
+    typedef Ptr pointer;
+    typedef Value value_type;
+
+    pointer ptr; // A pointer fits the definition of 'possible value'.
+
+  protected:
+    constexpr BasicMaybe( pointer ptr ) : ptr( ptr ) { }
+  public:
+
+    struct Nothing { }; // Definitely holds nothing.
+    struct Just { // Holds a definite value.
+        T value;
+        constexpr Just( T value ) : value( std::move(value) ) { }
+    };
+
+    BasicMaybe( typename BasicMaybe::Just j ) : ptr( new  T(move(j.value)) ) { }
+    constexpr BasicMaybe( Nothing ) : ptr( nullptr ) { }
+
+    BasicMaybe( const BasicMaybe& m )    = delete;
+    constexpr BasicMaybe( BasicMaybe&& ) = default;
+
+    constexpr explicit operator bool () { return ptr != nullptr; }
+
+    constexpr value_type operator* () { return *ptr; }
+
+};
+
+template< class T >
+struct Maybe : public BasicMaybe< T > 
+{ 
+    typedef BasicMaybe< T > M;
+    using typename M::value_type;
+    using typename M::pointer;
+    using typename M::Just;
+    using typename M::Nothing;
+
+    constexpr Maybe( Maybe&& ) = default;
+    constexpr Maybe( Just j ) : M( move(j) ) { }
+    constexpr Maybe( Nothing ) : M( Nothing() ) { }
+};
+
+/* 
+ * Maybe x* 
+ * A C-style pointer doesn't define ownership properties, but we can assume any
+ * non-null value valid for the scope of this object.
+ */
+template< class T > 
+struct Maybe<T*> : public BasicMaybe< T*, T* >
+{
+    typedef BasicMaybe< T*, T*, T& > M;
+    using typename M::value_type;
+    using typename M::pointer;
+    using typename M::Just;
+    using typename M::Nothing;
+
+    constexpr Maybe( Maybe&& ) = default;
+    constexpr Maybe( Just j ) : M( j.value ) { }
+    constexpr Maybe( Nothing ) : M( Nothing() ) { }
+};
+
+/* 
+ * Just  x -> Maybe (Just x) | with a definite value.
+ * Nothing -> Maybe Nothing  | with definitely no value.
+ * Mightbe pred x -> Maybe x | possible with a value.
+ */
+template< class T, class M = Maybe<T> > constexpr M Just( T t ) {
+    return M( typename M::Just(move(t)) ); 
+}
+
+template< class T, class M = Maybe<T> > constexpr M Nothing() {
+    return M( typename M::Nothing() );
+}
+
+// A simple short hand for constructing a Maybe based on a predicate.
+template< class T > Maybe<T> constexpr mightbe( bool p, T&& t ) {
+    typedef Maybe<T> M;
+    return p ? M( typename M::Just(forward<T>(t)) )
+             : M( typename M::Nothing() );
+}
+
+/* maybe b (a->b) (Maybe a) -> b */
+template< class R, class F, class T >
+constexpr R maybe( R&& nothingVal, F f, const Maybe<T>& m )
+{
+    return m ? f( *m ) : forward<R>( nothingVal );
+}
+
+/* 
+ * Just f  * Just x  = Just (f x)
+ * _       * _       = Nothing
+ * Just x  | _       = Just x
+ * Nothing | Just x  = Just x
+ * Nothing | Nothing = Nothing
+ */
+template< class F, class T, 
+          class Ret = decltype( declval<F>()(declval<T>()) ) >
+const auto operator* ( const Maybe<F>& a, const Maybe<T>& b )
+    -> Maybe< Ret >
+{
+    return a and b ? Maybe<Ret>( (*a)(*b) ) : Nothing<Ret>();
+}
+
+template< class T >
+const Maybe<T>& operator| ( const Maybe<T>& a, const Maybe<T>& b )
+{ return a ? a : b; }
+
+template< class T >
+Maybe<T> operator| ( Maybe<T>&& a, Maybe<T>&& b )
+{ return a ? move(a) : move(b); }
+
+/* Either a b : Left a | Right b */
+template< class L, class R >
+struct Either
+{
+    typedef L left_type;
+    typedef R right_type;
+
+    unique_ptr<left_type> left;
+    unique_ptr<right_type> right;
+
+    struct Left { 
+        left_type value;
+        constexpr Left( left_type value ) : value(move(value)) { }
+    };
+
+    struct Right { 
+        right_type value;
+        constexpr Right( right_type value ) : value(move(value)) { }
+    };
+
+    constexpr Either( Left x )  : left(  new left_type (move(x.value)) ) { }
+    constexpr Either( Right x ) : right( new right_type(move(x.value)) ) { }
+};
+
+/* 
+ * Left<b>  a -> Either a b
+ * Right<a> b -> Either a b
+ * Since an Either cannot be constructed without two type arguments, the
+ * 'other' type must be explicitly declared when called. It is, for
+ * convenience, the first type argument in both.
+ */
+template< class R, class L, class E = Either<L,R> >
+constexpr E Left( L x ) { return E( typename E::Left(move(x)) ); }
+
+template< class L, class R, class E = Either<L,R> >
+constexpr E Right( R x ) { return E( typename E::Right(move(x)) ); }
+
+/* either (a->c) (b->c) (Either a b) -> c */
+template< class F, class G, class L, class R >
+constexpr auto either( F&& f, G&& g, const Either<L,R>& e )
+    -> decltype( f(*e.right) )
+{
+    return e.right ? f(*e.right) : g(*e.left);
+}
+
+/*
+ * Right f * Right x = Right (f x)
+ * _       * _       = Left _
+ */
+template< class L, class F, class T, 
+          class Ret = decltype( declval<F>()(declval<T>()) ) >
+constexpr Either<L,Ret> operator* ( const Either<L,F>& a, 
+                                    const Either<L,T>& b )
+{
+    return a.right and b.right ? Right<L>( (*a.right)(*b.right) )
+        : a.left ? Left<Ret>( *a.left ) : Left<Ret>( *b.left );
+}
 
 /* 
  * Partial application.
@@ -94,7 +271,7 @@ struct Composition<F,G>
     constexpr auto operator() ( Args&& ...args )
         -> decltype( f(g(declval<Args>()...)) )
     {
-        return g( f(forward<Args>(args)...) );
+        return f( g(forward<Args>(args)...) );
     }
 };
 
@@ -118,6 +295,65 @@ constexpr Composition<F,G...> compose( F&& f, G&& ...g )
 {
     return Composition<F,G...>( forward<F>(f), forward<G>(g)... );
 }
+
+/*
+ * In category theory, a functor is a mapping between categories.
+ * Pure provides the minimal wrappings to lift X to a higher category.
+ *
+ * pure(x) -> F(x) where F(_) = x
+ */
+template< class X >
+struct Pure
+{
+    X x;
+
+    constexpr Pure( X x ) : x( x ) { }
+    constexpr Pure( Pure&& ) = default;
+
+    template< class ...Args >
+    constexpr X operator() ( Args ... ) { return x; }
+};
+
+template< class X >
+constexpr Pure<X> pure( X&& x )
+{
+    return Pure<X>( forward<X>(x) );
+}
+
+/* 
+ * fmap maps a function, f, to a functor, F such that for each f:X->Y, there
+ * exists an F(f):F(X)->F(Y). 
+ *
+ * fmap f F(x) = F(f x) 
+ *
+ * In Haskell, each mappable type class must be specialized with a Functor
+ * instance. Likewise, here, we must use template specialization for each type
+ * we want mappable.
+ */
+template< class ...F > struct Functor;
+
+/* fmap f g = compose( f, g ) */
+template< class F, class G >
+struct Functor<F,G> : public Composition<F,G>
+{
+    template< class _F, class _G >
+    constexpr Functor( _F&& f, _G&& g )
+        : Composition<F,G>( forward<_F>(f), forward<_G>(g) )
+    {
+    }
+};
+
+/* fmap f Pair(x,y) = Pair( f x, f y ) */
+template< class F, class X, class Y >
+struct Functor< F, std::pair<X,Y> > : public std::pair<X,Y>
+{
+    template< class _F, class P >
+    constexpr Functor( _F&& f, P&& p )
+        : std::pair<X,Y>( f( forward<P>(p).first  ), 
+                          f( forward<P>(p).second ) )
+    {
+    }
+};
 
 /*
  * Rotation.
@@ -283,6 +519,76 @@ constexpr RNRot<N,F> rnrot( F&& f )
     return RNRot<N,F>( forward<F>(f) );
 }
 
+template< class F, class T >
+struct Functor< F, Maybe<T> > 
+    : Maybe< decltype( declval<F>()(declval<T>()) ) >
+{
+    typedef decltype( declval<F>()(declval<T>()) ) R;
+    typedef Maybe< R > M;
+
+    template< class _F >
+    Functor( _F&& f, const M& m ) 
+        : M( m ? Just<R>( f(*m) ) : Nothing<R>() ) 
+    { 
+    }
+};
+
+template< class F, class L, class R >
+struct Functor< F, Either<L,R> > 
+    : public Either< L, decltype( declval<F>()(declval<R>()) ) >
+{
+    typedef decltype( declval<F>()(declval<R>()) ) R2;
+    typedef Either< L, R2 > E;
+    template< class _F >
+    constexpr Functor( _F&& f, const Either<L,R>& e )
+        : Either<L,R2>( e.right ? 
+                        Right<L>( f(*e.right) ) : Left<R2>( *e.left ) )
+    {
+    }
+};
+
+/* map f {1,2,3} -> { f(1), f(2), f(3) } */
+template< typename Sequence, typename F >
+Sequence map( F&& f, Sequence cont ) 
+{
+    transform( begin(cont), end(cont), begin(cont), 
+               forward<F>(f) );
+    return cont;
+}
+
+template< class C > struct IsSeqImpl {
+    // Can only be supported on STL-like sequence types, not pointers.
+    template< class _C > static true_type f(typename _C::iterator*);
+    template< class _C > static false_type f(...);
+    typedef decltype( f<C>(0) ) type;
+};
+
+template< class C > struct IsSeq : public IsSeqImpl<C>::type { };
+
+/* Enable if is an STL-like sequence. */
+template< class C, class R > struct ESeq : enable_if<IsSeq<C>::value,R> { };
+
+/* Disable if is sequence. */
+template< class C, class R > struct XSeq : enable_if<not IsSeq<C>::value,R> { };
+
+/* fmap f {...} = map f {...} where {...} is any sequence. */
+template< class F, class C >
+constexpr auto fmap( F&& f, C&& c )
+    -> typename ESeq <
+        C, decltype( map(forward<F>(f),forward<C>(c)) ) 
+    >::type
+{
+    return map( forward<F>(f), forward<C>(c) );
+}
+
+template< class F, class G >
+constexpr auto fmap( F&& f, G&& g )
+    // Disallow on sequences.
+    -> typename XSeq< G, Functor<F,G> >::type
+{
+    return Functor<F,G>( forward<F>(f), forward<G>(g) );
+}
+
 /* squash[ f(x,x) ] = g(x) */
 template< class F >
 struct Squash
@@ -368,15 +674,6 @@ constexpr bool ordered( const Container& c )
         ).second == end(c);
 }
 
-/* map f {1,2,3} -> { f(1), f(2), f(3) } */
-template< typename Container, typename F >
-Container map( F&& f, Container cont ) 
-{
-    transform( begin(cont), end(cont), begin(cont), 
-                    forward<F>(f) );
-    return cont;
-}
-
 /* filter f C -> { x for x in C such that f(x) is true. } */
 template< typename Container, typename F >
 Container filter( const F& f, Container cont )
@@ -392,16 +689,28 @@ Container filter( const F& f, Container cont )
     return cont;
 }
 
-/* find x in C -> iterator to x or end(C) */
+/* find pred xs -> Maybe x */
+template< class F, class Sequence,
+          class Val = decltype(&declval<Sequence>().front()) >
+Maybe<Val> find( F&& f, Sequence&& s )
+{
+    const auto e = end( s ), b = begin( s );
+    const auto it = find_if( b, e, forward<F>(f) );
+
+    typedef Maybe< Val > M;
+    return mightbe( it != e, &(*it) ); 
+}
+
+/* cfind x C -> C::iterator */
 template< typename Container, typename T >
-constexpr auto find( const T& value, Container&& cont )
+constexpr auto cfind( const T& value, Container&& cont )
     -> decltype( begin(cont) )
 {
     return find( begin(cont), end(cont), value );
 }
 
 template< typename Container, typename F >
-constexpr auto find_if( const F& f, Container&& cont )
+constexpr auto cfind_if( const F& f, Container&& cont )
     -> decltype( begin(cont) )
 {
     return find_if( begin(cont), end(cont), f );
