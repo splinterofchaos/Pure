@@ -97,12 +97,16 @@ I incf( F&& f, Val&& step ) {
 }
 
 typedef std::pair<float,float> Vec;
-float  get_x( const Vec& v ) { return v.first; }
-float& get_x( Vec& v       ) { return v.first; }
-float  get_y( const Vec& v ) { return v.second; }
-float& get_y( Vec& v       ) { return v.second; }
+constexpr float get_x( const Vec& v ) { return v.first; }
+constexpr float get_y( const Vec& v ) { return v.second; }
 
-Vec vecFromAngle( float a ) {
+float times( float x, float y ) { return x * y; }
+
+Vec operator* ( const Vec& v, float x ) {
+    return pure::fmap( pure::partial(times,x), Vec(v) );
+}
+
+constexpr Vec vecFromAngle( float a ) {
     return Vec( std::cos(a), std::sin(a) );
 }
 
@@ -122,6 +126,8 @@ std::string show( const Vec& v ) {
     return "<" + show(get_x(v)) + " " + show(get_y(v)) + ">";
 }
 
+constexpr auto vert = pure::join( glVertex2f, get_x, get_y );
+
 int main()
 {
 
@@ -136,16 +142,6 @@ int main()
     constexpr unsigned int STEPS = 21;
     auto unitCircle = 
         pure::generate( incf(vecFromAngle,CIRCUMFERENCE/STEPS), STEPS+1 ); 
-
-    int n = 0;
-    for( const Vec& v : unitCircle ) {
-        printf( "[%d] = %s\n", n++, show(v).c_str() );
-    }
-
-    while( n > 0 ) {
-        printf( "vecFromAngle %d = %s\n", 
-                n, show( vecFromAngle(n--) ).c_str() );
-    }
 
     while( not quit )
     {
@@ -169,8 +165,8 @@ int main()
         }
          glBegin( GL_TRIANGLE_STRIP );
          for( auto& p : unitCircle ) {
-             glVertex2f( get_x(p), get_y(p) );
-             glVertex2f( 0.5*get_x(p), 0.5*get_y(p) );
+             vert( p );
+             vert( p*0.5f );
          }
          glEnd(); 
 
