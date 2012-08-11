@@ -114,7 +114,7 @@ Vec operator/ ( const Vec& v, float x ) {
     return v * (1/x);
 }
 Vec operator/ ( float x, const Vec& v ) {
-    return Vec(1/get_x(v), 1/get_y(v)) * x;
+    return Vec(x/get_x(v), x/get_y(v));
 }
 
 constexpr Vec operator+ ( const Vec& a, const Vec& b ) {
@@ -131,6 +131,16 @@ Vec operator- ( const Vec& v ) {
 
 constexpr Vec vecFromAngle( float a ) {
     return Vec( std::cos(a), std::sin(a) );
+}
+
+
+constexpr float sqr( float x ) { return x * x; }
+
+constexpr float len_sqr( const Vec& v ) { 
+    return sqr( get_x(v) ) + sqr( get_y(v) );
+}
+constexpr float len( const Vec& v ) {
+    return std::sqrt( len_sqr(v) );
 }
 
 std::string show( int x ) {
@@ -152,7 +162,7 @@ std::string show( const Vec& v ) {
 constexpr auto vert = pure::join( glVertex2f, get_x, get_y );
 
 constexpr float CIRCUMFERENCE = 2 * 3.145; // with r=1.
-constexpr unsigned int STEPS = 30;
+constexpr unsigned int STEPS = 25;
 auto unitCircle = 
     pure::generate( incf(vecFromAngle,CIRCUMFERENCE/STEPS), STEPS+1 ); 
 
@@ -167,7 +177,6 @@ struct Smily {
 
 Vec left(  const Smily& s ) { return Vec(s.left, s.y); }
 Vec right( const Smily& s ) { return Vec(s.right,s.y); }
-
 
 Smily smily( const Vec& v, float scale, bool down ) {
     Vec off = vec(0.45,-0.15);
@@ -190,6 +199,9 @@ void paint_face( const Vec& v, float scale = 1 )
 {
     auto rng = pure::partial( pure::rot(in_range), -3, 3 );
 
+    float a = 0.2/scale;
+    glColor3f( get_x(v)/len_sqr(v), std::cos(a)/2 + 0.5, std::sin(a)/2 + 0.5 );
+
     glBegin( GL_QUAD_STRIP );
     for( const auto& p : unitCircle ) {
         vert( p*scale + v );
@@ -198,7 +210,7 @@ void paint_face( const Vec& v, float scale = 1 )
     glEnd(); 
 
     glBegin( GL_QUAD_STRIP );
-    for( float x = -0.7f; x < 0.7f; x += 0.1f ) {
+    for( float x = -0.7f; x <= 0.7f; x += 0.15f ) {
         float y = -(x*x)*0.8 + 0.75;
         vert( Vec(x,y)*scale + v );
         vert( Vec(x,y*1.2)*scale + v );
@@ -287,7 +299,7 @@ int main()
             else
                 dO = left(s);
 
-            pos = dO + (pos - dO)*(scale - s.scale);
+            pos = dO + (pos - dO)*(1 - s.scale);
             scale = s.scale;
         }
 
