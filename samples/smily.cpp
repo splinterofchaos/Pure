@@ -175,6 +175,9 @@ int main()
 
     enum KeyState{ NOT_PRESSED=0, PRESSED=1 };
     auto keys = pure::generate( pure::pure(NOT_PRESSED), (unsigned)SDLK_LAST );
+
+    Vec pos( 0, 0 );
+    float scale = 1;
     
     while( not quit )
     {
@@ -197,7 +200,22 @@ int main()
             }
         }
 
-        paint_face( Vec(0,0) );
+        float SPEED = 0.001f;
+        if( keys[SDLK_LEFT] )
+            set_x( pos, get_x(pos)+SPEED*scale );
+        if( keys[SDLK_RIGHT] )
+            set_x( pos, get_x(pos)-SPEED*scale );
+        if( keys[SDLK_UP] )
+            set_y( pos, get_y(pos)+SPEED*scale );
+        if( keys[SDLK_DOWN] )
+            set_y( pos, get_y(pos)-SPEED*scale );
+
+        if( keys[SDLK_EQUALS] )
+            scale += scale*0.001f;
+        if( keys[SDLK_MINUS] )
+            scale -= scale*0.001f;
+
+        paint_face( pos, scale );
 
         update_screen();
     }
