@@ -8,6 +8,7 @@
 #include <string>
 #include <cstdio>
 #include <cmath>
+#include <random>
 
 bool quit = false;
 
@@ -109,6 +110,13 @@ Vec operator* ( const Vec& v, float x ) {
     return pure::fmap( pure::partial(times,x), Vec(v) );
 }
 
+Vec operator/ ( const Vec& v, float x ) {
+    return v * (1/x);
+}
+Vec operator/ ( float x, const Vec& v ) {
+    return Vec(1/get_x(v), 1/get_y(v)) * x;
+}
+
 constexpr Vec operator+ ( const Vec& a, const Vec& b ) {
     return Vec( a.first+b.first, a.second+b.second );
 }
@@ -144,7 +152,7 @@ std::string show( const Vec& v ) {
 constexpr auto vert = pure::join( glVertex2f, get_x, get_y );
 
 constexpr float CIRCUMFERENCE = 2 * 3.145; // with r=1.
-constexpr unsigned int STEPS = 31;
+constexpr unsigned int STEPS = 30;
 auto unitCircle = 
     pure::generate( incf(vecFromAngle,CIRCUMFERENCE/STEPS), STEPS+1 ); 
 
@@ -152,39 +160,63 @@ constexpr bool in_range( float x, float min, float max ) {
     return x >= min and x <= max;
 }
 
+struct Smily {
+    float left, right, y;
+    float scale;
+};
+
+Vec left(  const Smily& s ) { return Vec(s.left, s.y); }
+Vec right( const Smily& s ) { return Vec(s.right,s.y); }
+
+
+Smily smily( const Vec& v, float scale, bool down ) {
+    Vec off = vec(0.45,-0.15);
+    float newScale;
+    constexpr float DS = 0.45;
+
+    if( down ) {
+        newScale = scale*DS;
+    } else {
+        off = -off;
+        newScale = scale/DS;
+    }
+
+    Vec o = off * scale;
+    return { get_x(v)+get_x(o), get_x(v)-get_x(o), 
+             get_y(v)+get_y(o), newScale };
+}
+
 void paint_face( const Vec& v, float scale = 1 )
 {
     auto rng = pure::partial( pure::rot(in_range), -3, 3 );
-    if( rng(get_x(v)) and rng(get_y(v)) and scale < 3 )
-    {
-        glBegin( GL_TRIANGLE_STRIP );
-        for( const auto& p : unitCircle ) {
-            vert( p*scale + v );
-            vert( p*0.98f*scale + v );
-        }
-        glEnd(); 
 
-        glBegin( GL_TRIANGLE_STRIP );
-        for( float x = -0.7f; x < 0.7f; x += 0.1f ) {
-            float y = -(x*x)*0.8 + 0.75;
-            vert( Vec(x,y)*scale + v );
-            vert( Vec(x,y*1.2)*scale + v );
-        }
-        glEnd(); 
+    glBegin( GL_QUAD_STRIP );
+    for( const auto& p : unitCircle ) {
+        vert( p*scale + v );
+        vert( p*0.98f*scale + v );
     }
+    glEnd(); 
+
+    glBegin( GL_QUAD_STRIP );
+    for( float x = -0.7f; x < 0.7f; x += 0.1f ) {
+        float y = -(x*x)*0.8 + 0.75;
+        vert( Vec(x,y)*scale + v );
+        vert( Vec(x,y*1.2)*scale + v );
+    }
+    glEnd(); 
 
     float diameter = scale * 2;
-    if( diameter > 0.01 ) {
-        Vec off = vec(0.45,-0.15) * scale;
-        paint_face( v + off, scale*0.45 );
-        set_x( off, -get_x(off) );
-        paint_face( v + off, scale*0.45 );
+    if( diameter > 0.03 ) {
+        Smily s = smily( v, scale, true );
+        paint_face( left(s),  s.scale );
+        paint_face( right(s), s.scale );
     }
 }
 
+
+
 int main()
 {
-
     if( SDL_Init( SDL_INIT_EVERYTHING ) < 0 )
         return 1;
     make_sdl_gl_window( 600, 600 );
@@ -194,6 +226,11 @@ int main()
 
     Vec pos( 0, 0 );
     float scale = 1;
+
+    std::random_device rd;
+    std::mt19937 gen( rd() );
+
+    std::bernoulli_distribution rnd;
     
     while( not quit )
     {
@@ -227,17 +264,31 @@ int main()
         if( keys[SDLK_DOWN] )
             off.second = -SPEED;
 
-        pos = pos + off*scale;
+        pos = pos + off;
 
         float dscale = 0;
         if( keys[SDLK_EQUALS] )
             dscale = SPEED;
         if( keys[SDLK_MINUS] )
             dscale = -SPEED;
+
         if( dscale != 0 ) {
             float newScale = dscale*scale + scale;
             pos = pos + pos*dscale;
             scale = newScale;
+        }
+
+        if( scale < 1 ) {
+            Smily s = smily( pos, scale, false );
+
+            Vec dO; // Change in origin.
+            if( rnd(gen) )
+                dO = right(s);
+            else
+                dO = left(s);
+
+            pos = dO + (pos - dO)*(scale - s.scale);
+            scale = s.scale;
         }
 
         paint_face( pos, scale );
