@@ -113,6 +113,14 @@ constexpr Vec operator+ ( const Vec& a, const Vec& b ) {
     return Vec( a.first+b.first, a.second+b.second );
 }
 
+constexpr Vec operator- ( const Vec& a, const Vec& b ) {
+    return Vec( a.first-b.first, a.second-b.second );
+}
+
+Vec operator- ( const Vec& v ) {
+    return pure::fmap( std::negate<float>(), Vec(v) );
+}
+
 constexpr Vec vecFromAngle( float a ) {
     return Vec( std::cos(a), std::sin(a) );
 }
@@ -140,22 +148,30 @@ constexpr unsigned int STEPS = 31;
 auto unitCircle = 
     pure::generate( incf(vecFromAngle,CIRCUMFERENCE/STEPS), STEPS+1 ); 
 
+constexpr bool in_range( float x, float min, float max ) {
+    return x >= min and x <= max;
+}
+
 void paint_face( const Vec& v, float scale = 1 )
 {
-    glBegin( GL_TRIANGLE_STRIP );
-    for( const auto& p : unitCircle ) {
-        vert( p*scale + v );
-        vert( p*0.98f*scale + v );
-    }
-    glEnd(); 
+    auto rng = pure::partial( pure::rot(in_range), -3, 3 );
+    if( rng(get_x(v)) and rng(get_y(v)) and scale < 3 )
+    {
+        glBegin( GL_TRIANGLE_STRIP );
+        for( const auto& p : unitCircle ) {
+            vert( p*scale + v );
+            vert( p*0.98f*scale + v );
+        }
+        glEnd(); 
 
-    glBegin( GL_TRIANGLE_STRIP );
-    for( float x = -0.7f; x < 0.7f; x += 0.1f ) {
-        float y = -(x*x)*0.8 + 0.75;
-        vert( Vec(x,y)*scale + v );
-        vert( Vec(x,y*1.2)*scale + v );
+        glBegin( GL_TRIANGLE_STRIP );
+        for( float x = -0.7f; x < 0.7f; x += 0.1f ) {
+            float y = -(x*x)*0.8 + 0.75;
+            vert( Vec(x,y)*scale + v );
+            vert( Vec(x,y*1.2)*scale + v );
+        }
+        glEnd(); 
     }
-    glEnd(); 
 
     float diameter = scale * 2;
     if( diameter > 0.01 ) {
@@ -200,20 +216,29 @@ int main()
             }
         }
 
-        float SPEED = 0.001f;
+        float SPEED = 0.003f;
+        Vec off;
         if( keys[SDLK_LEFT] )
-            set_x( pos, get_x(pos)+SPEED*scale );
+            off.first = SPEED;
         if( keys[SDLK_RIGHT] )
-            set_x( pos, get_x(pos)-SPEED*scale );
+            off.first = -SPEED;
         if( keys[SDLK_UP] )
-            set_y( pos, get_y(pos)+SPEED*scale );
+            off.second = SPEED;
         if( keys[SDLK_DOWN] )
-            set_y( pos, get_y(pos)-SPEED*scale );
+            off.second = -SPEED;
 
+        pos = pos + off*scale;
+
+        float dscale = 0;
         if( keys[SDLK_EQUALS] )
-            scale += scale*0.001f;
+            dscale = SPEED;
         if( keys[SDLK_MINUS] )
-            scale -= scale*0.001f;
+            dscale = -SPEED;
+        if( dscale != 0 ) {
+            float newScale = dscale*scale + scale;
+            pos = pos + pos*dscale;
+            scale = newScale;
+        }
 
         paint_face( pos, scale );
 
