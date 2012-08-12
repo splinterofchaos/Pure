@@ -16,6 +16,182 @@ namespace pure {
 using namespace std;
 
 /* 
+ * Maybe x : Just x | Nothing 
+ * A simple type to hold a possible value. Similar to a bool that holds nothing
+ * when false and any value when true. By default, owns its value.
+ */
+template< class T, class Ptr=unique_ptr<T>, class Value=decltype(*Ptr()) > 
+struct BasicMaybe
+{
+    typedef Ptr pointer;
+    typedef Value value_type;
+
+    pointer ptr; // A pointer fits the definition of 'possible value'.
+
+  protected:
+    constexpr BasicMaybe( pointer ptr ) : ptr( ptr ) { }
+  public:
+
+    struct Nothing { }; // Definitely holds nothing.
+    struct Just { // Holds a definite value.
+        T value;
+        constexpr Just( T value ) : value( std::move(value) ) { }
+    };
+
+    BasicMaybe( typename BasicMaybe::Just j ) : ptr( new  T(move(j.value)) ) { }
+    constexpr BasicMaybe( Nothing ) : ptr( nullptr ) { }
+
+    BasicMaybe( const BasicMaybe& m )    = delete;
+    constexpr BasicMaybe( BasicMaybe&& ) = default;
+
+    constexpr explicit operator bool () { return ptr != nullptr; }
+
+    constexpr value_type operator* () { return *ptr; }
+
+};
+
+template< class T >
+struct Maybe : public BasicMaybe< T > 
+{ 
+    typedef BasicMaybe< T > M;
+    using typename M::value_type;
+    using typename M::pointer;
+    using typename M::Just;
+    using typename M::Nothing;
+
+    constexpr Maybe( Maybe&& ) = default;
+    constexpr Maybe( Just j ) : M( move(j) ) { }
+    constexpr Maybe( Nothing ) : M( Nothing() ) { }
+};
+
+/* 
+ * Maybe x* 
+ * A C-style pointer doesn't define ownership properties, but we can assume any
+ * non-null value valid for the scope of this object.
+ */
+template< class T > 
+struct Maybe<T*> : public BasicMaybe< T*, T* >
+{
+    typedef BasicMaybe< T*, T*, T& > M;
+    using typename M::value_type;
+    using typename M::pointer;
+    using typename M::Just;
+    using typename M::Nothing;
+
+    constexpr Maybe( Maybe&& ) = default;
+    constexpr Maybe( Just j ) : M( j.value ) { }
+    constexpr Maybe( Nothing ) : M( Nothing() ) { }
+};
+
+/* 
+ * Just  x -> Maybe (Just x) | with a definite value.
+ * Nothing -> Maybe Nothing  | with definitely no value.
+ * Mightbe pred x -> Maybe x | possible with a value.
+ */
+template< class T, class M = Maybe<T> > constexpr M Just( T t ) {
+    return M( typename M::Just(move(t)) ); 
+}
+
+template< class T, class M = Maybe<T> > constexpr M Nothing() {
+    return M( typename M::Nothing() );
+}
+
+// A simple short hand for constructing a Maybe based on a predicate.
+template< class T > Maybe<T> constexpr mightbe( bool p, T&& t ) {
+    typedef Maybe<T> M;
+    return p ? M( typename M::Just(forward<T>(t)) )
+             : M( typename M::Nothing() );
+}
+
+/* maybe b (a->b) (Maybe a) -> b */
+template< class R, class F, class T >
+constexpr R maybe( R&& nothingVal, F f, const Maybe<T>& m )
+{
+    return m ? f( *m ) : forward<R>( nothingVal );
+}
+
+/* 
+ * Just f  * Just x  = Just (f x)
+ * _       * _       = Nothing
+ * Just x  | _       = Just x
+ * Nothing | Just x  = Just x
+ * Nothing | Nothing = Nothing
+ */
+template< class F, class T, 
+          class Ret = decltype( declval<F>()(declval<T>()) ) >
+auto operator* ( const Maybe<F>& a, const Maybe<T>& b )
+    -> Maybe< Ret >
+{
+    return a and b ? Maybe<Ret>( (*a)(*b) ) : Nothing<Ret>();
+}
+
+template< class T >
+const Maybe<T>& operator| ( const Maybe<T>& a, const Maybe<T>& b )
+{ return a ? a : b; }
+
+template< class T >
+Maybe<T> operator| ( Maybe<T>&& a, Maybe<T>&& b )
+{ return a ? move(a) : move(b); }
+
+/* Either a b : Left a | Right b */
+template< class L, class R >
+struct Either
+{
+    typedef L left_type;
+    typedef R right_type;
+
+    unique_ptr<left_type> left;
+    unique_ptr<right_type> right;
+
+    struct Left { 
+        left_type value;
+        constexpr Left( left_type value ) : value(move(value)) { }
+    };
+
+    struct Right { 
+        right_type value;
+        constexpr Right( right_type value ) : value(move(value)) { }
+    };
+
+    constexpr Either( Left x )  : left(  new left_type (move(x.value)) ) { }
+    constexpr Either( Right x ) : right( new right_type(move(x.value)) ) { }
+};
+
+/* 
+ * Left<b>  a -> Either a b
+ * Right<a> b -> Either a b
+ * Since an Either cannot be constructed without two type arguments, the
+ * 'other' type must be explicitly declared when called. It is, for
+ * convenience, the first type argument in both.
+ */
+template< class R, class L, class E = Either<L,R> >
+constexpr E Left( L x ) { return E( typename E::Left(move(x)) ); }
+
+template< class L, class R, class E = Either<L,R> >
+constexpr E Right( R x ) { return E( typename E::Right(move(x)) ); }
+
+/* either (a->c) (b->c) (Either a b) -> c */
+template< class F, class G, class L, class R >
+constexpr auto either( F&& f, G&& g, const Either<L,R>& e )
+    -> decltype( f(*e.right) )
+{
+    return e.right ? f(*e.right) : g(*e.left);
+}
+
+/*
+ * Right f * Right x = Right (f x)
+ * _       * _       = Left _
+ */
+template< class L, class F, class T, 
+          class Ret = decltype( declval<F>()(declval<T>()) ) >
+constexpr Either<L,Ret> operator* ( const Either<L,F>& a, 
+                                    const Either<L,T>& b )
+{
+    return a.right and b.right ? Right<L>( (*a.right)(*b.right) )
+        : a.left ? Left<Ret>( *a.left ) : Left<Ret>( *b.left );
+}
+
+/* 
  * Partial application.
  * g(y) = f( x, y )
  * partial( f, x ) -> g(y)
@@ -30,8 +206,9 @@ struct PartialApplication< F, Arg >
     F f;
     Arg arg;
 
-    constexpr PartialApplication( F&& f, Arg&& arg )
-        : f(forward<F>(f)), arg(forward<Arg>(arg))
+    template< class _F, class _Arg >
+    constexpr PartialApplication( _F&& f, _Arg&& arg )
+        : f(forward<_F>(f)), arg(forward<_Arg>(arg))
     {
     }
 
@@ -52,10 +229,11 @@ template< class F, class Arg1, class ...Args >
 struct PartialApplication< F, Arg1, Args... > 
     : public PartialApplication< PartialApplication<F,Arg1>, Args... >
 {
-    constexpr PartialApplication( F&& f, Arg1&& arg1, Args&& ...args )
+    template< class _F, class _Arg1, class ..._Args >
+    constexpr PartialApplication( _F&& f, _Arg1&& arg1, _Args&& ...args )
         : PartialApplication< PartialApplication<F,Arg1>, Args... > (
-            PartialApplication<F,Arg1>( forward<F>(f), forward<Arg1>(arg1) ),
-            forward<Args>(args)...
+            PartialApplication<F,Arg1>( forward<_F>(f), forward<_Arg1>(arg1) ),
+            forward<_Args>(args)...
         )
     {
     }
@@ -83,8 +261,9 @@ struct Composition<F,G>
 {
     F f; G g;
 
-    constexpr Composition( F&& f, G&& g ) 
-        : f(forward<F>(f)), g(forward<G>(g)) 
+    template< class _F, class _G >
+    constexpr Composition( _F&& f, _G&& g ) 
+        : f(forward<_F>(f)), g(forward<_G>(g)) 
     {
     }
 
@@ -101,10 +280,11 @@ struct Composition<F,G,H...> : Composition<F,Composition<G,H...>>
 {
     typedef Composition<G,H...> Comp;
 
-    constexpr Composition( F&& f, G&& g, H&& ...h )
-        : Composition<F,Composition<G,H...>> ( 
-            forward<F>(f), 
-            Comp( forward<G>(g), forward<H>(h)... )
+    template< class _F, class _G, class ..._H >
+    constexpr Composition( _F&& f, _G&& g, _H&& ...h )
+        : Composition<_F,Composition<_G,_H...>> ( 
+            forward<_F>(f), 
+            Comp( forward<_G>(g), forward<_H>(h)... )
         )
     {
     }
@@ -179,6 +359,198 @@ struct Functor< pair<X,Y> >
     }
 };
 
+/*
+ * Rotation.
+ * f(x...,y) = g(y,x...)
+ * rot f = g
+ * rrot g = f
+ * rrot( rot f ) = f
+ *
+ * In stack-based (or concatenative languages) rotation applies to the top
+ * three elements on the stack. Here, the function's arguments are treated as a
+ * stack and rotated. The entire stack gets rotated, rather than the top three
+ * elements.
+ */
+template< class F, class ...Args >
+struct PartialLast; // Apply the last argument.
+
+template< class F, class Last >
+struct PartialLast< F, Last > : public PartialApplication< F, Last > 
+{ 
+    template< class _F, class _Last >
+    constexpr PartialLast( _F&& f, _Last&& last )
+        : PartialApplication<F,Last>( forward<_F>(f), forward<_Last>(last) )
+    {
+    }
+};
+
+// Remove one argument each recursion.
+template< class F, class Arg1, class ...Args >
+struct PartialLast< F, Arg1, Args... > : public PartialLast< F, Args... > 
+{
+    template< class _F, class _Arg1, class ..._Args >
+    constexpr PartialLast( _F&& f, _Arg1&&, _Args&& ...args )
+        : PartialLast<F,Args...>( forward<_F>(f), forward<_Args>(args)... )
+    {
+    }
+};
+
+template< class F, class ...Args >
+struct PartialInitial; // Apply all but the last argument.
+
+template< class F, class Arg1, class Arg2 >
+struct PartialInitial< F, Arg1, Arg2 > : public PartialApplication< F, Arg1 >
+{
+    template< class _F, class _Arg1, class _Arg2 >
+    constexpr PartialInitial( _F&& f, _Arg1&& arg1, _Arg2&& )
+        : PartialApplication<F,Arg1>( forward<_F>(f), forward<_Arg1>(arg1) )
+    {
+    }
+};
+
+template< class F, class Arg1, class ...Args >
+struct PartialInitial< F, Arg1, Args... > 
+    : public PartialInitial< PartialApplication<F,Arg1>, Args... >
+{
+    template< class _F, class _Arg1, class ..._Args >
+    PartialInitial( _F&& f, _Arg1&& arg1, _Args&& ...args )
+        : PartialInitial<PartialApplication<F,Arg1>,Args...> (
+            partial( forward<_F>(f), forward<_Arg1>(arg1) ),
+            forward<_Args>(args)...
+        )
+    {
+    }
+};
+
+template< class F >
+struct Rot
+{
+    F f;
+
+    template< class _F >
+    constexpr Rot( _F&& f ) : f( forward<_F>(f) ) { }
+
+    template< class ...Args >
+    constexpr auto operator() ( Args&& ...args )
+        -> decltype ( 
+            declval< PartialInitial<PartialLast<F,Args...>,Args...> >()() 
+        )
+    {
+        /* We can't just (to my knowledge) pull the initial and final args
+         * apart, so first reverse-apply the last argument, then apply each
+         * argument forward until the last. The result is a zero-arity function
+         * to invoke.
+         */
+        return PartialInitial< PartialLast<F,Args...>, Args... > (
+            PartialLast< F, Args... >( f, forward<Args>(args)... ),
+            forward<Args>( args )...
+        )();
+    }
+};
+
+template< class F >
+struct RRot // Reverse Rotate
+{
+    F f;
+
+    template< class _F >
+    constexpr RRot( _F&& f ) : f( forward<_F>(f) ) { }
+
+    template< class Arg1, class ...Args >
+    constexpr auto operator() ( Arg1&& arg1, Args&& ...args )
+        -> decltype( f(declval<Args>()..., arg1) )
+    {
+        return f( forward<Args>(args)..., arg1 );
+    }
+};
+
+template< class F >
+constexpr Rot<F> rot( F&& f )
+{
+    return Rot<F>( forward<F>(f) );
+}
+
+template< class F >
+constexpr RRot<F> rrot( F&& f )
+{
+    return RRot<F>( forward<F>(f) );
+}
+
+/* Rotate F by N times. */
+template< unsigned int N, class F >
+struct NRot;
+
+template< class F >
+struct NRot< 1, F > : public Rot<F>
+{
+    template< class _F >
+    constexpr NRot( _F&& f ) : Rot<F>( forward<_F>(f) ) { }
+};
+
+template< unsigned int N, class F >
+struct NRot : public NRot< N-1, Rot<F> >
+{
+    template< class _F >
+    constexpr NRot( _F&& f ) : NRot< N-1, Rot<F> >( rot(forward<_F>(f)) ) { }
+};
+
+template< unsigned int N, class F >
+struct RNRot; // Reverse nrot.
+
+template< class F >
+struct RNRot< 1, F > : public RRot<F>
+{
+    template< class _F >
+    RNRot( _F&& f ) : RRot<F>( forward<_F>(f) ) { }
+};
+
+template< unsigned int N, class F >
+struct RNRot : public RNRot< N-1, RRot<F> >
+{
+    template< class _F >
+    RNRot( _F&& f ) : RNRot<N-1,RRot<F>>( rrot(forward<_F>(f)) ) { }
+};
+
+template< unsigned int N, class F >
+constexpr NRot<N,F> nrot( F&& f )
+{
+    return NRot<N,F>( forward<F>(f) );
+}
+
+template< unsigned int N, class F >
+constexpr RNRot<N,F> rnrot( F&& f )
+{
+    return RNRot<N,F>( forward<F>(f) );
+}
+
+template< class F, class T >
+struct Functor< F, Maybe<T> > 
+    : Maybe< decltype( declval<F>()(declval<T>()) ) >
+{
+    typedef decltype( declval<F>()(declval<T>()) ) R;
+    typedef Maybe< R > M;
+
+    template< class _F >
+    Functor( _F&& f, const M& m ) 
+        : M( m ? Just<R>( f(*m) ) : Nothing<R>() ) 
+    { 
+    }
+};
+
+template< class F, class L, class R >
+struct Functor< F, Either<L,R> > 
+    : public Either< L, decltype( declval<F>()(declval<R>()) ) >
+{
+    typedef decltype( declval<F>()(declval<R>()) ) R2;
+    typedef Either< L, R2 > E;
+    template< class _F >
+    constexpr Functor( _F&& f, const Either<L,R>& e )
+        : Either<L,R2>( e.right ? 
+                        Right<L>( f(*e.right) ) : Left<R2>( *e.left ) )
+    {
+    }
+};
+
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< typename Sequence, typename F >
 Sequence map( F&& f, Sequence cont ) 
@@ -222,6 +594,62 @@ constexpr auto fmap( F&& f, G&& g )
     >::type
 {
     return Functor<G>::fmap( forward<F>(f), forward<G>(g) );
+}
+
+/* squash[ f(x,x) ] = g(x) */
+template< class F >
+struct Squash
+{
+    F f;
+
+    template< class _F >
+    constexpr Squash( _F&& f ) : f( forward<_F>(f) ) { }
+
+    template< class Arg1, class ...Args >
+    constexpr auto operator() ( Arg1&& arg1, Args&& ...args )
+        -> decltype( f(declval<Arg1>(),declval<Arg1>(),declval<Args>()...) )
+    {
+        return f( forward<Arg1>(arg1), forward<Arg1>(arg1), 
+                  forward<Args>(args)... );
+    }
+};
+
+template< class F >
+constexpr Squash<F> squash( F&& f )
+{
+    return Squash<F>( forward<F>(f) );
+}
+
+/* 
+ * f( x, y ) = f( l(z), r(z) ) = g(z)
+ *  where x = l(z) and y = r(z)
+ * join( f, l, r ) = g
+ */
+template< class F, class Left, class Right >
+struct Join
+{
+    F f;
+    Left l;
+    Right r;
+
+    template< class _F, class _L, class _R >
+    constexpr Join( _F&& f, _L&& l, _R&& r )
+        : f(forward<_F>(f)), l(forward<_L>(l)), r(forward<_R>(r))
+    {
+    }
+
+    template< class A, class ...AS >
+    constexpr auto operator() ( A&& a, AS&& ...as )
+        -> decltype( f(l(declval<A>()),r(declval<A>()),declval<AS>()...) )
+    {
+        return f( l(forward<A>(a)), r(forward<A>(a)), forward<AS>(as)... );
+    }
+};
+
+template< class F, class L, class R >
+constexpr Join<F,L,R> join( F&& f, L&& l, R&& r )
+{
+    return Join<F,L,R>( forward<F>(f), forward<L>(l), forward<R>(r) );
 }
 
 /* 
@@ -268,16 +696,28 @@ Container filter( const F& f, Container cont )
     return cont;
 }
 
-/* find x in C -> iterator to x or end(C) */
+/* find pred xs -> Maybe x */
+template< class F, class Sequence,
+          class Val = decltype(&declval<Sequence>().front()) >
+Maybe<Val> find( F&& f, Sequence&& s )
+{
+    const auto e = end( s ), b = begin( s );
+    const auto it = find_if( b, e, forward<F>(f) );
+
+    typedef Maybe< Val > M;
+    return mightbe( it != e, &(*it) ); 
+}
+
+/* cfind x C -> C::iterator */
 template< typename Container, typename T >
-constexpr auto find( const T& value, Container&& cont )
+constexpr auto cfind( const T& value, Container&& cont )
     -> decltype( begin(cont) )
 {
     return find( begin(cont), end(cont), value );
 }
 
 template< typename Container, typename F >
-constexpr auto find_if( const F& f, Container&& cont )
+constexpr auto cfind_if( const F& f, Container&& cont )
     -> decltype( begin(cont) )
 {
     return find_if( begin(cont), end(cont), f );
