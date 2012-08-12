@@ -98,7 +98,7 @@ I incf( F&& f, Val&& step ) {
 }
 
 typedef std::pair<float,float> Vec;
-constexpr Vec vec( float x, float y ) { return Vec(x,y); }
+Vec vec( float x, float y ) { return Vec(x,y); }
 constexpr float get_x( const Vec& v ) { return v.first; }
 constexpr float get_y( const Vec& v ) { return v.second; }
 void set_x( Vec& v, float x ) { v.first = x; }
@@ -117,11 +117,11 @@ Vec operator/ ( float x, const Vec& v ) {
     return Vec(x/get_x(v), x/get_y(v));
 }
 
-constexpr Vec operator+ ( const Vec& a, const Vec& b ) {
+Vec operator+ ( const Vec& a, const Vec& b ) {
     return Vec( a.first+b.first, a.second+b.second );
 }
 
-constexpr Vec operator- ( const Vec& a, const Vec& b ) {
+Vec operator- ( const Vec& a, const Vec& b ) {
     return Vec( a.first-b.first, a.second-b.second );
 }
 
@@ -129,7 +129,7 @@ Vec operator- ( const Vec& v ) {
     return pure::fmap( std::negate<float>(), Vec(v) );
 }
 
-constexpr Vec vecFromAngle( float a ) {
+Vec vecFromAngle( float a ) {
     return Vec( std::cos(a), std::sin(a) );
 }
 
@@ -139,36 +139,14 @@ constexpr float sqr( float x ) { return x * x; }
 constexpr float len_sqr( const Vec& v ) { 
     return sqr( get_x(v) ) + sqr( get_y(v) );
 }
-constexpr float len( const Vec& v ) {
+float len( const Vec& v ) {
     return std::sqrt( len_sqr(v) );
 }
 
-std::string show( int x ) {
-    char digits[10];
-    sprintf( digits, "%d", x );
-    return digits;
-}
-
-std::string show( float x ) {
-    char digits[10];
-    sprintf( digits, "%.2f", x );
-    return digits;
-}
-
-std::string show( const Vec& v ) {
-    return "<" + show(get_x(v)) + " " + show(get_y(v)) + ">";
-}
-
-constexpr auto vert = pure::join( glVertex2f, get_x, get_y );
-
 constexpr float CIRCUMFERENCE = 2 * 3.145; // with r=1.
 constexpr unsigned int STEPS = 25;
-auto unitCircle = 
+const auto unitCircle = 
     pure::generate( incf(vecFromAngle,CIRCUMFERENCE/STEPS), STEPS+1 ); 
-
-constexpr bool in_range( float x, float min, float max ) {
-    return x >= min and x <= max;
-}
 
 struct Smily {
     float left, right, y;
@@ -178,54 +156,96 @@ struct Smily {
 Vec left(  const Smily& s ) { return Vec(s.left, s.y); }
 Vec right( const Smily& s ) { return Vec(s.right,s.y); }
 
+typedef std::pair<Vec,float> Scale;
+constexpr Vec get_off( const Scale& s ) { return s.first; }
+constexpr float get_scale( const Scale& s ) { return s.second; }
+
+constexpr float DS = 0.45;
+const Vec OFF( DS, -0.15 );
+
+Scale _smily_scale_down( float scale ) {
+    return { OFF*scale, scale * DS };
+}
+
+Scale _smily_scale_up( float scale ) {
+    return { OFF*-scale, scale / DS };
+}
+
 Smily smily( const Vec& v, float scale, bool down ) {
-    Vec off = vec(0.45,-0.15);
-    float newScale;
-    constexpr float DS = 0.45;
+    Vec off; float newScale;
+    std::tie( off, newScale ) = 
+        // Call scale_up or _down of scale.
+        (down ? _smily_scale_down : _smily_scale_up) ( scale );
 
-    if( down ) {
-        newScale = scale*DS;
-    } else {
-        off = -off;
-        newScale = scale/DS;
-    }
+    return { get_x(v)+get_x(off), get_x(v)-get_x(off), 
+             get_y(v)+get_y(off), newScale };
+}
 
-    Vec o = off * scale;
-    return { get_x(v)+get_x(o), get_x(v)-get_x(o), 
-             get_y(v)+get_y(o), newScale };
+constexpr bool in_range( float x, float min, float max ) {
+    return x >= min and x <= max;
+}
+
+// vert(Vec v) = glVertex2f vx vy
+constexpr auto vert  = pure::join( glVertex2f, get_x, get_y );
+// trans(Vec v) = glTranslatef vx vy 0
+constexpr auto trans = 
+    pure::partial( pure::rot(pure::join(glTranslatef,get_x,get_y)), 0 );
+// scalef x = glScale x x x
+constexpr auto scalef = pure::squash( pure::squash(glScalef) );
+
+template< class F >
+constexpr void with_gl( GLenum mode, const F& f ) {
+    glBegin( mode ); f(); glEnd();
+}
+
+bool axis_not_on_screen( float x, float scale ) {
+    return x+scale < -1 or x-scale > 1;
 }
 
 void paint_face( const Vec& v, float scale = 1 )
 {
-    auto rng = pure::partial( pure::rot(in_range), -3, 3 );
+    // Don't do anything if neither this face, nor its children, will be
+    // visible.
+    if( axis_not_on_screen(get_x(v), scale)
+        or axis_not_on_screen(get_y(v), scale) )
+        return;
 
-    float a = 0.2/scale;
-    glColor3f( get_x(v)/len_sqr(v), std::cos(a)/2 + 0.5, std::sin(a)/2 + 0.5 );
+    // Monstrously huge smilies won't be visible either, but continue below to
+    // draw its children.
+    if( scale < 6 )
+    {
+        // Use a nice red gradient across the x-axis and rotate between green
+        // and blue based on scale.
+        float a = 0.2/scale;
+        glColor3f( std::atan(get_x(v))/2 + 0.5,
+                   std::cos(a)/2 + 0.5, std::sin(a)/2 + 0.5 );
 
-    glBegin( GL_QUAD_STRIP );
-    for( const auto& p : unitCircle ) {
-        vert( p*scale + v );
-        vert( p*0.98f*scale + v );
+        glLoadIdentity();
+        trans( v );
+        scalef( scale );
+
+        // Draw the face
+        with_gl( GL_LINE_LOOP, 
+                 [&]{ pure::for_each( vert, unitCircle ); } );
+
+        // and its smile.
+        static const auto draw_smile = [] {
+            for( float x = -0.7f; x <= 0.7f; x += 0.15f ) {
+                float y = -(x*x)*0.8 + 0.75;
+                vert( Vec(x,y) );
+                vert( Vec(x,y*1.2) );
+            }
+        };
+        with_gl( GL_QUAD_STRIP, draw_smile );
     }
-    glEnd(); 
-
-    glBegin( GL_QUAD_STRIP );
-    for( float x = -0.7f; x <= 0.7f; x += 0.15f ) {
-        float y = -(x*x)*0.8 + 0.75;
-        vert( Vec(x,y)*scale + v );
-        vert( Vec(x,y*1.2)*scale + v );
-    }
-    glEnd(); 
 
     float diameter = scale * 2;
-    if( diameter > 0.03 ) {
+    if( diameter > 0.01 ) {
         Smily s = smily( v, scale, true );
         paint_face( left(s),  s.scale );
         paint_face( right(s), s.scale );
     }
 }
-
-
 
 int main()
 {
@@ -293,13 +313,11 @@ int main()
         if( scale < 1 ) {
             Smily s = smily( pos, scale, false );
 
-            Vec dO; // Change in origin.
-            if( rnd(gen) )
-                dO = right(s);
-            else
-                dO = left(s);
+            // Change in origin.
+            Vec dO = ( get_x(pos) < 0 ? right : left )( s );
 
-            pos = dO + (pos - dO)*(1 - s.scale);
+
+            pos = dO + (pos - dO)*(scale - s.scale);
             scale = s.scale;
         }
 
