@@ -359,6 +359,69 @@ struct Functor< pair<X,Y> >
     }
 };
 
+template< class T >
+struct Functor< Maybe<T> > 
+{
+    template< class F, class R = decltype( declval<F>()(declval<T>()) ) >
+    static Maybe<R> fmap( const F& f, const Maybe<T>& m ) {
+        return m ? Just( f(*m) ) : Nothing<R>();
+    }
+};
+
+template< class L, class R >
+struct Functor< Either<L,R> > 
+{
+    template< class F, class FR = decltype( declval<F>()(declval<R>()) ) >
+    static Either<L,FR>  fmap( const F& f, const Either<L,R>& e ) {
+        return e.right ?  Right<L>( f(*e.right) ) : Left<FR>( *e.left );
+    }
+};
+
+/* map f {1,2,3} -> { f(1), f(2), f(3) } */
+template< typename Sequence, typename F >
+Sequence map( F&& f, Sequence cont ) 
+{
+    transform( begin(cont), end(cont), begin(cont), 
+               forward<F>(f) );
+    return cont;
+}
+
+template< class C > struct IsSeqImpl {
+    // Can only be supported on STL-like sequence types, not pointers.
+    template< class _C > static true_type f(typename _C::iterator*);
+    template< class _C > static false_type f(...);
+    typedef decltype( f<C>(0) ) type;
+};
+
+template< class C > struct IsSeq : public IsSeqImpl<C>::type { };
+
+/* Enable if is an STL-like sequence. */
+template< class C, class R > struct ESeq : enable_if<IsSeq<C>::value,R> { };
+
+/* Disable if is sequence. */
+template< class C, class R > struct XSeq : enable_if<not IsSeq<C>::value,R> { };
+
+/* fmap f {...} = map f {...} where {...} is any sequence. */
+template< class F, class C >
+constexpr auto fmap( F&& f, C&& c )
+    -> typename ESeq <
+        C, decltype( map(forward<F>(f),forward<C>(c)) ) 
+    >::type
+{
+    return map( forward<F>(f), forward<C>(c) );
+}
+
+template< class F, class G >
+constexpr auto fmap( F&& f, G&& g )
+    // Disallow on sequences.
+    -> typename XSeq < 
+        G, 
+        decltype( Functor<G>::fmap(forward<F>(f),forward<G>(g)) ) 
+    >::type
+{
+    return Functor<G>::fmap( forward<F>(f), forward<G>(g) );
+}
+
 /*
  * Rotation.
  * f(x...,y) = g(y,x...)
@@ -521,79 +584,6 @@ template< unsigned int N, class F >
 constexpr RNRot<N,F> rnrot( F&& f )
 {
     return RNRot<N,F>( forward<F>(f) );
-}
-
-template< class F, class T >
-struct Functor< F, Maybe<T> > 
-    : Maybe< decltype( declval<F>()(declval<T>()) ) >
-{
-    typedef decltype( declval<F>()(declval<T>()) ) R;
-    typedef Maybe< R > M;
-
-    template< class _F >
-    Functor( _F&& f, const M& m ) 
-        : M( m ? Just<R>( f(*m) ) : Nothing<R>() ) 
-    { 
-    }
-};
-
-template< class F, class L, class R >
-struct Functor< F, Either<L,R> > 
-    : public Either< L, decltype( declval<F>()(declval<R>()) ) >
-{
-    typedef decltype( declval<F>()(declval<R>()) ) R2;
-    typedef Either< L, R2 > E;
-    template< class _F >
-    constexpr Functor( _F&& f, const Either<L,R>& e )
-        : Either<L,R2>( e.right ? 
-                        Right<L>( f(*e.right) ) : Left<R2>( *e.left ) )
-    {
-    }
-};
-
-/* map f {1,2,3} -> { f(1), f(2), f(3) } */
-template< typename Sequence, typename F >
-Sequence map( F&& f, Sequence cont ) 
-{
-    transform( begin(cont), end(cont), begin(cont), 
-               forward<F>(f) );
-    return cont;
-}
-
-template< class C > struct IsSeqImpl {
-    // Can only be supported on STL-like sequence types, not pointers.
-    template< class _C > static true_type f(typename _C::iterator*);
-    template< class _C > static false_type f(...);
-    typedef decltype( f<C>(0) ) type;
-};
-
-template< class C > struct IsSeq : public IsSeqImpl<C>::type { };
-
-/* Enable if is an STL-like sequence. */
-template< class C, class R > struct ESeq : enable_if<IsSeq<C>::value,R> { };
-
-/* Disable if is sequence. */
-template< class C, class R > struct XSeq : enable_if<not IsSeq<C>::value,R> { };
-
-/* fmap f {...} = map f {...} where {...} is any sequence. */
-template< class F, class C >
-constexpr auto fmap( F&& f, C&& c )
-    -> typename ESeq <
-        C, decltype( map(forward<F>(f),forward<C>(c)) ) 
-    >::type
-{
-    return map( forward<F>(f), forward<C>(c) );
-}
-
-template< class F, class G >
-constexpr auto fmap( F&& f, G&& g )
-    // Disallow on sequences.
-    -> typename XSeq < 
-        G, 
-        decltype( Functor<G>::fmap(forward<F>(f),forward<G>(g)) ) 
-    >::type
-{
-    return Functor<G>::fmap( forward<F>(f), forward<G>(g) );
 }
 
 /* squash[ f(x,x) ] = g(x) */
