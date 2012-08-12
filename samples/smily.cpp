@@ -310,14 +310,26 @@ int main()
             scale = newScale;
         }
 
-        if( scale < 1 ) {
+        if( scale < 3 ) {
             Smily s = smily( pos, scale, false );
 
-            // Change in origin.
+            // Let O0 = the initial origin, (0,0).
+            //     O1 = the new origin.
+            // dO = O0 - O1
             Vec dO = ( get_x(pos) < 0 ? right : left )( s );
 
+            // Let p1 = pos, the current position offset from O1.
+            Vec P1 = pos - dO; 
+            //     p0 = the corrected position offset from O0.
+            //     P1 = a vector from O1 to p1
+            //     P0 = a vector from O0 to p0
+            //     k  = ||P1|| / ||P0||
+            // Given that P1 is parallel to P0: 
+            //     P0 = P1 * k
+            Vec P0 = P1 * ( 1 - 1/DS );
+            // And thus: p0 = dO + P0
+            pos = dO + P0;
 
-            pos = dO + (pos - dO)*(scale - s.scale);
             scale = s.scale;
         }
 
