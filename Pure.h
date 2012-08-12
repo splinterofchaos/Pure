@@ -153,25 +153,29 @@ constexpr Pure<X> pure( X&& x )
 template< class ...F > struct Functor;
 
 /* fmap f g = compose( f, g ) */
-template< class F, class G >
-struct Functor<F,G> : public Composition<F,G>
+template< class Function >
+struct Functor<Function>
 {
-    template< class _F, class _G >
-    constexpr Functor( _F&& f, _G&& g )
-        : Composition<F,G>( forward<_F>(f), forward<_G>(g) )
-    {
+    template< class F, class G >
+    static Composition<F,G> fmap( F&& f, G&& g ) {
+        return compose( forward<F>(f), forward<G>(g) );
     }
 };
 
 /* fmap f Pair(x,y) = Pair( f x, f y ) */
-template< class F, class X, class Y >
-struct Functor< F, std::pair<X,Y> > : public std::pair<X,Y>
+template< class X, class Y >
+struct Functor< pair<X,Y> >
 {
-    template< class _F, class P >
-    constexpr Functor( _F&& f, P&& p )
-        : std::pair<X,Y>( f( forward<P>(p).first  ), 
-                          f( forward<P>(p).second ) )
-    {
+    template< class F, class R = decltype(declval<F>()(declval<X>())) >
+    static pair<R,R> fmap( F&& f, const pair<X,Y>& p ) {
+        return make_pair( f(p.first), f(p.second) );
+    }
+
+    template< class F >
+    static pair<X,Y> fmap( const F& f, pair<X,Y>&& p ) {
+        p.first = f( p.first );
+        p.second = f( p.second );
+        return move( p );
     }
 };
 
@@ -212,9 +216,12 @@ constexpr auto fmap( F&& f, C&& c )
 template< class F, class G >
 constexpr auto fmap( F&& f, G&& g )
     // Disallow on sequences.
-    -> typename XSeq< G, Functor<F,G> >::type
+    -> typename XSeq < 
+        G, 
+        decltype( Functor<G>::fmap(forward<F>(f),forward<G>(g)) ) 
+    >::type
 {
-    return Functor<F,G>( forward<F>(f), forward<G>(g) );
+    return Functor<G>::fmap( forward<F>(f), forward<G>(g) );
 }
 
 /* 
