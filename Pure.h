@@ -62,8 +62,8 @@ struct Maybe : public BasicMaybe< T >
     using typename M::Nothing;
 
     constexpr Maybe( Maybe&& ) = default;
-    constexpr Maybe( Just j ) : M( move(j) ) { }
-    constexpr Maybe( Nothing ) : M( Nothing() ) { }
+    explicit constexpr Maybe( Just j ) : M( move(j) ) { }
+    explicit constexpr Maybe( Nothing ) : M( Nothing() ) { }
 };
 
 /* 
@@ -81,8 +81,8 @@ struct Maybe<T*> : public BasicMaybe< T*, T* >
     using typename M::Nothing;
 
     constexpr Maybe( Maybe&& ) = default;
-    constexpr Maybe( Just j ) : M( j.value ) { }
-    constexpr Maybe( Nothing ) : M( Nothing() ) { }
+    explicit constexpr Maybe( Just j ) : M( j.value ) { }
+    explicit constexpr Maybe( Nothing ) : M( Nothing() ) { }
 };
 
 /*
@@ -405,12 +405,22 @@ struct Functor< Either<L,R> >
 };
 
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
-template< typename Sequence, typename F >
-Sequence map( F&& f, Sequence cont ) 
+template< template<class...> class S, class X, class ...XS, class F,
+          class R = decltype( declval<F>()(declval<X>()) ) >
+S<R,XS...> map( F&& f, const S<X,XS...>& xs ) 
 {
-    transform( begin(cont), end(cont), begin(cont), 
+    S<R,XS...> r;
+    transform( begin(xs), end(xs), back_inserter(r),
                forward<F>(f) );
-    return cont;
+    return r;
+}
+
+template< class X, size_t N, class F, class R = decltype( declval<F>()(declval<X>()) ) >
+array< R, N > map( F&& f, const array< X, N >& xs ) {
+    array< R, N > r;
+    transform( begin(xs), end(xs), begin(r),
+               forward<F>(f) );
+    return r;
 }
 
 template< class C > struct IsSeqImpl {
@@ -449,6 +459,75 @@ constexpr auto fmap( F&& f, G&& g )
     return Functor<G>::fmap( forward<F>(f), forward<G>(g) );
 }
 
+/* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
+template< typename Container, typename Value, typename F >
+constexpr Value foldl( const F& f, const Value& val, const Container& cont )
+{
+    return accumulate( begin(cont), end(cont), val, f );
+}
+
+template< typename Value, typename F, typename Container >
+constexpr Value foldl( F&& f, const Container& cont )
+{
+    return accumulate( next(begin(cont)), end(cont), 
+                            cont.front(), f );
+}
+
+/* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
+template< typename F, typename Value, typename Container >
+constexpr Value foldr( F&& f, Value&& val, const Container& cont )
+{
+    return accumulate( cont.rbegin(), cont.rend(), 
+                       forward<Value>(val), forward<F>(f) );
+}
+
+template< typename Value, typename F, typename Container >
+constexpr Value foldr( F&& f, const Container& cont )
+{
+    return accumulate( next(cont.rbegin()), cont.rend(), 
+                       cont.back(), forward<F>(f) );
+}
+
+/* 
+ * append({1},{2,3},{4}) -> {1,2,3,4} 
+ * Similar to [1]++[2,3]++[4]
+ */
+template< typename C1, typename C2 >
+C1 append( C1 a, const C2& b )
+{
+    copy( begin(b), end(b), back_inserter(a) );
+    return a;
+}
+
+template< typename Cx1, typename Cx2, typename Cx3, typename ... Cxs >
+Cx1 append( Cx1&& a, const Cx2& b, const Cx3& c, const Cxs& ... d )
+{
+    return append( append(forward<Cx1>(a), b), c, d... );
+}
+
+template< typename Container, typename F >
+void for_each( const F& f, const Container& cont )
+{
+    for_each( begin(cont), end(cont), f );
+}
+
+template< class F, class I, class J >
+void for_ij( const F& f, I i, const I& imax, J j, const J& jmax )
+{
+    for( ; j != jmax; j++ )
+        for( ; i != imax; i++ )
+            f( i, j );
+}
+
+template< class F, class I, class J >
+void for_ij( const F& f, const I& imax, const J& jmax )
+{
+    for( J j = J(); j != jmax; j++ )
+        for( I i = I(); i != imax; i++ )
+            f( i, j );
+}
+
+
 /*
  * Monad M :
  *   mdo (M a) (M b) -> M b        -- (M-do) Do from left to right.
@@ -460,6 +539,80 @@ constexpr auto fmap( F&& f, G&& g )
  *   m >>= f = mbind m f
  */
 template< class ...M > struct Monad;
+
+/* m >> k = k -- where m is a sequence. */
+template< class A, class B >
+B mdo( const A& a, const B& b ) {
+    // In Haskell, this is defined as
+    //      m >> k = foldr ((++) . (\ _ -> k)) [] m
+    // In other words, 
+    //      for each element in a, duplicate b.
+    //      [] >> k = []
+    B c;
+    auto size = a.size();
+    while( size-- )
+        c = append( b, c );
+    return c;
+}
+
+/* m >> k */
+template< class A, class B >
+decltype( Monad<A>::mdo(declval<A>(),declval<B>()) ) 
+mdo( A&& a, B&& b ) {
+    return Monad<A>::mdo( forward<A>(a), forward<B>(b) ); 
+}
+
+/* m >>= k -- where m is a sequence. */
+template< class S, class F >
+auto mbind( const S& xs, const F& f ) -> decltype( f(xs.front()) )
+{
+    decltype( f(xs.front()) ) r;
+    for( const auto& x : xs ) 
+        r = append( r, f(x) );
+    return r;
+}
+
+
+/* m >>= k */
+template< class M, class F >
+decltype( Monad<M>::mbind(declval<M>(),declval<F>()) ) 
+mbind( M&& m, F&& f ) {
+    return Monad<M>::mbind( forward<M>(m), forward<F>(f) ); 
+}
+
+/* return<S> x = [x] -- where S is a sequence. */
+template< template<class> class S, class X, class SX = S<X> >
+auto mreturn( X x ) -> decltype( SX(1,x) ) {
+    return SX( 1, x );
+}
+
+/* return<M> x = M x */
+template< template<class> class M, class X, class MX = M<X> >
+MX mreturn( X x ) {
+    return Monad< MX >::mreturn( move(x) );
+}
+
+template< template<class> class S, class X, class SX = S<X> >
+decltype( SX() ) mfail( const char* const ) {
+    return SX();
+}
+
+template< template<class> class M, class X >
+M<X> mfail( const char* const why ) {
+    return Monad< M<X> >::mfail( why );
+}
+
+template< class X, class Y >
+decltype( mbind(declval<X>(),declval<Y>()) ) 
+operator >>= ( X&& x, Y&& y ) {
+    return mbind( forward<X>(x), forward<Y>(y) );
+}
+
+template< class X, class Y >
+decltype( mdo(declval<X>(),declval<Y>()) ) 
+operator >> ( X&& x, Y&& y ) {
+    return mdo( forward<X>(x), forward<Y>(y) );
+}
 
 template< class X >
 struct Monad< Maybe<X> > {
@@ -473,7 +626,8 @@ struct Monad< Maybe<X> > {
     static B mdo( const A& a, B&& b ) {
         // In Haskell, Nothing >> _ = Nothing.
         // Note: When not a, a = Nothing.
-        return a ? forward<B>(b) : N();
+        typedef typename B::from_type Y;
+        return a ? forward<B>(b) : Nothing<Y>();
     }
 
     /*
@@ -491,42 +645,8 @@ struct Monad< Maybe<X> > {
     static M mreturn( X x ) { return Just( move(x) ); }
 
     /* fail s = Nothing */
-    static M mfail( const char* const ) { return typename M::Nothing(); }
+    static M mfail( const char* const ) { return Nothing<X>(); }
 };
-
-template< class A, class B >
-decltype( Monad<A>::mdo(declval<A>(),declval<B>()) ) 
-mdo( A&& a, B&& b ) {
-    return Monad<A>::mdo( forward<A>(a), forward<B>(b) ); 
-}
-
-template< class X, class Y >
-decltype(mdo(declval<X>(),declval<Y>())) 
-operator >> ( X&& x, Y&& y ) {
-    return mdo( forward<X>(x), forward<Y>(y) );
-}
-
-template< class M, class F >
-decltype( Monad<M>::mbind(declval<M>(),declval<F>()) ) 
-mbind( M&& m, F&& f ) {
-    return Monad<M>::mbind( forward<M>(m), forward<F>(f) ); 
-}
-
-template< class X, class Y >
-decltype( mbind(declval<X>(),declval<Y>()) ) 
-operator >>= ( X&& x, Y&& y ) {
-    return mbind( forward<X>(x), forward<Y>(y) );
-}
-
-template< template<class> class M, class X, class MX = M<X> >
-MX mreturn( X x ) {
-    return Monad< MX >::mreturn( move(x) );
-}
-
-template< template<class> class M, class X >
-M<X> mfail( const char* const why ) {
-    return Monad< M<X> >::mfail( why );
-}
 
 /*
  * Rotation.
@@ -748,24 +868,6 @@ constexpr Join<F,L,R> join( F&& f, L&& l, R&& r )
     return Join<F,L,R>( forward<F>(f), forward<L>(l), forward<R>(r) );
 }
 
-/* 
- * Concatenation.
- * concat({1},{2,3},{4}) -> {1,2,3,4}
- */
-template< typename C1, typename C2 >
-C1 concat( C1 a, const C2& b )
-{
-    a.reserve( a.size() + b.size() );
-    copy( begin(b), end(b), back_inserter(a) );
-    return a;
-}
-
-template< typename Cx1, typename Cx2, typename ... Cxs >
-Cx1 concat( Cx1&& a, const Cx2& b, const Cxs& ... c )
-{
-    return concat( concat(forward<Cx1>(a), b), c... );
-}
-
 template< typename Container >
 constexpr bool ordered( const Container& c )
 {
@@ -824,57 +926,6 @@ template< typename Container, typename F >
 constexpr bool all( const F& f, const Container& cont )
 {
     return all_of( begin(cont), end(cont), f );
-}
-
-/* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
-template< typename Container, typename Value, typename F >
-constexpr Value foldl( const F& f, const Value& val, const Container& cont )
-{
-    return accumulate( begin(cont), end(cont), val, f );
-}
-
-template< typename Value, typename F, typename Container >
-constexpr Value foldl( F&& f, const Container& cont )
-{
-    return accumulate( next(begin(cont)), end(cont), 
-                            cont.front(), f );
-}
-
-/* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
-template< typename F, typename Value, typename Container >
-constexpr Value foldr( F&& f, Value&& val, const Container& cont )
-{
-    return accumulate ( cont.rbegin(), cont.rend(), 
-                             forward<Value>(val), forward<F>(f) );
-}
-
-template< typename Value, typename F, typename Container >
-constexpr Value foldr( F&& f, const Container& cont )
-{
-    return accumulate ( next(cont.rbegin()), cont.rend(), 
-                             cont.back(), forward<F>(f) );
-}
-
-template< typename Container, typename F >
-void for_each( const F& f, const Container& cont )
-{
-    for_each( begin(cont), end(cont), f );
-}
-
-template< class F, class I, class J >
-void for_ij( const F& f, I i, const I& imax, J j, const J& jmax )
-{
-    for( ; j != jmax; j++ )
-        for( ; i != imax; i++ )
-            f( i, j );
-}
-
-template< class F, class I, class J >
-void for_ij( const F& f, const I& imax, const J& jmax )
-{
-    for( J j = J(); j != jmax; j++ )
-        for( I i = I(); i != imax; i++ )
-            f( i, j );
 }
 
 /* zip_with f A B -> { f(a,b) for a in A and b in B } */

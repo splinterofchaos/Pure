@@ -100,7 +100,7 @@ string show( string s ) {
 template< class S > typename ESeq<S,string>::type show( S s ) {
     string str = "[";
     for( const auto& x : s ) {
-        str += show( x ) + " ";
+        str += show( x ) + ",";
     }
     if( str.size() > 1 )
         str.back() = ']';
@@ -135,6 +135,8 @@ string show( const Either<L,R>& e ) {
     typedef typename Either<L,R>::left_type LT;
     return either( showRight<RT>, showLeft<LT>, e );
 }
+
+vector<int> plus_minus( int x ) { return { x, -x }; }
 
 int main()
 {
@@ -231,4 +233,12 @@ int main()
             show( mreturn<Maybe>(1) ).c_str() );
     printf( "Just 1 >> fail 'oops' = %s\n",
             show( Just(1) >> mfail<Maybe,int>("oops") ).c_str() );
+
+    printf( "[1,2,3] >> [4,5] = %s\n",
+            show( vector<int>{1,2,3} >> vector<int>{4,5} ).c_str() );
+    printf( "[] >> [3,4] = %s\n",
+            show( vector<int>{} >> vector<int>{3,4} ).c_str() );
+
+    printf( "[1,2,3] >>= (\\x->[x,-x]) = %s\n",
+            show( vector<int>{1,2,3} >>= plus_minus ).c_str() );
 }
