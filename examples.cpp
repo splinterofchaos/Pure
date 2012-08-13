@@ -83,6 +83,10 @@ string show( int x ) {
     return digits;
 }
 
+string show( char c ) {
+    return string( 1, c );
+}
+
 string show( float x ) {
     char digits[20];
     sprintf( digits, "%.1f", x );
@@ -110,13 +114,14 @@ template< class X, class Y > string show( const pair<X,Y>& p ) {
     return "Pair (" + show(p.first) + ") (" + show(p.second) + ")";
 }
 
-template< class X > string showJust( const X& x ) {
-    return "Just (" + show( x ) + ")";
-}
-
+template< class X > string showJust( const X& x );
 template< class T > string show( const Maybe<T>& m ) {
     typedef typename Maybe<T>::value_type V;
     return maybe( string("Nothing"), showJust<V>, m );
+}
+
+template< class X > string showJust( const X& x ) {
+    return "Just (" + show( x ) + ")";
 }
 
 template< class R > string showRight( const R& r ) 
@@ -210,4 +215,20 @@ int main()
             show( Nothing<int>() | Just(2) ).c_str() );
     printf( "Nothing <|> Nothing  = %s\n", 
             show( Nothing<int>() | Nothing<int>() ).c_str() );
+
+    printf( "Just 1 >> Just \"hya!\" = %s\n",
+            show( Just(1) >> Just("hya!") ).c_str() );
+    printf( "Just 1 >> Nothing = %s\n",
+            show( Just(1) >> Nothing<int>() >>= mreturn<Maybe,int> ).c_str() );
+
+    auto qr = partial( quadratic_root, 1, 3 );
+    typedef pair<float,float> QR;
+    printf( "Just -4  >>= (quadraticRoot 1 3) = %s\n",
+            show( Just(-4) >>= qr ).c_str() );
+    printf( "Just 400 >>= (quadraticRoot 1 3) = %s\n",
+            show( Just(400) >>= qr ).c_str() );
+    printf( "return 1 :: Maybe Int = %s\n",
+            show( mreturn<Maybe>(1) ).c_str() );
+    printf( "Just 1 >> fail 'oops' = %s\n",
+            show( Just(1) >> mfail<Maybe,int>("oops") ).c_str() );
 }

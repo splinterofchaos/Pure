@@ -11,6 +11,8 @@
 #include <tuple>
 #include <memory>
 
+#include <iostream>
+
 namespace pure {
 
 using namespace std;
@@ -23,7 +25,8 @@ using namespace std;
 template< class T, class Ptr=unique_ptr<T>, class Value=decltype(*Ptr()) > 
 struct BasicMaybe
 {
-    typedef Ptr pointer;
+    typedef T     from_type;
+    typedef Ptr   pointer;
     typedef Value value_type;
 
     pointer ptr; // A pointer fits the definition of 'possible value'.
@@ -41,7 +44,6 @@ struct BasicMaybe
     BasicMaybe( typename BasicMaybe::Just j ) : ptr( new  T(move(j.value)) ) { }
     constexpr BasicMaybe( Nothing ) : ptr( nullptr ) { }
 
-    BasicMaybe( const BasicMaybe& m )    = delete;
     constexpr BasicMaybe( BasicMaybe&& ) = default;
 
     constexpr explicit operator bool () { return ptr != nullptr; }
@@ -81,6 +83,28 @@ struct Maybe<T*> : public BasicMaybe< T*, T* >
     constexpr Maybe( Maybe&& ) = default;
     constexpr Maybe( Just j ) : M( j.value ) { }
     constexpr Maybe( Nothing ) : M( Nothing() ) { }
+};
+
+/*
+ * Maybe c-string
+ * This specialization is important because dereferencing it returns a char*.
+ * The about specialization would have it return a char.
+ */
+template< > 
+struct Maybe<const char*> : public BasicMaybe< const char*, const char*, const char* >
+{
+    typedef const char* C;
+    typedef BasicMaybe< C, C, C > M;
+    using typename M::value_type;
+    using typename M::pointer;
+    using typename M::Just;
+    using typename M::Nothing;
+
+    constexpr Maybe( Maybe&& ) = default;
+    constexpr Maybe( Just j ) : M( j.value ) { }
+    constexpr Maybe( Nothing ) : M( Nothing() ) { }
+
+    constexpr const char* operator* () { return ptr; }
 };
 
 /* 
@@ -127,7 +151,7 @@ auto operator* ( const Maybe<F>& a, const Maybe<T>& b )
 
 template< class T >
 const Maybe<T>& operator| ( const Maybe<T>& a, const Maybe<T>& b )
-{ return a ? a : b; }
+{ return maybe( b, a, a ); }
 
 template< class T >
 Maybe<T> operator| ( Maybe<T>&& a, Maybe<T>&& b )
@@ -321,6 +345,9 @@ constexpr Pure<X> pure( X&& x )
 }
 
 /* 
+ * Functor F:
+ *      fmap f (F a) -> F (f a)
+ *
  * fmap maps a function, f, to a functor, F such that for each f:X->Y, there
  * exists an F(f):F(X)->F(Y). 
  *
@@ -347,7 +374,7 @@ template< class X, class Y >
 struct Functor< pair<X,Y> >
 {
     template< class F, class R = decltype(declval<F>()(declval<X>())) >
-    static pair<R,R> fmap( F&& f, const pair<X,Y>& p ) {
+    static pair<R,R> fmap( const F& f, const pair<X,Y>& p ) {
         return make_pair( f(p.first), f(p.second) );
     }
 
@@ -420,6 +447,85 @@ constexpr auto fmap( F&& f, G&& g )
     >::type
 {
     return Functor<G>::fmap( forward<F>(f), forward<G>(g) );
+}
+
+/*
+ * Monad M :
+ *   mdo (M a) (M b) -> M b        -- (M-do) Do from left to right.
+ *   mbind (M a) (a -> M b) -> M b -- Apply to the right the value of the left.
+ *   mreturn a -> M a              -- Lift a.
+ *   mfail String -> M a           -- Produce a failure value.
+ *
+ *   a >>  b = mdo   a b
+ *   m >>= f = mbind m f
+ */
+template< class ...M > struct Monad;
+
+template< class X >
+struct Monad< Maybe<X> > {
+    typedef Maybe<X> M;
+
+    /* 
+     * Just x  >> b = b
+     * Nothing >> _ = Nothing
+     */
+    template< class A, class B, class N = typename B::Nothing >
+    static B mdo( const A& a, B&& b ) {
+        // In Haskell, Nothing >> _ = Nothing.
+        // Note: When not a, a = Nothing.
+        return a ? forward<B>(b) : N();
+    }
+
+    /*
+     * Just x  >>= f = f(x)
+     * Nothing >>= f = Nothing
+     */
+    template< template<class> class M, class F,
+              class R = decltype( declval<F>()( declval<X>() ) ),
+              class V = typename R::from_type >
+    static Maybe<V> mbind(  M<X>&& m, const F& f ) {
+        return maybe( Nothing<V>(), f, m );
+    }
+
+    /* return x = Just x */
+    static M mreturn( X x ) { return Just( move(x) ); }
+
+    /* fail s = Nothing */
+    static M mfail( const char* const ) { return typename M::Nothing(); }
+};
+
+template< class A, class B >
+decltype( Monad<A>::mdo(declval<A>(),declval<B>()) ) 
+mdo( A&& a, B&& b ) {
+    return Monad<A>::mdo( forward<A>(a), forward<B>(b) ); 
+}
+
+template< class X, class Y >
+decltype(mdo(declval<X>(),declval<Y>())) 
+operator >> ( X&& x, Y&& y ) {
+    return mdo( forward<X>(x), forward<Y>(y) );
+}
+
+template< class M, class F >
+decltype( Monad<M>::mbind(declval<M>(),declval<F>()) ) 
+mbind( M&& m, F&& f ) {
+    return Monad<M>::mbind( forward<M>(m), forward<F>(f) ); 
+}
+
+template< class X, class Y >
+decltype( mbind(declval<X>(),declval<Y>()) ) 
+operator >>= ( X&& x, Y&& y ) {
+    return mbind( forward<X>(x), forward<Y>(y) );
+}
+
+template< template<class> class M, class X, class MX = M<X> >
+MX mreturn( X x ) {
+    return Monad< MX >::mreturn( move(x) );
+}
+
+template< template<class> class M, class X >
+M<X> mfail( const char* const why ) {
+    return Monad< M<X> >::mfail( why );
 }
 
 /*
