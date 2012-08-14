@@ -101,8 +101,8 @@ struct Maybe<const char*> : public BasicMaybe< const char*, const char*, const c
     using typename M::Nothing;
 
     constexpr Maybe( Maybe&& ) = default;
-    constexpr Maybe( Just j ) : M( j.value ) { }
-    constexpr Maybe( Nothing ) : M( Nothing() ) { }
+    explicit constexpr Maybe( Just j ) : M( j.value ) { }
+    explicit constexpr Maybe( Nothing ) : M( Nothing() ) { }
 
     constexpr const char* operator* () { return ptr; }
 };
@@ -177,8 +177,10 @@ struct Either
         constexpr Right( right_type value ) : value(move(value)) { }
     };
 
-    constexpr Either( Left x )  : left(  new left_type (move(x.value)) ) { }
-    constexpr Either( Right x ) : right( new right_type(move(x.value)) ) { }
+    explicit constexpr Either( Left x )  
+        : left(  new left_type (move(x.value)) ) { }
+    explicit constexpr Either( Right x ) 
+        : right( new right_type(move(x.value)) ) { }
 };
 
 /* 
@@ -213,6 +215,44 @@ constexpr Either<L,Ret> operator* ( const Either<L,F>& a,
 {
     return a.right and b.right ? Right<L>( (*a.right)(*b.right) )
         : a.left ? Left<Ret>( *a.left ) : Left<Ret>( *b.left );
+}
+
+/* Translate f g : h(x,xs...) = f( g(x), xs... ) */
+template< class F, class G > struct Translate {
+    F f;
+    G g;
+
+    template< class _F, class _G >
+    Translate( _F&& f, _G&& g ) : f(forward<_F>(f)), g(forward<_G>(g)) { }
+
+    template< class X, class ...XS >
+    decltype( f(g(declval<X>()),declval<XS>()...) )
+    operator() ( X&& x, XS&& ...xs ) {
+        return f( g(forward<X>(x)), xs... );
+    }
+};
+
+template< class F, class G >
+Translate<F,G> translate( F&& f, G&& g ) {
+    return Translate<F,G>( forward<F>(f), forward<G>(g) );
+}
+
+/* Flip f : g(x,y) = f(y,x) */
+template< class F > struct Flip {
+    F f;
+
+    template< class _F >
+    Flip( _F&& f ) : f(forward<_F>(f)) { }
+
+    template< class X, class Y, class ...XS >
+    decltype( f(declval<Y>(),declval<X>(),declval<XS>()...) )
+    operator() ( X&& x, Y&& y, XS&& ...xs ) {
+        return f( forward<Y>(y), forward<X>(x), forward<XS>(xs)... );
+    }
+};
+
+template< class F > Flip<F> flip( F&& f ) {
+    return Flip<F>( forward<F>(f) );
 }
 
 /* 
@@ -331,7 +371,7 @@ struct Pure
 {
     X x;
 
-    constexpr Pure( X x ) : x( x ) { }
+    explicit constexpr Pure( X x ) : x( x ) { }
     constexpr Pure( Pure&& ) = default;
 
     template< class ...Args >
@@ -505,6 +545,31 @@ Cx1 append( Cx1&& a, const Cx2& b, const Cx3& c, const Cxs& ... d )
     return append( append(forward<Cx1>(a), b), c, d... );
 }
 
+
+template< class SS, class S = typename SS::value_type >
+S concat( const SS& ss ) {
+    return foldl( append<S,S>, S(), ss );
+}
+
+/* 
+ * concatMap f s = concat (map f s)
+ *      where f is a function: a -> [b]
+ *            map f s produces a type: [[b]]
+ * The operation "map then concat" may be inefficient compared to an inlined
+ * loop, which would not require allocating a sequence of sequences to be
+ * concatenated. This is an optimization that should be equivalent to the
+ * inlined loop.
+ */
+template< class F, class S > 
+auto concatMap( const F& f, const S& xs ) -> decltype( f(xs.front()) ) 
+{
+    typedef decltype( f(xs.front()) ) R;
+    return foldr ( 
+        flip( translate(append<R,R>,f) ), // \ acc x = append( acc, f(x) )
+        R(), xs
+    );
+}
+
 template< typename Container, typename F >
 void for_each( const F& f, const Container& cont )
 {
@@ -526,7 +591,6 @@ void for_ij( const F& f, const I& imax, const J& jmax )
         for( I i = I(); i != imax; i++ )
             f( i, j );
 }
-
 
 /*
  * Monad M :
@@ -563,13 +627,15 @@ mdo( A&& a, B&& b ) {
 }
 
 /* m >>= k -- where m is a sequence. */
-template< class S, class F >
-auto mbind( const S& xs, const F& f ) -> decltype( f(xs.front()) )
-{
-    decltype( f(xs.front()) ) r;
-    for( const auto& x : xs ) 
-        r = append( r, f(x) );
-    return r;
+template< class S, class F, class R = typename remove_reference < 
+        decltype( declval<F>()(declval<S>().front()) ) 
+    >::type >
+R mbind( const S& xs, const F& f )
+{ 
+    // xs >>= f = foldr g [] xs 
+    //     where g acc x = acc ++ f(x)
+    //           ++ = append
+    return concatMap( f, xs );
 }
 
 
