@@ -20,50 +20,43 @@ void print( const char* const msg, const Container& v )
     cout << endl;
 }
 
-typedef array<int,2> Vec;
+typedef array<float,2> Vec;
 
 constexpr int get_x( const Vec& v ) { return v[0]; } 
 constexpr int get_y( const Vec& v ) { return v[1]; }
 
 Vec operator + ( const Vec& a, Vec&& b )
 { 
-    return zip_with( plus<int>(), a, move(b) ); 
+    return zip_with( plus<float>(), a, move(b) ); 
 }
 
 Vec operator + ( Vec&& a, const Vec& b )      { return b + move(a); } 
 Vec operator + ( const Vec& a, const Vec& b ) { return a + Vec(b); }
 
 
-Vec operator * ( Vec&& a, int x )
+Vec operator * ( Vec&& a, float x )
 {
-    return map( partial(multiplies<int>(),x), move(a) ); 
+    return map( partial(multiplies<float>(),x), move(a) ); 
 }
-Vec operator * ( int x, Vec&& a )      { return move(a) * x; }
-Vec operator * ( const Vec& a, int x ) { return Vec(a) * x; }
-Vec operator * ( int x, const Vec& a ) { return Vec(a) * x; }
+Vec operator * ( float x, Vec&& a )      { return move(a) * x; }
+Vec operator * ( const Vec& a, float x ) { return Vec(a) * x; }
+Vec operator * ( float x, const Vec& a ) { return Vec(a) * x; }
 
-/* Complete the quadratic equation with a pre-calculated square root. */
-constexpr float _qroot( float a, float b, float root )
-{
-    return (-b + root) / (2 * a);
+Vec operator / ( const Vec& v, float x ) { return v * (1/x); }
+
+Maybe<float> sqroot( float x ) { return x >= 0 ? Just(sqrt(x)) : Nothing<float>(); }
+
+/* x +- y = [x+y,x-y] */
+constexpr Vec plus_minus( float x, float y ) { return {{x+y,x-y}}; }
+
+Vec qroot_impl( float a, float b, float root ) {
+    return plus_minus( -b, root ) / (2*a);
 }
 
-constexpr pair<float,float> _split_qroot( float a, float b,float root )
+/* quadratic root(a,b,c) = Maybe [x,y] */
+Maybe<Vec> quadratic_root( float a, float b, float c )
 {
-    return make_pair( _qroot(a,b,root), _qroot(a,b,-root) );
-}
-
-/* 
- * quadratic root(a,b,c) = Maybe [x,y]
- * pure:: functions prefer to work with sequences, so this returns an array
- * containing just the two possible values of x.
- */
-Maybe<pair<float,float>> quadratic_root( float a, float b, float c )
-{
-    // Return split(a,b,root) 
-    return Just( partial(_split_qroot, a, b) ) * 
-        // IFF root>=0; else Nothing.
-        (b*b >= 4*a*c ? Just( sqrt(b*b-4*a*c) ) : Nothing<float>());
+    return fmap( partial(qroot_impl,a,b), sqroot(b*b - 4*a*c) );
 }
 
 int five() { return 5; }
@@ -136,7 +129,7 @@ string show( const Either<L,R>& e ) {
     return either( showRight<RT>, showLeft<LT>, e );
 }
 
-vector<int> plus_minus( int x ) { return { x, -x }; }
+vector<int> pos_neg( int x ) { return { x, -x }; }
 
 int main()
 {
@@ -158,11 +151,10 @@ int main()
     // is the same as times(get_x(fiveTwo),get_y(fiveTwo)).
 
     auto sevens = fiveTwo + twoFive;
-    printf( "<5,2> + <2,5> = <%d,%d>\n", sevens[0], sevens[1] );
+    printf( "<5,2> + <2,5> = <%f,%f>\n", sevens[0], sevens[1] );
     auto fourteens = sevens * 2;
-    printf( "<7,7> * 2 = <%d,%d>\n", fourteens[0], fourteens[1] );
+    printf( "<7,7> * 2 = <%f,%f>\n", fourteens[0], fourteens[1] );
 
-    auto roots = quadratic_root( 1, 3, -4 );
     printf( "quadratic root of x^2 + 3x - 4 = 0 : %s\n",
             show( quadratic_root(1,3,-4) ).c_str() );
     printf( "quadratic root of x^2 + 4 = 0 : %s\n",
@@ -240,5 +232,5 @@ int main()
             show( vector<int>{} >> vector<int>{3,4} ).c_str() );
 
     printf( "[1,2,3] >>= (\\x->[x,-x]) = %s\n",
-            show( vector<int>{1,2,3} >>= plus_minus ).c_str() );
+            show( vector<int>{1,2,3} >>= pos_neg ).c_str() );
 }
