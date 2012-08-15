@@ -129,6 +129,16 @@ string show( const Either<L,R>& e ) {
     return either( showRight<RT>, showLeft<LT>, e );
 }
 
+// This is a hard type to deduce, so explicitly define show for it. (Used for
+// mconcat example.)
+string show( const vector<Maybe<vector<int>>>& vmv ) {
+    string str = "{";
+    for( const auto& mv : vmv )
+        str = str + show( mv ) + " ";
+    str.back() = '}';
+    return str;
+}
+
 vector<int> pos_neg( int x ) { return { x, -x }; }
 
 int main()
@@ -233,4 +243,20 @@ int main()
 
     printf( "[1,2,3] >>= (\\x->[x,-x]) = %s\n",
             show( vector<int>{1,2,3} >>= pos_neg ).c_str() );
+
+    printf( "Just [1,2] <> Just [3,4] = %s\n",
+            show( mappend(Just(vector<int>{1,2}),Just(vector<int>{3,4})) ).c_str() );
+
+    vector<Maybe<vector<int>>> vmv;
+    vmv.emplace_back( Just(vector<int>{1,2}) ); // Don't use an initializer list
+    vmv.emplace_back( Just(vector<int>{3,4}) ); // since Maybe is non-copyable.
+    printf( "mconcat %s = %s\n",
+            show( vmv ).c_str(),
+            show( mconcat(vmv) ).c_str() );
+
+    const auto PSX = make_pair( vector<int>{1}, vector<int>{2} );
+    const auto PSY = make_pair( vector<int>{3}, vector<int>{4} );
+    printf( "Pair [1] [2] <> Pair [3] [4] = %s\n",
+            show( mappend(PSX,PSY) ).c_str() );
+
 }

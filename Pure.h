@@ -47,7 +47,6 @@ struct BasicMaybe
     constexpr BasicMaybe( BasicMaybe&& ) = default;
 
     constexpr explicit operator bool () { return ptr != nullptr; }
-
     constexpr value_type operator* () { return *ptr; }
 
 };
@@ -60,8 +59,11 @@ struct Maybe : public BasicMaybe< T >
     using typename M::pointer;
     using typename M::Just;
     using typename M::Nothing;
+    using M::ptr;
 
     constexpr Maybe( Maybe&& ) = default;
+
+    Maybe& operator= ( Maybe&& m ) { ptr = move(m.ptr); return *this; }
     explicit constexpr Maybe( Just j ) : M( move(j) ) { }
     explicit constexpr Maybe( Nothing ) : M( Nothing() ) { }
 };
@@ -79,8 +81,11 @@ struct Maybe<T*> : public BasicMaybe< T*, T* >
     using typename M::pointer;
     using typename M::Just;
     using typename M::Nothing;
+    using M::ptr;
 
     constexpr Maybe( Maybe&& ) = default;
+
+    Maybe& operator= ( Maybe&& m ) { ptr = m.ptr; return *this; }
     explicit constexpr Maybe( Just j ) : M( j.value ) { }
     explicit constexpr Maybe( Nothing ) : M( Nothing() ) { }
 };
@@ -91,7 +96,8 @@ struct Maybe<T*> : public BasicMaybe< T*, T* >
  * The about specialization would have it return a char.
  */
 template< > 
-struct Maybe<const char*> : public BasicMaybe< const char*, const char*, const char* >
+struct Maybe<const char*> : public BasicMaybe< const char*, const char*, 
+                                               const char* >
 {
     typedef const char* C;
     typedef BasicMaybe< C, C, C > M;
@@ -99,8 +105,11 @@ struct Maybe<const char*> : public BasicMaybe< const char*, const char*, const c
     using typename M::pointer;
     using typename M::Just;
     using typename M::Nothing;
+    using M::ptr;
 
     constexpr Maybe( Maybe&& ) = default;
+
+    Maybe& operator= ( Maybe&& m ) { ptr = m.ptr; return *this; }
     explicit constexpr Maybe( Just j ) : M( j.value ) { }
     explicit constexpr Maybe( Nothing ) : M( Nothing() ) { }
 
@@ -151,7 +160,7 @@ auto operator* ( const Maybe<F>& a, const Maybe<T>& b )
 
 template< class T >
 const Maybe<T>& operator| ( const Maybe<T>& a, const Maybe<T>& b )
-{ return maybe( b, a, a ); }
+{ return a ? a : b; }
 
 template< class T >
 Maybe<T> operator| ( Maybe<T>&& a, Maybe<T>&& b )
@@ -501,9 +510,9 @@ constexpr auto fmap( F&& f, G&& g )
 
 /* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
 template< typename Container, typename Value, typename F >
-constexpr Value foldl( const F& f, const Value& val, const Container& cont )
+constexpr Value foldl( const F& f, Value val, const Container& cont )
 {
-    return accumulate( begin(cont), end(cont), val, f );
+    return accumulate( begin(cont), end(cont), move(val), f );
 }
 
 template< typename Value, typename F, typename Container >
@@ -515,10 +524,10 @@ constexpr Value foldl( F&& f, const Container& cont )
 
 /* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
 template< typename F, typename Value, typename Container >
-constexpr Value foldr( F&& f, Value&& val, const Container& cont )
+constexpr Value foldr( F&& f, Value val, const Container& cont )
 {
     return accumulate( cont.rbegin(), cont.rend(), 
-                       forward<Value>(val), forward<F>(f) );
+                       move(val), forward<F>(f) );
 }
 
 template< typename Value, typename F, typename Container >
@@ -533,16 +542,15 @@ constexpr Value foldr( F&& f, const Container& cont )
  * Similar to [1]++[2,3]++[4]
  */
 template< typename C1, typename C2 >
-C1 append( C1 a, const C2& b )
-{
+C1 append( C1 a, const C2& b ) {
     copy( begin(b), end(b), back_inserter(a) );
     return a;
 }
 
 template< typename Cx1, typename Cx2, typename Cx3, typename ... Cxs >
-Cx1 append( Cx1&& a, const Cx2& b, const Cx3& c, const Cxs& ... d )
+Cx1 append( Cx1 a, const Cx2& b, const Cx3& c, const Cxs& ... d )
 {
-    return append( append(forward<Cx1>(a), b), c, d... );
+    return append( append(move(a), b), c, d... );
 }
 
 
@@ -591,6 +599,116 @@ void for_ij( const F& f, const I& imax, const J& jmax )
         for( I i = I(); i != imax; i++ )
             f( i, j );
 }
+
+/*
+ * Monoid M :
+ *      mempty -> M
+ *      mappend M M -> M
+ *      mconcat [M] -> M
+ *
+ *      mconcat = foldr mappend mempty
+ */
+template< class ...M > struct Monoid;
+
+template< class M, class Mo = Monoid<M> >
+decltype( Mo::mempty() )
+mempty() { return Mo::mempty(); }
+
+/* mempty [] */
+template< class M > decltype( M() ) mempty() { return M(); }
+
+template< class M1, class M2, class Mo = Monoid<M1> >
+decltype( Mo::mappend(declval<M1>(),declval<M2>()) )
+mappend( M1&& a, M2&& b ) {
+    return Mo::mappend( forward<M1>(a), forward<M2>(b) );
+}
+
+/*
+ * mappend const& 
+ * The above && version will always be preferred, except in the case of a
+ * const&. In other words, this version will NEVER be preferred otherwise.
+ */
+template< class M1, class M2, class Mo = Monoid<M1> >
+decltype( Mo::mappend(declval<M1>(),declval<M2>()) )
+mappend( const M1& a, M2&& b ) {
+    return Mo::mappend( a, forward<M2>(b) );
+}
+
+/* mappend [] */
+template< class XS, class YS >
+typename ESeq< XS, XS >::type
+mappend( XS xs, YS&& ys ) { 
+    return append( move(xs), forward<YS>(ys) ); 
+}
+
+template< class S, class M = typename S::value_type >
+decltype( Monoid<M>::mconcat(declval<S>()) ) mconcat( const S& s ) 
+{
+    return Monoid<M>::mconcat( s );
+}
+
+/* mconcat [] */
+template< class SS >
+typename ESeq< typename SS::value_type,
+               decltype( concat(declval<SS>()) ) >::type
+mconcat( SS&& ss ) {
+    return concat( forward<SS>(ss) );
+}
+
+// When we call mappend from within Monoid<M>, lookup deduction will see its
+// own implementation of mappend. This ensures a recursive mappend gets
+// properly forwarded.
+template< class XS, class YS > 
+decltype( mappend(declval<XS>(),declval<YS>()) )
+fwd_mappend( XS&& xs, YS&& ys ) {
+    return mappend( forward<XS>(xs), forward<YS>(ys) );
+}
+
+template< class M > 
+decltype( mempty<M>() ) fwd_mempty() { return mempty<M>(); }
+
+/* Monoid (Maybe X) -- where X is a monoid. */
+template< class X > struct Monoid< Maybe<X> > {
+    typedef Maybe<X> M;
+
+    static M mempty() { return Nothing<X>(); }
+
+    /* 
+     * mappend (Just x) (Just y) = Just (mappend x y)
+     * mappend a Nothing = mappend Nothing a = a
+     */
+    static M mappend( const M& a, const M& b ) {
+        return a and b ? Just( fwd_mappend(*a,*b) ) 
+            // Either construct a new copy of a or b, a make a new Nothing.
+            : maybe( mempty(), Just<X>, a | b );
+    }
+
+    static M mappend( M&& a, M&& b ) {
+        return a and b ? Just( fwd_mappend(*a,*b) ) : (move(a) | move(b));
+    }
+
+    template< class S > 
+    static M mconcat( const S& s ) {
+        typedef M (*F) ( const M&, const M& );
+        return foldl( (F)mappend, mempty(), s );
+    }
+};
+
+/* Monoid (Pair X X) */
+template< class X, class Y > struct Monoid< pair<X,Y> > {
+    typedef pair<X,Y> P;
+
+    static P mempty() { return P( fwd_mempty<X>(), fwd_mempty<Y>() ); }
+
+    static P mappend( const P& a, const P& b ) {
+        return P( fwd_mappend(a.first,b.first), 
+                  fwd_mappend(a.second,b.second) );
+    }
+
+    template< class S > static P mconcat( const S& s ) {
+        return foldr( mappend, mempty(), s );
+    }
+};
 
 /*
  * Monad M :
