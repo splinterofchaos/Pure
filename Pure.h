@@ -440,7 +440,7 @@ struct Functor< Maybe<T> >
 {
     template< class F, class R = decltype( declval<F>()(declval<T>()) ) >
     static Maybe<R> fmap( const F& f, const Maybe<T>& m ) {
-        return m ? Just( f(*m) ) : Nothing<R>();
+        return maybe( Nothing<R>(), compose(Just<R>,f), m );
     }
 };
 
@@ -815,14 +815,13 @@ struct Monad< Maybe<X> > {
     }
 
     /*
-     * Just x  >>= f = f(x)
+     * Just x  >>= f = f(x) -- where f returns a Maybe
      * Nothing >>= f = Nothing
      */
-    template< template<class> class M, class F,
-              class R = decltype( declval<F>()( declval<X>() ) ),
-              class V = typename R::from_type >
-    static Maybe<V> mbind(  M<X>&& m, const F& f ) {
-        return maybe( Nothing<V>(), f, m );
+    template< template<class> class M, class F >
+    static auto mbind(  M<X>&& m, const F& f ) -> decltype(f(*m)) {
+        typedef typename decltype(f(*m))::from_type Y;
+        return maybe( Nothing<Y>(), f, m );
     }
 
     /* return x = Just x */
