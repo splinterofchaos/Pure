@@ -833,6 +833,45 @@ struct Monad< Maybe<X> > {
 };
 
 /*
+ * MonadPlus M :
+ *      mzero -> M
+ *      mplus M M -> M
+ *
+ *      mzero >>= f = mzero
+ */
+template< class ...F > struct MonadPlus;
+
+template< class M >
+decltype( M() ) mzero() { return M(); }
+
+template< class M >
+decltype( MonadPlus<M>::mzero() )
+mzero() { return MonadPlus<M>::mzero(); }
+
+template< class S >
+typename ESeq< S, S >::type mplus( S a, const S& b ) {
+    return append( move(a), b );
+}
+
+    template< class M1, class M2, class Mo = Monoid<M1> >
+decltype( MonadPlus<M1>::mplus(declval<M1>(),declval<M2>()) )
+mplus( M1&& a, M2&& b ) {
+    return MonadPlus<M1>::mplus( forward<M1>(a), forward<M2>(b) );
+}
+
+template< class X > struct MonadPlus< Maybe<X> > {
+    typedef Maybe<X> M;
+
+    static M mzero() { return Nothing<X>(); }
+
+    template< class A, class B >
+    static decltype(declval<A>()|declval<B>()) 
+    mplus( A&& a, B&& b ) {
+        return forward<A>(a) | forward<B>(b);
+    }
+};
+
+/*
  * Rotation.
  * f(x...,y) = g(y,x...)
  * rot f = g
