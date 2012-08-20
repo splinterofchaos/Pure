@@ -30,11 +30,6 @@ constexpr M Just( T t ) {
 template< class X >
 constexpr X* Just( X* x ) { return x; }
 
-//template< class X, class M = std::unique_ptr<X> >
-//constexpr M Just( const X& x ) {
-//    return M( new X(x) );
-//}
-
 template< class T, class M = std::unique_ptr<T> > 
 constexpr M Nothing() {
     return M( nullptr );
@@ -61,7 +56,7 @@ auto operator* ( const F& a, const P& b )
     return a and b ? Just( (*a)(*b) ) : Nothing<Ret>();
 }
 
-template< class P > P operator| ( P&& a, P&& b ) {
+template< class P > P operator|| ( P&& a, P&& b ) {
     return a ? forward<P>(a) : forward<P>(b); 
 }
 
@@ -584,7 +579,7 @@ template< class X > struct Monoid< X* > {
     static X* mempty() { return nullptr; }
 
     static unique_ptr<X> mappend( X* x, X* y ) {
-        return x and y ? Just( fwd_mappend(*x,*y) ) : x | y;
+        return x and y ? Just( fwd_mappend(*x,*y) ) : x || y;
     }
 
     template< class S >
@@ -606,7 +601,7 @@ template< class X > struct Monoid< unique_ptr<X> > {
 
     static P mappend( P&& x, P&& y ) {
         return x and y ? Just( fwd_mappend(*x,*y) )
-            : move(x) | move(y);
+            : move(x) || move(y);
     }
 
     template< class S >
@@ -704,11 +699,6 @@ decltype( Monad<M>::mreturn() ) mreturn() {
     return Monad<M>::mreturn();
 }
 
-//template< template<class> class S, class X, class SX = S<X> >
-//decltype( SX() ) mfail( const char* const ) {
-//    return SX();
-//}
-
 template< class M >
 M mfail( const char* const why ) {
     return Monad< M >::mfail( why );
@@ -796,15 +786,15 @@ mplus( M1&& a, M2&& b ) {
 
 template< class X > struct MonadPlus< X* > {
     static X* mzero() { return nullptr; }
-    static X* mplus( X* a, X* b ) { return a | b; }
+    static X* mplus( X* a, X* b ) { return a || b; }
 };
 
 template< class X > struct MonadPlus< unique_ptr<X> > {
     typedef unique_ptr<X> P;
 
     static P mzero() { return P(nullptr); }
-    static const P& mplus( const P& x, const P& y ) { return x | y; }
-    static P mplus( P&& x, P&& y ) { return move(x) | move(y); }
+    static const P& mplus( const P& x, const P& y ) { return x || y; }
+    static P mplus( P&& x, P&& y ) { return move(x) || move(y); }
 };
 
 /*

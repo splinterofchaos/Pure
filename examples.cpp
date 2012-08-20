@@ -224,9 +224,9 @@ int main()
             show( Right<int>(plus_two) * Left<int>(1)  ).c_str() );
 
     printf( "Nothing <|> Just 2   = %s\n", 
-            show( Nothing<int>() | Just(2) ).c_str() );
+            show( Nothing<int>() || Just(2) ).c_str() );
     printf( "Nothing <|> Nothing  = %s\n", 
-            show( Nothing<int>() | Nothing<int>() ).c_str() );
+            show( Nothing<int>() || Nothing<int>() ).c_str() );
 
     printf( "Just 1 >> Just \"hya!\" = %s\n",
             show( Just(1) >> Just("hya!") ).c_str() );
