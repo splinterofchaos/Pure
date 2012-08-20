@@ -44,7 +44,9 @@ Vec operator * ( float x, const Vec& a ) { return Vec(a) * x; }
 
 Vec operator / ( const Vec& v, float x ) { return v * (1/x); }
 
-Maybe<float> sqroot( float x ) { return x >= 0 ? Just(sqrt(x)) : Nothing<float>(); }
+unique_ptr<float> sqroot( float x ) {
+    return x >= 0 ? Just(sqrt(x)) : Nothing<float>(); 
+}
 
 /* x +- y = [x+y,x-y] */
 constexpr Vec plus_minus( float x, float y ) { return {{x+y,x-y}}; }
@@ -54,7 +56,7 @@ Vec qroot_impl( float a, float b, float root ) {
 }
 
 /* quadratic root(a,b,c) = Maybe [x,y] */
-Maybe<Vec> quadratic_root( float a, float b, float c )
+unique_ptr<Vec> quadratic_root( float a, float b, float c )
 {
     return fmap( partial(qroot_impl,a,b), sqroot(b*b - 4*a*c) );
 }
@@ -76,8 +78,8 @@ string show( int x ) {
     return digits;
 }
 
-string show( char c ) {
-    return string( 1, c );
+string show( char c ) { 
+    return "'" + string( 1, c ) + "'"; 
 }
 
 string show( float x ) {
@@ -88,6 +90,10 @@ string show( float x ) {
 
 string show( string s ) {
     return "\"" + s + "\"";
+}
+
+string show( const char* str ) {
+    return show( string(str) );
 }
 
 template< class S > typename ESeq<S,string>::type show( S s ) {
@@ -108,9 +114,11 @@ template< class X, class Y > string show( const pair<X,Y>& p ) {
 }
 
 template< class X > string showJust( const X& x );
-template< class T > string show( const Maybe<T>& m ) {
-    typedef typename Maybe<T>::value_type V;
-    return maybe( string("Nothing"), showJust<V>, m );
+template< class X > string show( const unique_ptr<X>& m ) {
+    return maybe( string("Nothing"), showJust<X>, m );
+}
+template< class X > string show( X* m ) {
+    return maybe( string("Nothing"), showJust<X>, m );
 }
 
 template< class X > string showJust( const X& x ) {
@@ -131,7 +139,7 @@ string show( const Either<L,R>& e ) {
 
 // This is a hard type to deduce, so explicitly define show for it. (Used for
 // mconcat example.)
-string show( const vector<Maybe<vector<int>>>& vmv ) {
+string show( const vector<unique_ptr<vector<int>>>& vmv ) {
     string str = "{";
     for( const auto& mv : vmv )
         str = str + show( mv ) + " ";
@@ -222,8 +230,10 @@ int main()
 
     printf( "Just 1 >> Just \"hya!\" = %s\n",
             show( Just(1) >> Just("hya!") ).c_str() );
-    printf( "Just 1 >> Nothing = %s\n",
-            show( Just(1) >> Nothing<int>() >>= mreturn<Maybe,int> ).c_str() );
+
+    typedef unique_ptr<int>(*mret)(int&&);
+    printf( "Just 1 >> Nothing >>= return = %s\n",
+            show( Just(1) >> Nothing<int>() >>= mreturn<unique_ptr<int>>() ).c_str() );
 
     auto qr = partial( quadratic_root, 1, 3 );
     typedef pair<float,float> QR;
@@ -232,9 +242,9 @@ int main()
     printf( "Just 400 >>= (quadraticRoot 1 3) = %s\n",
             show( Just(400) >>= qr ).c_str() );
     printf( "return 1 :: Maybe Int = %s\n",
-            show( mreturn<Maybe>(1) ).c_str() );
+            show( mreturn<unique_ptr<int>>(1) ).c_str() );
     printf( "Just 1 >> fail 'oops' = %s\n",
-            show( Just(1) >> mfail<Maybe,int>("oops") ).c_str() );
+            show( Just(1) >> mfail<unique_ptr<int>>("oops") ).c_str() );
 
     printf( "[1,2,3] >> [4,5] = %s\n",
             show( vector<int>{1,2,3} >> vector<int>{4,5} ).c_str() );
@@ -251,12 +261,12 @@ int main()
     printf( "Pair [1] [2] <> Pair [3] [4] = %s\n",
             show( mappend(PSX,PSY) ).c_str() );
 
-    vector<Maybe<vector<int>>> vmv;
+    vector<unique_ptr<vector<int>>> vmv;
     vmv.emplace_back( Just(vector<int>{1,2}) ); // Don't use an initializer list
     vmv.emplace_back( Just(vector<int>{3,4}) ); // since Maybe is non-copyable.
     printf( "mconcat %s = %s\n",
-            show( vmv ).c_str(),
-            show( mconcat(vmv) ).c_str() );
+            show( vmv ).c_str(), "" );
+            //show( mconcat(vmv) ).c_str() );
 
     printf( "Just 1 `mplus` Just 2 = %s\n",
             show( mplus(Just(1),Just(2)) ).c_str() );

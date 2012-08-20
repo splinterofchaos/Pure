@@ -18,128 +18,31 @@ namespace pure {
 using namespace std;
 
 /* 
- * Maybe x : Just x | Nothing 
- * A simple type to hold a possible value. Similar to a bool that holds nothing
- * when false and any value when true. By default, owns its value.
- */
-template< class T, class Ptr=unique_ptr<T>, class Value=decltype(*Ptr()) > 
-struct BasicMaybe
-{
-    typedef T     from_type;
-    typedef Ptr   pointer;
-    typedef Value value_type;
-
-    pointer ptr; // A pointer fits the definition of 'possible value'.
-
-  protected:
-    constexpr BasicMaybe( pointer ptr ) : ptr( ptr ) { }
-  public:
-
-    struct Nothing { }; // Definitely holds nothing.
-    struct Just { // Holds a definite value.
-        T value;
-        constexpr Just( T value ) : value( std::move(value) ) { }
-    };
-
-    BasicMaybe( typename BasicMaybe::Just j ) : ptr( new  T(move(j.value)) ) { }
-    constexpr BasicMaybe( Nothing ) : ptr( nullptr ) { }
-
-    constexpr BasicMaybe( BasicMaybe&& ) = default;
-
-    constexpr explicit operator bool () { return ptr != nullptr; }
-    constexpr value_type operator* () { return *ptr; }
-
-};
-
-template< class T >
-struct Maybe : public BasicMaybe< T > 
-{ 
-    typedef BasicMaybe< T > M;
-    using typename M::value_type;
-    using typename M::pointer;
-    using typename M::Just;
-    using typename M::Nothing;
-    using M::ptr;
-
-    constexpr Maybe( Maybe&& ) = default;
-
-    Maybe& operator= ( Maybe&& m ) { ptr = move(m.ptr); return *this; }
-    explicit constexpr Maybe( Just j ) : M( move(j) ) { }
-    explicit constexpr Maybe( Nothing ) : M( Nothing() ) { }
-};
-
-/* 
- * Maybe x* 
- * A C-style pointer doesn't define ownership properties, but we can assume any
- * non-null value valid for the scope of this object.
- */
-template< class T > 
-struct Maybe<T*> : public BasicMaybe< T*, T* >
-{
-    typedef BasicMaybe< T*, T*, T& > M;
-    using typename M::value_type;
-    using typename M::pointer;
-    using typename M::Just;
-    using typename M::Nothing;
-    using M::ptr;
-
-    constexpr Maybe( Maybe&& ) = default;
-
-    Maybe& operator= ( Maybe&& m ) { ptr = m.ptr; return *this; }
-    explicit constexpr Maybe( Just j ) : M( j.value ) { }
-    explicit constexpr Maybe( Nothing ) : M( Nothing() ) { }
-};
-
-/*
- * Maybe c-string
- * This specialization is important because dereferencing it returns a char*.
- * The about specialization would have it return a char.
- */
-template< > 
-struct Maybe<const char*> : public BasicMaybe< const char*, const char*, 
-                                               const char* >
-{
-    typedef const char* C;
-    typedef BasicMaybe< C, C, C > M;
-    using typename M::value_type;
-    using typename M::pointer;
-    using typename M::Just;
-    using typename M::Nothing;
-    using M::ptr;
-
-    constexpr Maybe( Maybe&& ) = default;
-
-    Maybe& operator= ( Maybe&& m ) { ptr = m.ptr; return *this; }
-    explicit constexpr Maybe( Just j ) : M( j.value ) { }
-    explicit constexpr Maybe( Nothing ) : M( Nothing() ) { }
-
-    constexpr const char* operator* () { return ptr; }
-};
-
-/* 
  * Just  x -> Maybe (Just x) | with a definite value.
  * Nothing -> Maybe Nothing  | with definitely no value.
  * Mightbe pred x -> Maybe x | possible with a value.
  */
-template< class T, class M = Maybe<T> > constexpr M Just( T t ) {
-    return M( typename M::Just(move(t)) ); 
+template< class T, class M = std::unique_ptr<T> > 
+constexpr M Just( T t ) {
+    return M( new T(move(t)) );
 }
 
-template< class T, class M = Maybe<T> > constexpr M Nothing() {
-    return M( typename M::Nothing() );
-}
+template< class X >
+constexpr X* Just( X* x ) { return x; }
 
-// A simple short hand for constructing a Maybe based on a predicate.
-template< class T > Maybe<T> constexpr mightbe( bool p, T&& t ) {
-    typedef Maybe<T> M;
-    return p ? M( typename M::Just(forward<T>(t)) )
-             : M( typename M::Nothing() );
+//template< class X, class M = std::unique_ptr<X> >
+//constexpr M Just( const X& x ) {
+//    return M( new X(x) );
+//}
+
+template< class T, class M = std::unique_ptr<T> > 
+constexpr M Nothing() {
+    return M( nullptr );
 }
 
 /* maybe b (a->b) (Maybe a) -> b */
-template< class R, class F, class T >
-constexpr R maybe( R&& nothingVal, F f, const Maybe<T>& m )
-{
+template< class R, class F, class P >
+constexpr R maybe( R&& nothingVal, F f, const P& m ) {
     return m ? f( *m ) : forward<R>( nothingVal );
 }
 
@@ -150,21 +53,17 @@ constexpr R maybe( R&& nothingVal, F f, const Maybe<T>& m )
  * Nothing | Just x  = Just x
  * Nothing | Nothing = Nothing
  */
-template< class F, class T, 
-          class Ret = decltype( declval<F>()(declval<T>()) ) >
-auto operator* ( const Maybe<F>& a, const Maybe<T>& b )
-    -> Maybe< Ret >
+template< class F, class P, 
+          class Ret = decltype( declval<F>()(*declval<P>()) ) >
+auto operator* ( const F& a, const P& b )
+    -> unique_ptr< Ret >
 {
-    return a and b ? Maybe<Ret>( (*a)(*b) ) : Nothing<Ret>();
+    return a and b ? Just( (*a)(*b) ) : Nothing<Ret>();
 }
 
-template< class T >
-const Maybe<T>& operator| ( const Maybe<T>& a, const Maybe<T>& b )
-{ return a ? a : b; }
-
-template< class T >
-Maybe<T> operator| ( Maybe<T>&& a, Maybe<T>&& b )
-{ return a ? move(a) : move(b); }
+template< class P > P operator| ( P&& a, P&& b ) {
+    return a ? forward<P>(a) : forward<P>(b); 
+}
 
 /* Either a b : Left a | Right b */
 template< class L, class R >
@@ -436,11 +335,12 @@ struct Functor< pair<X,Y> >
 };
 
 template< class T >
-struct Functor< Maybe<T> > 
+struct Functor< typename enable_if< is_pointer<T>::value, T >::value, 
+                T >
 {
-    template< class F, class R = decltype( declval<F>()(declval<T>()) ) >
-    static Maybe<R> fmap( const F& f, const Maybe<T>& m ) {
-        return maybe( Nothing<R>(), compose(Just<R>,f), m );
+    template< class F, class R = decltype( declval<F>()(*declval<T>()) ) >
+    static unique_ptr<R> fmap( const F& f, T&& m ) {
+        return maybe( Nothing<R>(), compose(Just<R>,f), forward<T>(m) );
     }
 };
 
@@ -495,6 +395,18 @@ constexpr auto fmap( F&& f, C&& c )
     >::type
 {
     return map( forward<F>(f), forward<C>(c) );
+}
+
+template< class F, class X >
+unique_ptr< decltype( declval<F>()(declval<X>()) ) >
+fmap( F&& f, X* p ) {
+    return p ? Just(forward<F>(f)(*p)) : nullptr;
+}
+
+template< class F, class X >
+unique_ptr< decltype( declval<F>()(declval<X>()) ) >
+fmap( F&& f, unique_ptr<X> p ) {
+    return p ? Just(forward<F>(f)(*p)) : nullptr;
 }
 
 template< class F, class G >
@@ -668,28 +580,38 @@ template< class M >
 decltype( mempty<M>() ) fwd_mempty() { return mempty<M>(); }
 
 /* Monoid (Maybe X) -- where X is a monoid. */
-template< class X > struct Monoid< Maybe<X> > {
-    typedef Maybe<X> M;
+template< class X > struct Monoid< X* > {
+    static X* mempty() { return nullptr; }
 
-    static M mempty() { return Nothing<X>(); }
-
-    /* 
-     * mappend (Just x) (Just y) = Just (mappend x y)
-     * mappend a Nothing = mappend Nothing a = a
-     */
-    static M mappend( const M& a, const M& b ) {
-        return a and b ? Just( fwd_mappend(*a,*b) ) 
-            // Either construct a new copy of a or b, a make a new Nothing.
-            : maybe( mempty(), Just<X>, a | b );
+    static unique_ptr<X> mappend( X* x, X* y ) {
+        return x and y ? Just( fwd_mappend(*x,*y) ) : x | y;
     }
 
-    static M mappend( M&& a, M&& b ) {
-        return a and b ? Just( fwd_mappend(*a,*b) ) : (move(a) | move(b));
+    template< class S >
+    static unique_ptr<X> mconcat( const S& s ) {
+        typedef unique_ptr<X> (*F) ( X*, X* );
+        return foldl( (F)mappend, mempty(), s );
+    }
+};
+
+template< class X > struct Monoid< unique_ptr<X> > {
+    typedef unique_ptr<X> P;
+
+    static P mempty() { return P(nullptr); }
+
+    static P mappend( const P& x, const P& y ) {
+        return x and y ? Just( fwd_mappend(*x,*y) )
+            : x ? Just(*x) : y ? Just(*y) : nullptr;
     }
 
-    template< class S > 
-    static M mconcat( const S& s ) {
-        typedef M (*F) ( const M&, const M& );
+    static P mappend( P&& x, P&& y ) {
+        return x and y ? Just( fwd_mappend(*x,*y) )
+            : move(x) | move(y);
+    }
+
+    template< class S >
+    static P mconcat( const S& s ) {
+        typedef P (*F) ( X*, X* );
         return foldl( (F)mappend, mempty(), s );
     }
 };
@@ -766,24 +688,30 @@ mbind( M&& m, F&& f ) {
 
 /* return<S> x = [x] -- where S is a sequence. */
 template< template<class> class S, class X, class SX = S<X> >
-auto mreturn( X x ) -> decltype( SX(1,x) ) {
-    return SX( 1, x );
+auto mreturn( X x ) -> decltype( SX{x} ) {
+    return SX{ x };
 }
 
 /* return<M> x = M x */
-template< template<class> class M, class X, class MX = M<X> >
-MX mreturn( X x ) {
-    return Monad< MX >::mreturn( move(x) );
+template< class M, class X >
+M mreturn( X x ) {
+    return Monad< M >::mreturn( move(x) );
 }
 
-template< template<class> class S, class X, class SX = S<X> >
-decltype( SX() ) mfail( const char* const ) {
-    return SX();
+/* mreturn () = (\x -> return x) */
+template< class M > 
+decltype( Monad<M>::mreturn() ) mreturn() { 
+    return Monad<M>::mreturn();
 }
 
-template< template<class> class M, class X >
-M<X> mfail( const char* const why ) {
-    return Monad< M<X> >::mfail( why );
+//template< template<class> class S, class X, class SX = S<X> >
+//decltype( SX() ) mfail( const char* const ) {
+//    return SX();
+//}
+
+template< class M >
+M mfail( const char* const why ) {
+    return Monad< M >::mfail( why );
 }
 
 template< class X, class Y >
@@ -798,37 +726,45 @@ operator >> ( X&& x, Y&& y ) {
     return mdo( forward<X>(x), forward<Y>(y) );
 }
 
-template< class X >
-struct Monad< Maybe<X> > {
-    typedef Maybe<X> M;
+template< class X > struct Monad< X* > {
+    static unique_ptr<X> mreturn( X x ) { return Just(move(x)); }
 
-    /* 
-     * Just x  >> b = b
-     * Nothing >> _ = Nothing
-     */
-    template< class A, class B, class N = typename B::Nothing >
-    static B mdo( const A& a, B&& b ) {
-        // In Haskell, Nothing >> _ = Nothing.
-        // Note: When not a, a = Nothing.
-        typedef typename B::from_type Y;
-        return a ? forward<B>(b) : Nothing<Y>();
+    typedef unique_ptr<X> (*Return)( X );
+    static Return mreturn() { return Just<X>; }
+
+    static X* mfail(const char*) { return nullptr; }
+
+    template< class Y >
+    static Y* mdo( X* x, Y* y ) {
+        return x ? y : nullptr;
     }
 
-    /*
-     * Just x  >>= f = f(x) -- where f returns a Maybe
-     * Nothing >>= f = Nothing
-     */
-    template< template<class> class M, class F >
-    static auto mbind(  M<X>&& m, const F& f ) -> decltype(f(*m)) {
-        typedef typename decltype(f(*m))::from_type Y;
-        return maybe( Nothing<Y>(), f, m );
+    template< class Y, class F, 
+              class R = decltype( declval<F>()(*declval<Y>()) ) >
+    static typename enable_if< is_pointer<R>::value, R >::type
+    mbind( Y* y, const F& f ) {
+        return y ? f(*y) : nullptr;
+    }
+};
+
+template< class X > struct Monad< unique_ptr<X> > {
+    static unique_ptr<X> mreturn( X x ) { return Just(move(x)); }
+
+    typedef unique_ptr<X> (*Return)( X );
+    static Return mreturn() { return Just<X>; }
+
+    static unique_ptr<X> mfail(const char*) { return nullptr; }
+
+    template< class PZ >
+    static PZ mdo( const unique_ptr<X>& x, PZ&& z ) {
+        return x ? forward<PZ>(z) : nullptr;
     }
 
-    /* return x = Just x */
-    static M mreturn( X x ) { return Just( move(x) ); }
-
-    /* fail s = Nothing */
-    static M mfail( const char* const ) { return Nothing<X>(); }
+    template< class F,
+              class R = decltype( declval<F>()(declval<X>()) ) >
+    static R mbind( const unique_ptr<X>& x, const F& f ) {
+        return x ? f(*x) : nullptr;
+    }
 };
 
 /*
@@ -858,16 +794,17 @@ mplus( M1&& a, M2&& b ) {
     return MonadPlus<M1>::mplus( forward<M1>(a), forward<M2>(b) );
 }
 
-template< class X > struct MonadPlus< Maybe<X> > {
-    typedef Maybe<X> M;
+template< class X > struct MonadPlus< X* > {
+    static X* mzero() { return nullptr; }
+    static X* mplus( X* a, X* b ) { return a | b; }
+};
 
-    static M mzero() { return Nothing<X>(); }
+template< class X > struct MonadPlus< unique_ptr<X> > {
+    typedef unique_ptr<X> P;
 
-    template< class A, class B >
-    static decltype(declval<A>()|declval<B>()) 
-    mplus( A&& a, B&& b ) {
-        return forward<A>(a) | forward<B>(b);
-    }
+    static P mzero() { return P(nullptr); }
+    static const P& mplus( const P& x, const P& y ) { return x | y; }
+    static P mplus( P&& x, P&& y ) { return move(x) | move(y); }
 };
 
 /*
@@ -1119,13 +1056,12 @@ Container filter( const F& f, Container cont )
 /* find pred xs -> Maybe x */
 template< class F, class Sequence,
           class Val = decltype(&declval<Sequence>().front()) >
-Maybe<Val> find( F&& f, Sequence&& s )
+Val find( F&& f, Sequence&& s )
 {
     const auto e = end( s ), b = begin( s );
     const auto it = find_if( b, e, forward<F>(f) );
 
-    typedef Maybe< Val > M;
-    return mightbe( it != e, &(*it) ); 
+    return it != e ? &(*it) : nullptr; 
 }
 
 /* cfind x C -> C::iterator */
