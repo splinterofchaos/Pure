@@ -20,7 +20,6 @@ using namespace std;
 /* 
  * Just  x -> Maybe (Just x) | with a definite value.
  * Nothing -> Maybe Nothing  | with definitely no value.
- * Mightbe pred x -> Maybe x | possible with a value.
  */
 template< class T, class M = std::unique_ptr<T> > 
 constexpr M Just( T t ) {
@@ -415,6 +414,12 @@ constexpr auto fmap( F&& f, G&& g )
     return Functor<G>::fmap( forward<F>(f), forward<G>(g) );
 }
 
+template< class F, class M >
+constexpr decltype( fmap(declval<F>(), declval<M>()) )
+operator^ ( F&& f, M&& m ) {
+    return fmap( forward<F>(f), forward<M>(m) );
+}
+
 /* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
 template< typename Container, typename Value, typename F >
 constexpr Value foldl( const F& f, Value val, const Container& cont )
@@ -606,7 +611,7 @@ template< class X > struct Monoid< unique_ptr<X> > {
 
     template< class S >
     static P mconcat( const S& s ) {
-        typedef P (*F) ( X*, X* );
+        typedef P (*F) ( const P&, const P& );
         return foldl( (F)mappend, mempty(), s );
     }
 };

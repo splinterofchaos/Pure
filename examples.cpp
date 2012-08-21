@@ -58,7 +58,7 @@ Vec qroot_impl( float a, float b, float root ) {
 /* quadratic root(a,b,c) = Maybe [x,y] */
 unique_ptr<Vec> quadratic_root( float a, float b, float c )
 {
-    return fmap( partial(qroot_impl,a,b), sqroot(b*b - 4*a*c) );
+    return partial(qroot_impl,a,b) ^ sqroot(b*b - 4*a*c);
 }
 
 int five() { return 5; }
@@ -184,24 +184,24 @@ int main()
     printf( "5 * 2 = %d\n", partial(times,5)(2) );
     printf( "5 * 2 = %d\n", partial(times,5,2)() );
 
-    printf( "fmap (+2) (pure 1) = %d\n", fmap(plus_two,pure::pure(1))() );
-    printf( "fmap (+2) (+2) 1   = %d\n", fmap(plus_two,plus_two)(1) );
+    printf( "(+2) <$> (pure 1) ( ) = %d\n", fmap(plus_two, pure::pure(1))() );
+    printf( "(+2) <$> (+2)      1  = %d\n", fmap(plus_two, plus_two)(1) );
 
-    printf( "fmap (+2) (Pair 1 2) = %s\n", 
-            show( fmap(plus_two, std::make_pair(1,2)) ).c_str() );
+    printf( "(+2) <$> (Pair 1 2) = %s\n", 
+            show( plus_two ^ std::make_pair(1,2) ).c_str() );
 
-    printf( "fmap (+2) [1,2] = %s\n", 
-            show( fmap(plus_two, std::list<int>{1,2}) ).c_str() );
+    printf( "(+2) <$> [1,2] = %s\n", 
+            show( plus_two ^ std::list<int>{1,2} ).c_str() );
 
-    printf( "fmap (+2) (Just 2)  = %s\n", 
-            show( fmap(plus_two, Just(2)) ).c_str() );
-    printf( "fmap (+2) (Nothing) = %s\n", 
-            show( fmap(plus_two, Nothing<int>()) ).c_str() );
+    printf( "(+2) <$> (Just 2)  = %s\n", 
+            show( plus_two ^ Just(2) ).c_str() );
+    printf( "(+2) <$> (Nothing) = %s\n", 
+            show( plus_two ^ Nothing<int>() ).c_str() );
 
-    printf( "fmap (+2) (Left \"yawn\") = %s\n", 
-            show( fmap(plus_two,Left<int>("yawn")) ).c_str() );
-    printf( "fmap (+2) (Right 5)     = %s\n",
-            show( fmap(plus_two,Right<string>(5)) ).c_str() );
+    printf( "(+2) <$> (Left \"yawn\") = %s\n", 
+            show( plus_two ^ Left<int>("yawn") ).c_str() );
+    printf( "(+2) <$> (Right 5)     = %s\n",
+            show( plus_two ^ Right<string>(5) ).c_str() );
 
     vector<int> N = {1,2,3,4,5,6,7,8};
     int n = 5;
@@ -265,8 +265,8 @@ int main()
     vmv.emplace_back( Just(vector<int>{1,2}) ); // Don't use an initializer list
     vmv.emplace_back( Just(vector<int>{3,4}) ); // since Maybe is non-copyable.
     printf( "mconcat %s = %s\n",
-            show( vmv ).c_str(), "" );
-            //show( mconcat(vmv) ).c_str() );
+            show( vmv ).c_str(), 
+            show( mconcat(vmv) ).c_str() );
 
     printf( "Just 1 `mplus` Just 2 = %s\n",
             show( mplus(Just(1),Just(2)) ).c_str() );
