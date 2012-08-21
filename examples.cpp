@@ -20,50 +20,45 @@ void print( const char* const msg, const Container& v )
     cout << endl;
 }
 
-typedef array<int,2> Vec;
+typedef array<float,2> Vec;
 
 constexpr int get_x( const Vec& v ) { return v[0]; } 
 constexpr int get_y( const Vec& v ) { return v[1]; }
 
 Vec operator + ( const Vec& a, Vec&& b )
 { 
-    return zip_with( plus<int>(), a, move(b) ); 
+    return zip_with( plus<float>(), a, move(b) ); 
 }
 
 Vec operator + ( Vec&& a, const Vec& b )      { return b + move(a); } 
 Vec operator + ( const Vec& a, const Vec& b ) { return a + Vec(b); }
 
 
-Vec operator * ( Vec&& a, int x )
+Vec operator * ( Vec&& a, float x )
 {
-    return map( partial(multiplies<int>(),x), move(a) ); 
+    return map( partial(multiplies<float>(),x), move(a) ); 
 }
-Vec operator * ( int x, Vec&& a )      { return move(a) * x; }
-Vec operator * ( const Vec& a, int x ) { return Vec(a) * x; }
-Vec operator * ( int x, const Vec& a ) { return Vec(a) * x; }
+Vec operator * ( float x, Vec&& a )      { return move(a) * x; }
+Vec operator * ( const Vec& a, float x ) { return Vec(a) * x; }
+Vec operator * ( float x, const Vec& a ) { return Vec(a) * x; }
 
-/* Complete the quadratic equation with a pre-calculated square root. */
-constexpr float _qroot( float a, float b, float root )
-{
-    return (-b + root) / (2 * a);
-}
+Vec operator / ( const Vec& v, float x ) { return v * (1/x); }
 
-constexpr pair<float,float> _split_qroot( float a, float b,float root )
-{
-    return make_pair( _qroot(a,b,root), _qroot(a,b,-root) );
+unique_ptr<float> sqroot( float x ) {
+    return x >= 0 ? Just(sqrt(x)) : Nothing<float>(); 
 }
 
-/* 
- * quadratic root(a,b,c) = Maybe [x,y]
- * pure:: functions prefer to work with sequences, so this returns an array
- * containing just the two possible values of x.
- */
-Maybe<pair<float,float>> quadratic_root( float a, float b, float c )
+/* x +- y = [x+y,x-y] */
+constexpr Vec plus_minus( float x, float y ) { return {{x+y,x-y}}; }
+
+Vec qroot_impl( float a, float b, float root ) {
+    return plus_minus( -b, root ) / (2*a);
+}
+
+/* quadratic root(a,b,c) = Maybe [x,y] */
+unique_ptr<Vec> quadratic_root( float a, float b, float c )
 {
-    // Return split(a,b,root) 
-    return Just( partial(_split_qroot, a, b) ) * 
-        // IFF root>=0; else Nothing.
-        (b*b >= 4*a*c ? Just( sqrt(b*b-4*a*c) ) : Nothing<float>());
+    return partial(qroot_impl,a,b) ^ sqroot(b*b - 4*a*c);
 }
 
 int five() { return 5; }
@@ -83,6 +78,10 @@ string show( int x ) {
     return digits;
 }
 
+string show( char c ) { 
+    return "'" + string( 1, c ) + "'"; 
+}
+
 string show( float x ) {
     char digits[20];
     sprintf( digits, "%.1f", x );
@@ -93,10 +92,14 @@ string show( string s ) {
     return "\"" + s + "\"";
 }
 
+string show( const char* str ) {
+    return show( string(str) );
+}
+
 template< class S > typename ESeq<S,string>::type show( S s ) {
     string str = "[";
     for( const auto& x : s ) {
-        str += show( x ) + " ";
+        str += show( x ) + ",";
     }
     if( str.size() > 1 )
         str.back() = ']';
@@ -110,13 +113,16 @@ template< class X, class Y > string show( const pair<X,Y>& p ) {
     return "Pair (" + show(p.first) + ") (" + show(p.second) + ")";
 }
 
-template< class X > string showJust( const X& x ) {
-    return "Just (" + show( x ) + ")";
+template< class X > string showJust( const X& x );
+template< class X > string show( const unique_ptr<X>& m ) {
+    return maybe( string("Nothing"), showJust<X>, m );
+}
+template< class X > string show( X* m ) {
+    return maybe( string("Nothing"), showJust<X>, m );
 }
 
-template< class T > string show( const Maybe<T>& m ) {
-    typedef typename Maybe<T>::value_type V;
-    return maybe( string("Nothing"), showJust<V>, m );
+template< class X > string showJust( const X& x ) {
+    return "Just (" + show( x ) + ")";
 }
 
 template< class R > string showRight( const R& r ) 
@@ -130,6 +136,18 @@ string show( const Either<L,R>& e ) {
     typedef typename Either<L,R>::left_type LT;
     return either( showRight<RT>, showLeft<LT>, e );
 }
+
+// This is a hard type to deduce, so explicitly define show for it. (Used for
+// mconcat example.)
+string show( const vector<unique_ptr<vector<int>>>& vmv ) {
+    string str = "{";
+    for( const auto& mv : vmv )
+        str = str + show( mv ) + " ";
+    str.back() = '}';
+    return str;
+}
+
+vector<int> pos_neg( int x ) { return { x, -x }; }
 
 int main()
 {
@@ -151,11 +169,10 @@ int main()
     // is the same as times(get_x(fiveTwo),get_y(fiveTwo)).
 
     auto sevens = fiveTwo + twoFive;
-    printf( "<5,2> + <2,5> = <%d,%d>\n", sevens[0], sevens[1] );
+    printf( "<5,2> + <2,5> = <%f,%f>\n", sevens[0], sevens[1] );
     auto fourteens = sevens * 2;
-    printf( "<7,7> * 2 = <%d,%d>\n", fourteens[0], fourteens[1] );
+    printf( "<7,7> * 2 = <%f,%f>\n", fourteens[0], fourteens[1] );
 
-    auto roots = quadratic_root( 1, 3, -4 );
     printf( "quadratic root of x^2 + 3x - 4 = 0 : %s\n",
             show( quadratic_root(1,3,-4) ).c_str() );
     printf( "quadratic root of x^2 + 4 = 0 : %s\n",
@@ -167,24 +184,24 @@ int main()
     printf( "5 * 2 = %d\n", partial(times,5)(2) );
     printf( "5 * 2 = %d\n", partial(times,5,2)() );
 
-    printf( "fmap (+2) (pure 1) = %d\n", fmap(plus_two,pure::pure(1))() );
-    printf( "fmap (+2) (+2) 1   = %d\n", fmap(plus_two,plus_two)(1) );
+    printf( "(+2) <$> (pure 1) ( ) = %d\n", fmap(plus_two, pure::pure(1))() );
+    printf( "(+2) <$> (+2)      1  = %d\n", fmap(plus_two, plus_two)(1) );
 
-    printf( "fmap (+2) (Pair 1 2) = %s\n", 
-            show( fmap(plus_two, std::make_pair(1,2)) ).c_str() );
+    printf( "(+2) <$> (Pair 1 2) = %s\n", 
+            show( plus_two ^ std::make_pair(1,2) ).c_str() );
 
-    printf( "fmap (+2) [1,2] = %s\n", 
-            show( fmap(plus_two, std::list<int>{1,2}) ).c_str() );
+    printf( "(+2) <$> [1,2] = %s\n", 
+            show( plus_two ^ std::list<int>{1,2} ).c_str() );
 
-    printf( "fmap (+2) (Just 2)  = %s\n", 
-            show( fmap(plus_two, Just(2)) ).c_str() );
-    printf( "fmap (+2) (Nothing) = %s\n", 
-            show( fmap(plus_two, Nothing<int>()) ).c_str() );
+    printf( "(+2) <$> (Just 2)  = %s\n", 
+            show( plus_two ^ Just(2) ).c_str() );
+    printf( "(+2) <$> (Nothing) = %s\n", 
+            show( plus_two ^ Nothing<int>() ).c_str() );
 
-    printf( "fmap (+2) (Left \"yawn\") = %s\n", 
-            show( fmap(plus_two,Left<int>("yawn")) ).c_str() );
-    printf( "fmap (+2) (Right 5)     = %s\n",
-            show( fmap(plus_two,Right<string>(5)) ).c_str() );
+    printf( "(+2) <$> (Left \"yawn\") = %s\n", 
+            show( plus_two ^ Left<int>("yawn") ).c_str() );
+    printf( "(+2) <$> (Right 5)     = %s\n",
+            show( plus_two ^ Right<string>(5) ).c_str() );
 
     vector<int> N = {1,2,3,4,5,6,7,8};
     int n = 5;
@@ -207,7 +224,52 @@ int main()
             show( Right<int>(plus_two) * Left<int>(1)  ).c_str() );
 
     printf( "Nothing <|> Just 2   = %s\n", 
-            show( Nothing<int>() | Just(2) ).c_str() );
+            show( Nothing<int>() || Just(2) ).c_str() );
     printf( "Nothing <|> Nothing  = %s\n", 
-            show( Nothing<int>() | Nothing<int>() ).c_str() );
+            show( Nothing<int>() || Nothing<int>() ).c_str() );
+
+    printf( "Just 1 >> Just \"hya!\" = %s\n",
+            show( Just(1) >> Just("hya!") ).c_str() );
+
+    typedef unique_ptr<int>(*mret)(int&&);
+    printf( "Just 1 >> Nothing >>= return = %s\n",
+            show( Just(1) >> Nothing<int>() >>= mreturn<unique_ptr<int>>() ).c_str() );
+
+    auto qr = partial( quadratic_root, 1, 3 );
+    typedef pair<float,float> QR;
+    printf( "Just -4  >>= (quadraticRoot 1 3) = %s\n",
+            show( Just(-4) >>= qr ).c_str() );
+    printf( "Just 400 >>= (quadraticRoot 1 3) = %s\n",
+            show( Just(400) >>= qr ).c_str() );
+    printf( "return 1 :: Maybe Int = %s\n",
+            show( mreturn<unique_ptr<int>>(1) ).c_str() );
+    printf( "Just 1 >> fail 'oops' = %s\n",
+            show( Just(1) >> mfail<unique_ptr<int>>("oops") ).c_str() );
+
+    printf( "[1,2,3] >> [4,5] = %s\n",
+            show( vector<int>{1,2,3} >> vector<int>{4,5} ).c_str() );
+    printf( "[] >> [3,4] = %s\n",
+            show( vector<int>{} >> vector<int>{3,4} ).c_str() );
+
+    printf( "[1,2,3] >>= (\\x->[x,-x]) = %s\n",
+            show( vector<int>{1,2,3} >>= pos_neg ).c_str() );
+
+    printf( "Just [1,2] <> Just [3,4] = %s\n",
+            show( mappend(Just(vector<int>{1,2}),Just(vector<int>{3,4})) ).c_str() );
+    const auto PSX = make_pair( vector<int>{1}, vector<int>{2} );
+    const auto PSY = make_pair( vector<int>{3}, vector<int>{4} );
+    printf( "Pair [1] [2] <> Pair [3] [4] = %s\n",
+            show( mappend(PSX,PSY) ).c_str() );
+
+    vector<unique_ptr<vector<int>>> vmv;
+    vmv.emplace_back( Just(vector<int>{1,2}) ); // Don't use an initializer list
+    vmv.emplace_back( Just(vector<int>{3,4}) ); // since Maybe is non-copyable.
+    printf( "mconcat %s = %s\n",
+            show( vmv ).c_str(), 
+            show( mconcat(vmv) ).c_str() );
+
+    printf( "Just 1 `mplus` Just 2 = %s\n",
+            show( mplus(Just(1),Just(2)) ).c_str() );
+    printf( "[1] `mplus` [2] = %s\n",
+            show( mplus(vector<int>{1},vector<int>{2}) ).c_str() );
 }
