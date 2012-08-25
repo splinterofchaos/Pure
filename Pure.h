@@ -18,6 +18,52 @@ namespace pure {
 using namespace std;
 
 /* 
+ * TAGS:
+ * In order to easily implement algorithms for different categories of types,
+ * we define tags and a type, Tag<T>, which defines type as either a tag type
+ * or T. This way, we can implement algorithms in terms of either tags
+ * (categories) or specific types.
+ */
+
+/*
+ * Sequence "[ ]"
+ * Any type that defines begin() and end().
+ */
+struct sequence_tag {};
+
+/*
+ * Maybe 
+ * Any type that: 
+ *      Can be dereferenced like so: *Maybe(). (fromJust).
+ *      Can be converted to a boolean. (isJust/isNothing)
+ *      But is not a function
+ */
+struct maybe_tag {};
+
+/*
+ * _tag performs the actual type deduction via its argument. If no other
+ * definition of _tag is valid, it returns a variable of the same type as its
+ * argument. It is only for use in decltype expressions.
+ */
+template< class X >
+X _tag( ... );
+
+template< class S >
+auto _tag( const S& s ) -> decltype( begin(s), end(s), sequence_tag{} );
+
+template< class M >
+auto _tag( const M& m ) -> decltype( *m, (bool)m, maybe_tag{} );
+
+template< class T > struct Tag {
+    typedef decltype( _tag<T>(declval<T>()) ) type;
+};
+
+// Prevent function pointers from being deduced as maybe types.
+template< class R, class ...X > struct Tag< R(&)(X...) > {
+    typedef R(&type)(X...);
+};
+
+/* 
  * Just  x -> Maybe (Just x) | with a definite value.
  * Nothing -> Maybe Nothing  | with definitely no value.
  */
@@ -286,67 +332,6 @@ constexpr Pure<X> pure( X&& x )
     return Pure<X>( forward<X>(x) );
 }
 
-/* 
- * Functor F:
- *      fmap f (F a) -> F (f a)
- *
- * fmap maps a function, f, to a functor, F such that for each f:X->Y, there
- * exists an F(f):F(X)->F(Y). 
- *
- * fmap f F(x) = F(f x) 
- *
- * In Haskell, each mappable type class must be specialized with a Functor
- * instance. Likewise, here, we must use template specialization for each type
- * we want mappable.
- */
-template< class ...F > struct Functor;
-
-/* fmap f g = compose( f, g ) */
-template< class Function >
-struct Functor<Function>
-{
-    template< class F, class G >
-    static Composition<F,G> fmap( F&& f, G&& g ) {
-        return compose( forward<F>(f), forward<G>(g) );
-    }
-};
-
-/* fmap f Pair(x,y) = Pair( f x, f y ) */
-template< class X, class Y >
-struct Functor< pair<X,Y> >
-{
-    template< class F, class R = decltype(declval<F>()(declval<X>())) >
-    static pair<R,R> fmap( const F& f, const pair<X,Y>& p ) {
-        return make_pair( f(p.first), f(p.second) );
-    }
-
-    template< class F >
-    static pair<X,Y> fmap( const F& f, pair<X,Y>&& p ) {
-        p.first = f( p.first );
-        p.second = f( p.second );
-        return move( p );
-    }
-};
-
-template< class T >
-struct Functor< typename enable_if< is_pointer<T>::value, T >::value, 
-                T >
-{
-    template< class F, class R = decltype( declval<F>()(*declval<T>()) ) >
-    static unique_ptr<R> fmap( const F& f, T&& m ) {
-        return maybe( Nothing<R>(), compose(Just<R>,f), forward<T>(m) );
-    }
-};
-
-template< class L, class R >
-struct Functor< Either<L,R> > 
-{
-    template< class F, class FR = decltype( declval<F>()(declval<R>()) ) >
-    static Either<L,FR>  fmap( const F& f, const Either<L,R>& e ) {
-        return e.right ?  Right<L>( f(*e.right) ) : Left<FR>( *e.left );
-    }
-};
-
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< template<class...> class S, class X, class ...XS, class F,
           class R = decltype( declval<F>()(declval<X>()) ) >
@@ -366,6 +351,78 @@ array< R, N > map( F&& f, const array< X, N >& xs ) {
     return r;
 }
 
+
+/* 
+ * Functor F:
+ *      fmap f (F a) -> F (f a)
+ *
+ * fmap maps a function, f, to a functor, F such that for each f:X->Y, there
+ * exists an F(f):F(X)->F(Y). 
+ *
+ * fmap f F(x) = F(f x) 
+ *
+ * In Haskell, each mappable type class must be specialized with a Functor
+ * instance. Likewise, here, we must use template specialization for each type
+ * we want mappable.
+ */
+template< class ...F > struct Functor;
+
+/* fmap f g = compose( f, g ) */
+template< class Function >
+struct Functor<Function> {
+    template< class F, class G >
+    static Composition<F,G> fmap( F&& f, G&& g ) {
+        return compose( forward<F>(f), forward<G>(g) );
+    }
+};
+
+/* fmap f Pair(x,y) = Pair( f x, f y ) */
+template< class X, class Y >
+struct Functor< pair<X,Y> > {
+    template< class F, class R = decltype(declval<F>()(declval<X>())) >
+    static pair<R,R> fmap( const F& f, const pair<X,Y>& p ) {
+        return make_pair( f(p.first), f(p.second) );
+    }
+
+    template< class F >
+    static pair<X,Y> fmap( const F& f, pair<X,Y>&& p ) {
+        p.first = f( p.first );
+        p.second = f( p.second );
+        return move( p );
+    }
+};
+
+template<>
+struct Functor< maybe_tag > {
+    /*
+     * f <$> Just x = Just (f x)
+     * f <$> Nothing = Nothing
+     */
+    template< class F, class M,
+              class R = decltype( declval<F>()(*declval<M>()) ) >
+    static unique_ptr<R> fmap( const F& f, M&& m ) {
+        return m ? Just( f(*m) ) : Nothing<R>();
+    }
+};
+
+template<>
+struct Functor< sequence_tag > {
+    /* f <$> [x0,x1,...] = [f x0, f x1, ...] */
+    template< class F, class S >
+    static decltype( map(declval<F>(),declval<S>()) )
+    fmap( F&& f, S&& s ) {
+        return map( forward<F>(f), forward<S>(s) );
+    }
+};
+
+template< class L, class R >
+struct Functor< Either<L,R> > {
+    template< class F, class FR = decltype( declval<F>()(declval<R>()) ) >
+    static Either<L,FR>  fmap( const F& f, const Either<L,R>& e ) {
+        return e.right ?  Right<L>( f(*e.right) ) : Left<FR>( *e.left );
+    }
+};
+
 template< class C > struct IsSeqImpl {
     // Can only be supported on STL-like sequence types, not pointers.
     template< class _C > static true_type f(typename _C::iterator*);
@@ -381,37 +438,12 @@ template< class C, class R > struct ESeq : enable_if<IsSeq<C>::value,R> { };
 /* Disable if is sequence. */
 template< class C, class R > struct XSeq : enable_if<not IsSeq<C>::value,R> { };
 
-/* fmap f {...} = map f {...} where {...} is any sequence. */
-template< class F, class C >
-constexpr auto fmap( F&& f, C&& c )
-    -> typename ESeq <
-        C, decltype( map(forward<F>(f),forward<C>(c)) ) 
-    >::type
-{
-    return map( forward<F>(f), forward<C>(c) );
-}
-
-template< class F, class X >
-unique_ptr< decltype( declval<F>()(declval<X>()) ) >
-fmap( F&& f, X* p ) {
-    return p ? Just(forward<F>(f)(*p)) : nullptr;
-}
-
-template< class F, class X >
-unique_ptr< decltype( declval<F>()(declval<X>()) ) >
-fmap( F&& f, unique_ptr<X> p ) {
-    return p ? Just(forward<F>(f)(*p)) : nullptr;
-}
-
-template< class F, class G >
+template< class F, class G, 
+          class Fn = Functor< typename Tag<G>::type > >
 constexpr auto fmap( F&& f, G&& g )
-    // Disallow on sequences.
-    -> typename XSeq < 
-        G, 
-        decltype( Functor<G>::fmap(forward<F>(f),forward<G>(g)) ) 
-    >::type
+    -> decltype( Fn::fmap(forward<F>(f),forward<G>(g)) ) 
 {
-    return Functor<G>::fmap( forward<F>(f), forward<G>(g) );
+    return Fn::fmap( forward<F>(f), forward<G>(g) );
 }
 
 template< class F, class M >
@@ -717,7 +749,7 @@ template< class S > struct Monad< S > : ESeq<S,S>::type {
     }
 };
 
-template< class P > struct IsPointerImpl<P> { 
+template< class P > struct IsPointerImpl { 
     using reference = decltype( *declval<P>() );
     using bool_type = decltype( (bool)declval<P>() );
 };
