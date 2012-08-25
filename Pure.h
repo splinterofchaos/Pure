@@ -29,7 +29,7 @@ using namespace std;
  * Sequence "[ ]"
  * Any type that defines begin() and end().
  */
-template< class S > struct sequence_tag { typedef S type; };
+template< class S > struct sequence_tag { using type = S; };
 
 /*
  * Maybe 
@@ -38,7 +38,19 @@ template< class S > struct sequence_tag { typedef S type; };
  *      Can be converted to a boolean. (isJust/isNothing)
  *      But is not a function
  */
-template< class Ptr > struct maybe_tag { typedef Ptr type; };
+template< class Ptr > struct maybe_tag { using type = Ptr; };
+
+// If we want to return a pointer that defines ownership, we want a smart
+// pointer. Consider any non-raw pointer good 'nuff.
+template< class Ptr > struct SmartPtr { using type = Ptr; };
+template< class X > struct SmartPtr<X*> { using type = unique_ptr<X>; };
+
+template< class Ptr > struct maybe_traits {
+    using pointer    = Ptr;
+    using smart_ptr  = typename SmartPtr<pointer>::type;
+    using reference  = decltype( *declval<pointer>() );
+    using value_type = typename decay<reference>::type;
+};
 
 /*
  * _tag performs the actual type deduction via its argument. If no other
@@ -761,19 +773,19 @@ template< class P > struct IsPointerImpl {
 
 template< class Ptr > 
 struct Monad< maybe_tag<Ptr> > {
-    typedef typename decay< decltype( *declval<Ptr>() ) >::type 
-        value_type;
+    using traits = maybe_traits<Ptr>;
+    using value_type = typename traits::value_type;
+    using smart_ptr  = typename traits::smart_ptr;
 
-    // TODO: If Ptr defines ownership (unique_ptr, shared_ptr, etc.), this
-    // should return a Ptr, but not when Ptr is a raw pointer. 
-    static unique_ptr<value_type> mreturn( value_type x ) { 
-        return Just( move(x) ); 
+    template< class X >
+    static smart_ptr mreturn( X&& x ) { 
+        return smart_ptr( new X(forward<X>(x)) ); 
     }
 
-    typedef unique_ptr<value_type> (*Return)( value_type );
-    static Return mreturn() { return Just<value_type>; }
+    using Return = smart_ptr (*) ( value_type );
+    static Return mreturn() { return Just; }
 
-    static Ptr mfail(const char*) { return nullptr; }
+    static smart_ptr mfail(const char*) { return nullptr; }
 
     template< class PZ >
     static PZ mdo( const Ptr& x, PZ&& z ) {
@@ -819,7 +831,7 @@ struct MonadPlus< sequence_tag<Seq> > {
 
 template< class Ptr > 
 struct MonadPlus< maybe_tag<Ptr> > {
-    static Ptr mzero() { return Ptr(nullptr); }
+    static Ptr mzero() { return nullptr; }
 
     template< class A, class B >
     static decltype(declval<A>() || declval<B>())
