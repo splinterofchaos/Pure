@@ -644,40 +644,12 @@ template< class X, class Y > struct Monoid< pair<X,Y> > {
  */
 template< class ...M > struct Monad;
 
-/* m >> k = k -- where m is a sequence. */
-template< class A, class B >
-B mdo( const A& a, const B& b ) {
-    // In Haskell, this is defined as
-    //      m >> k = foldr ((++) . (\ _ -> k)) [] m
-    // In other words, 
-    //      for each element in a, duplicate b.
-    //      [] >> k = []
-    B c;
-    auto size = a.size();
-    while( size-- )
-        c = append( b, c );
-    return c;
-}
-
 /* m >> k */
 template< class A, class B >
 decltype( Monad<A>::mdo(declval<A>(),declval<B>()) ) 
 mdo( A&& a, B&& b ) {
     return Monad<A>::mdo( forward<A>(a), forward<B>(b) ); 
 }
-
-/* m >>= k -- where m is a sequence. */
-template< class S, class F, class R = typename remove_reference < 
-        decltype( declval<F>()(declval<S>().front()) ) 
-    >::type >
-R mbind( const S& xs, const F& f )
-{ 
-    // xs >>= f = foldr g [] xs 
-    //     where g acc x = acc ++ f(x)
-    //           ++ = append
-    return concatMap( f, xs );
-}
-
 
 /* m >>= k */
 template< class M, class F >
@@ -686,15 +658,8 @@ mbind( M&& m, F&& f ) {
     return Monad<M>::mbind( forward<M>(m), forward<F>(f) ); 
 }
 
-/* return<S> x = [x] -- where S is a sequence. */
-template< template<class> class S, class X, class SX = S<X> >
-auto mreturn( X x ) -> decltype( SX{x} ) {
-    return SX{ x };
-}
-
 /* return<M> x = M x */
-template< class M, class X >
-M mreturn( X x ) {
+template< class M, class X > M mreturn( X x ) {
     return Monad< M >::mreturn( move(x) );
 }
 
@@ -720,6 +685,42 @@ decltype( mdo(declval<X>(),declval<Y>()) )
 operator >> ( X&& x, Y&& y ) {
     return mdo( forward<X>(x), forward<Y>(y) );
 }
+
+template< class S > struct Monad< S > : ESeq<S,S>::type {
+    template< class X >
+    static S mreturn( X&& x ) { return S{forward<X>(x)}; }
+
+    static S mfail(const char*) { return S(); }
+
+    template< class YS >
+    static YS mdo( const S& a, const YS& b ) {
+        // In Haskell, this is defined as
+        //      m >> k = foldr ((++) . (\ _ -> k)) [] m
+        // In other words, 
+        //      for each element in a, duplicate b.
+        //      [] >> k = []
+        YS c;
+        auto size = a.size();
+        while( size-- )
+            c = append( b, c );
+        return c;
+    }
+
+    /* m >>= k -- where m is a sequence. */
+    template< class F >
+    static auto mbind( const S& xs, const F& f ) -> decltype( concatMap(f,xs) )
+    { 
+        // xs >>= f = foldr g [] xs 
+        //     where g acc x = acc ++ f(x)
+        //           ++ = append
+        return concatMap( f, xs );
+    }
+};
+
+template< class P > struct IsPointerImpl<P> { 
+    using reference = decltype( *declval<P>() );
+    using bool_type = decltype( (bool)declval<P>() );
+};
 
 template< class X > struct Monad< X* > {
     static unique_ptr<X> mreturn( X x ) { return Just(move(x)); }
