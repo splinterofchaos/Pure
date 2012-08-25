@@ -29,7 +29,7 @@ using namespace std;
  * Sequence "[ ]"
  * Any type that defines begin() and end().
  */
-struct sequence_tag {};
+template< class S > struct sequence_tag { typedef S type; };
 
 /*
  * Maybe 
@@ -38,7 +38,7 @@ struct sequence_tag {};
  *      Can be converted to a boolean. (isJust/isNothing)
  *      But is not a function
  */
-struct maybe_tag {};
+template< class Ptr > struct maybe_tag { typedef Ptr type; };
 
 /*
  * _tag performs the actual type deduction via its argument. If no other
@@ -49,10 +49,10 @@ template< class X >
 X _tag( ... );
 
 template< class S >
-auto _tag( const S& s ) -> decltype( begin(s), end(s), sequence_tag{} );
+auto _tag( const S& s ) -> decltype( begin(s), end(s), sequence_tag<S>{} );
 
 template< class M >
-auto _tag( const M& m ) -> decltype( *m, (bool)m, maybe_tag{} );
+auto _tag( const M& m ) -> decltype( *m, (bool)m, maybe_tag<M>{} );
 
 template< class T > struct Tag {
     typedef decltype( _tag<T>(declval<T>()) ) type;
@@ -392,8 +392,8 @@ struct Functor< pair<X,Y> > {
     }
 };
 
-template<>
-struct Functor< maybe_tag > {
+template< class Ptr >
+struct Functor< maybe_tag<Ptr> > {
     /*
      * f <$> Just x = Just (f x)
      * f <$> Nothing = Nothing
@@ -405,8 +405,8 @@ struct Functor< maybe_tag > {
     }
 };
 
-template<>
-struct Functor< sequence_tag > {
+template< class Seq >
+struct Functor< sequence_tag<Seq> > {
     /* f <$> [x0,x1,...] = [f x0, f x1, ...] */
     template< class F, class S >
     static decltype( map(declval<F>(),declval<S>()) )
@@ -677,33 +677,35 @@ template< class X, class Y > struct Monoid< pair<X,Y> > {
 template< class ...M > struct Monad;
 
 /* m >> k */
-template< class A, class B >
-decltype( Monad<A>::mdo(declval<A>(),declval<B>()) ) 
+template< class A, class B,
+          class Mo = Monad<typename Tag<A>::type> >
+decltype( Mo::mdo(declval<A>(),declval<B>()) ) 
 mdo( A&& a, B&& b ) {
-    return Monad<A>::mdo( forward<A>(a), forward<B>(b) ); 
+    return Mo::mdo( forward<A>(a), forward<B>(b) ); 
 }
 
 /* m >>= k */
-template< class M, class F >
-decltype( Monad<M>::mbind(declval<M>(),declval<F>()) ) 
+template< class M, class F,
+          class Mo = Monad<typename Tag<M>::type> >
+decltype( Mo::mbind(declval<M>(),declval<F>()) ) 
 mbind( M&& m, F&& f ) {
-    return Monad<M>::mbind( forward<M>(m), forward<F>(f) ); 
+    return Mo::mbind( forward<M>(m), forward<F>(f) ); 
 }
 
 /* return<M> x = M x */
 template< class M, class X > M mreturn( X x ) {
-    return Monad< M >::mreturn( move(x) );
+    return Monad< typename Tag<M>::type >::mreturn( move(x) );
 }
 
 /* mreturn () = (\x -> return x) */
-template< class M > 
-decltype( Monad<M>::mreturn() ) mreturn() { 
-    return Monad<M>::mreturn();
+template< class M, class Mo = Monad<typename Tag<M>::type> > 
+decltype( Mo::mreturn() ) mreturn() { 
+    return Mo::mreturn();
 }
 
 template< class M >
 M mfail( const char* const why ) {
-    return Monad< M >::mfail( why );
+    return Monad< typename Tag<M>::type >::mfail( why );
 }
 
 template< class X, class Y >
@@ -718,13 +720,16 @@ operator >> ( X&& x, Y&& y ) {
     return mdo( forward<X>(x), forward<Y>(y) );
 }
 
-template< class S > struct Monad< S > : ESeq<S,S>::type {
+template< class Seq >
+struct Monad< sequence_tag<Seq> > {
     template< class X >
-    static S mreturn( X&& x ) { return S{forward<X>(x)}; }
+    static Seq mreturn( X&& x ) { 
+        return Seq{ forward<X>(x) }; 
+    }
 
-    static S mfail(const char*) { return S(); }
+    static Seq mfail(const char*) { return Seq(); }
 
-    template< class YS >
+    template< class S, class YS >
     static YS mdo( const S& a, const YS& b ) {
         // In Haskell, this is defined as
         //      m >> k = foldr ((++) . (\ _ -> k)) [] m
@@ -739,7 +744,7 @@ template< class S > struct Monad< S > : ESeq<S,S>::type {
     }
 
     /* m >>= k -- where m is a sequence. */
-    template< class F >
+    template< class S, class F >
     static auto mbind( const S& xs, const F& f ) -> decltype( concatMap(f,xs) )
     { 
         // xs >>= f = foldr g [] xs 
@@ -754,43 +759,30 @@ template< class P > struct IsPointerImpl {
     using bool_type = decltype( (bool)declval<P>() );
 };
 
-template< class X > struct Monad< X* > {
-    static unique_ptr<X> mreturn( X x ) { return Just(move(x)); }
+template< class Ptr > 
+struct Monad< maybe_tag<Ptr> > {
+    typedef typename decay< decltype( *declval<Ptr>() ) >::type 
+        value_type;
 
-    typedef unique_ptr<X> (*Return)( X );
-    static Return mreturn() { return Just<X>; }
-
-    static X* mfail(const char*) { return nullptr; }
-
-    template< class Y >
-    static Y* mdo( X* x, Y* y ) {
-        return x ? y : nullptr;
+    // TODO: If Ptr defines ownership (unique_ptr, shared_ptr, etc.), this
+    // should return a Ptr, but not when Ptr is a raw pointer. 
+    static unique_ptr<value_type> mreturn( value_type x ) { 
+        return Just( move(x) ); 
     }
 
-    template< class Y, class F, 
-              class R = decltype( declval<F>()(*declval<Y>()) ) >
-    static typename enable_if< is_pointer<R>::value, R >::type
-    mbind( Y* y, const F& f ) {
-        return y ? f(*y) : nullptr;
-    }
-};
+    typedef unique_ptr<value_type> (*Return)( value_type );
+    static Return mreturn() { return Just<value_type>; }
 
-template< class X > struct Monad< unique_ptr<X> > {
-    static unique_ptr<X> mreturn( X x ) { return Just(move(x)); }
-
-    typedef unique_ptr<X> (*Return)( X );
-    static Return mreturn() { return Just<X>; }
-
-    static unique_ptr<X> mfail(const char*) { return nullptr; }
+    static Ptr mfail(const char*) { return nullptr; }
 
     template< class PZ >
-    static PZ mdo( const unique_ptr<X>& x, PZ&& z ) {
+    static PZ mdo( const Ptr& x, PZ&& z ) {
         return x ? forward<PZ>(z) : nullptr;
     }
 
     template< class F,
-              class R = decltype( declval<F>()(declval<X>()) ) >
-    static R mbind( const unique_ptr<X>& x, const F& f ) {
+              class R = decltype( declval<F>()(declval<value_type>()) ) >
+    static R mbind( const Ptr& x, const F& f ) {
         return x ? f(*x) : nullptr;
     }
 };
@@ -804,35 +796,34 @@ template< class X > struct Monad< unique_ptr<X> > {
  */
 template< class ...F > struct MonadPlus;
 
-template< class M >
-decltype( M() ) mzero() { return M(); }
+template< class M, class Mo = MonadPlus<typename Tag<M>::type> >
+decltype( Mo::mzero() ) mzero() { return Mo::mzero(); }
 
-template< class M >
-decltype( MonadPlus<M>::mzero() )
-mzero() { return MonadPlus<M>::mzero(); }
-
-template< class S >
-typename ESeq< S, S >::type mplus( S a, const S& b ) {
-    return append( move(a), b );
-}
-
-    template< class M1, class M2, class Mo = Monoid<M1> >
-decltype( MonadPlus<M1>::mplus(declval<M1>(),declval<M2>()) )
+template< class M1, class M2, 
+          class Mo = MonadPlus<typename Tag<M1>::type> >
+decltype( Mo::mplus(declval<M1>(),declval<M2>()) )
 mplus( M1&& a, M2&& b ) {
-    return MonadPlus<M1>::mplus( forward<M1>(a), forward<M2>(b) );
+    return Mo::mplus( forward<M1>(a), forward<M2>(b) );
 }
 
-template< class X > struct MonadPlus< X* > {
-    static X* mzero() { return nullptr; }
-    static X* mplus( X* a, X* b ) { return a || b; }
+template< class Seq >
+struct MonadPlus< sequence_tag<Seq> > {
+    static Seq mzero() { return Seq(); }
+
+    template< class SX, class SY >
+    static decltype( append(declval<SX>(),declval<SY>()) )
+    mplus( SX&& sx, SY&& sy ) {
+        return append( forward<SX>(sx), forward<SY>(sy) );
+    }
 };
 
-template< class X > struct MonadPlus< unique_ptr<X> > {
-    typedef unique_ptr<X> P;
+template< class Ptr > 
+struct MonadPlus< maybe_tag<Ptr> > {
+    static Ptr mzero() { return Ptr(nullptr); }
 
-    static P mzero() { return P(nullptr); }
-    static const P& mplus( const P& x, const P& y ) { return x || y; }
-    static P mplus( P&& x, P&& y ) { return move(x) || move(y); }
+    template< class A, class B >
+    static decltype(declval<A>() || declval<B>())
+    mplus( A&& a, B&& b ) { return forward<A>(a) || forward<B>(b); }
 };
 
 /*
