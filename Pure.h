@@ -76,110 +76,10 @@ template< class R, class ...X > struct Tag< R(&)(X...) > {
 };
 
 /* 
- * Just  x -> Maybe (Just x) | with a definite value.
- * Nothing -> Maybe Nothing  | with definitely no value.
+ * FUNCTION TRANSFORMERS
+ * The fallowing are types that contain one or more functions and act like a
+ * function. 
  */
-template< class T, class M = std::unique_ptr<T> > 
-constexpr M Just( T t ) {
-    return M( new T(move(t)) );
-}
-
-template< class X >
-constexpr X* Just( X* x ) { return x; }
-
-template< class T, class M = std::unique_ptr<T> > 
-constexpr M Nothing() {
-    return nullptr;
-}
-
-/* maybe b (a->b) (Maybe a) -> b */
-template< class R, class F, class P >
-constexpr R maybe( R&& nothingVal, F&& f, P&& m ) {
-    return m ? forward<F>(f)( *forward<P>(m) )
-             : forward<R>( nothingVal );
-}
-
-/* 
- * Just f  * Just x  = Just (f x)
- * _       * _       = Nothing
- * Just x  | _       = Just x
- * Nothing | Just x  = Just x
- * Nothing | Nothing = Nothing
- */
-template< class F, class P, 
-          class Ret = decltype( declval<F>()(*declval<P>()) ) >
-auto operator* ( F&& a, P&& b )
-    -> unique_ptr< Ret >
-{
-    return a and b ? Just( (*forward<F>(a))(*forward<P>(b)) ) 
-                   : nullptr;
-}
-
-template< class P > P operator|| ( P&& a, P&& b ) {
-    return a ? forward<P>(a) : forward<P>(b); 
-}
-
-/* Either a b : Left a | Right b */
-template< class L, class R >
-struct Either
-{
-    typedef L left_type;
-    typedef R right_type;
-
-    unique_ptr<left_type> left;
-    unique_ptr<right_type> right;
-
-    // TODO: Make these type constructors, not types.
-    struct Left { 
-        left_type value;
-        constexpr Left( left_type value ) : value(move(value)) { }
-    };
-
-    struct Right { 
-        right_type value;
-        constexpr Right( right_type value ) : value(move(value)) { }
-    };
-
-    template< class X >
-    explicit constexpr Either( X&& x )  
-        : left(  new left_type (move(x.value)) ) { }
-    explicit constexpr Either( Right x ) 
-        : right( new right_type(move(x.value)) ) { }
-};
-
-/* 
- * Left<b>  a -> Either a b
- * Right<a> b -> Either a b
- * Since an Either cannot be constructed without two type arguments, the
- * 'other' type must be explicitly declared when called. It is, for
- * convenience, the first type argument in both.
- */
-template< class R, class L, class E = Either<L,R> >
-constexpr E Left( L x ) { return E( typename E::Left(move(x)) ); }
-
-template< class L, class R, class E = Either<L,R> >
-constexpr E Right( R x ) { return E( typename E::Right(move(x)) ); }
-
-/* either (a->c) (b->c) (Either a b) -> c */
-template< class F, class G, class L, class R >
-constexpr auto either( F&& f, G&& g, const Either<L,R>& e )
-    -> decltype( declval<F>()(*e.right) )
-{
-    return e.right ? forward<F>(f)(*e.right) : forward<G>(g)(*e.left);
-}
-
-/*
- * Right f * Right x = Right (f x)
- * _       * _       = Left _
- */
-template< class L, class F, class T, 
-          class Ret = decltype( declval<F>()(declval<T>()) ) >
-constexpr Either<L,Ret> operator* ( const Either<L,F>& a, 
-                                    const Either<L,T>& b )
-{
-    return a.right and b.right ? Right<L>( (*a.right)(*b.right) )
-        : a.left ? Left<Ret>( *a.left ) : Left<Ret>( *b.left );
-}
 
 /* Translate f g : h(x,xs...) = f( g(x), xs... ) */
 template< class F, class G > struct Translate {
@@ -323,6 +223,223 @@ constexpr Composition<F,G...> compose( F&& f, G&& ...g ) {
     return Composition<F,G...>( forward<F>(f), forward<G>(g)... );
 }
 
+/* map f {1,2,3} -> { f(1), f(2), f(3) } */
+template< template<class...> class S, class X, class ...XS, class F,
+          class R = typename result_of<F(X)>::type >
+S<R,XS...> map( F&& f, const S<X,XS...>& xs ) 
+{
+    S<R,XS...> r;
+    transform( begin(xs), end(xs), back_inserter(r),
+               forward<F>(f) );
+    return r;
+}
+
+template< class X, size_t N, class F, 
+          class R = class result_of<F(X)>::type >
+array< R, N > map( F&& f, const array< X, N >& xs ) {
+    array< R, N > r;
+    transform( begin(xs), end(xs), begin(r), forward<F>(f) );
+    return r;
+}
+
+/* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
+template< class F, class X, class S >
+constexpr X foldl( F&& f, X&& val, const S& cont )
+{
+    return accumulate( begin(cont), end(cont), forward<X>(val), 
+                       forward<F>(f) );
+}
+
+template< class X, class F, class S >
+constexpr X foldl( F&& f, const S& cont )
+{
+    return accumulate( next(begin(cont)), end(cont), 
+                            cont.front(), forward<F>(f) );
+}
+
+/* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
+template< class F, class X, class S >
+constexpr X foldr( F&& f, X&& val, const S& cont )
+{
+    return accumulate( cont.rbegin(), cont.rend(), 
+                       forward<X>(val), forward<F>(f) );
+}
+
+template< class X, class F, class S >
+constexpr X foldr( F&& f, const S& cont )
+{
+    return accumulate( next(cont.rbegin()), cont.rend(), 
+                       cont.back(), forward<F>(f) );
+}
+
+/* 
+ * append({1},{2,3},{4}) -> {1,2,3,4} 
+ * Similar to [1]++[2,3]++[4]
+ */
+template< typename A, typename B >
+A append( A a, const B& b ) {
+    copy( begin(b), end(b), back_inserter(a) );
+    return move(a);
+}
+
+template< typename A, typename B, typename C, typename ...D >
+A append( A&& a, const B& b, const C& c, const D& ... d )
+{
+    return append( append(forward<A>(a), b), c, d... );
+}
+
+
+template< class SS, class S = typename SS::value_type >
+S concat( const SS& ss ) {
+    return foldl( append<S,S>, S(), forward<SS>(ss) );
+}
+
+/* 
+ * concatMap f s = concat (map f s)
+ *      where f is a function: a -> [b]
+ *            map f s produces a type: [[b]]
+ * The operation "map then concat" may be inefficient compared to an inlined
+ * loop, which would not require allocating a sequence of sequences to be
+ * concatenated. This is an optimization that should be equivalent to the
+ * inlined loop.
+ */
+template< class F, class S,
+          class R = decltype( declval<F>()( declval<S>().front() ) ) > 
+R concatMap( F&& f, S&& xs ) {
+    return foldr ( 
+        // \ acc x = append( acc, f(x) )
+        flip( translate(append<R,R>,forward<F>(f)) ), 
+        R(), forward<S>(xs)
+    );
+}
+
+template< typename Container, typename F >
+void for_each( F&& f, const Container& cont ) {
+    for_each( begin(cont), end(cont), forward<F>(f) );
+}
+
+template< class F, class I, class J >
+void for_ij( const F& f, I i, const I& imax, J j, const J& jmax ) {
+    for( ; j != jmax; j++ )
+        for( ; i != imax; i++ )
+            f( i, j );
+}
+
+template< class F, class I, class J >
+void for_ij( const F& f, const I& imax, const J& jmax ) {
+    for( J j = J(); j != jmax; j++ )
+        for( I i = I(); i != imax; i++ )
+            f( i, j );
+}
+
+
+/* 
+ * Just  x -> Maybe (Just x) | with a definite value.
+ * Nothing -> Maybe Nothing  | with definitely no value.
+ */
+template< class T, class M = std::unique_ptr<T> > 
+constexpr M Just( T t ) {
+    return M( new T(move(t)) );
+}
+
+template< class X >
+constexpr X* Just( X* x ) { return x; }
+
+template< class T, class M = std::unique_ptr<T> > 
+constexpr M Nothing() {
+    return nullptr;
+}
+
+/* maybe b (a->b) (Maybe a) -> b */
+template< class R, class F, class P >
+constexpr R maybe( R&& nothingVal, F&& f, P&& m ) {
+    return m ? forward<F>(f)( *forward<P>(m) )
+             : forward<R>( nothingVal );
+}
+
+/* 
+ * Just f  * Just x  = Just (f x)
+ * _       * _       = Nothing
+ * Just x  | _       = Just x
+ * Nothing | Just x  = Just x
+ * Nothing | Nothing = Nothing
+ */
+template< class F, class P, 
+          class Ret = decltype( declval<F>()(*declval<P>()) ) >
+auto operator* ( F&& a, P&& b )
+    -> unique_ptr< Ret >
+{
+    return a and b ? Just( (*forward<F>(a))(*forward<P>(b)) ) 
+                   : nullptr;
+}
+
+template< class P > P operator|| ( P&& a, P&& b ) {
+    return a ? forward<P>(a) : forward<P>(b); 
+}
+
+/* Either a b : Left a | Right b */
+template< class L, class R >
+struct Either
+{
+    typedef L left_type;
+    typedef R right_type;
+
+    unique_ptr<left_type> left;
+    unique_ptr<right_type> right;
+
+    // TODO: Make these type constructors, not types.
+    struct Left { 
+        left_type value;
+        constexpr Left( left_type value ) : value(move(value)) { }
+    };
+
+    struct Right { 
+        right_type value;
+        constexpr Right( right_type value ) : value(move(value)) { }
+    };
+
+    template< class X >
+    explicit constexpr Either( X&& x )  
+        : left(  new left_type (move(x.value)) ) { }
+    explicit constexpr Either( Right x ) 
+        : right( new right_type(move(x.value)) ) { }
+};
+
+/* 
+ * Left<b>  a -> Either a b
+ * Right<a> b -> Either a b
+ * Since an Either cannot be constructed without two type arguments, the
+ * 'other' type must be explicitly declared when called. It is, for
+ * convenience, the first type argument in both.
+ */
+template< class R, class L, class E = Either<L,R> >
+constexpr E Left( L x ) { return E( typename E::Left(move(x)) ); }
+
+template< class L, class R, class E = Either<L,R> >
+constexpr E Right( R x ) { return E( typename E::Right(move(x)) ); }
+
+/* either (a->c) (b->c) (Either a b) -> c */
+template< class F, class G, class L, class R >
+constexpr auto either( F&& f, G&& g, const Either<L,R>& e )
+    -> decltype( declval<F>()(*e.right) )
+{
+    return e.right ? forward<F>(f)(*e.right) : forward<G>(g)(*e.left);
+}
+
+/*
+ * Right f * Right x = Right (f x)
+ * _       * _       = Left _
+ */
+template< class L, class F, class T, 
+          class Ret = decltype( declval<F>()(declval<T>()) ) >
+constexpr Either<L,Ret> operator* ( const Either<L,F>& a, 
+                                    const Either<L,T>& b )
+{
+    return a.right and b.right ? Right<L>( (*a.right)(*b.right) )
+        : a.left ? Left<Ret>( *a.left ) : Left<Ret>( *b.left );
+}
+
+
 /*
  * In category theory, a functor is a mapping between categories.
  * Pure provides the minimal wrappings to lift X to a higher category.
@@ -346,26 +463,6 @@ constexpr Pure<X> pure( X&& x )
 {
     return Pure<X>( forward<X>(x) );
 }
-
-/* map f {1,2,3} -> { f(1), f(2), f(3) } */
-template< template<class...> class S, class X, class ...XS, class F,
-          class R = decltype( declval<F>()(declval<X>()) ) >
-S<R,XS...> map( F&& f, const S<X,XS...>& xs ) 
-{
-    S<R,XS...> r;
-    transform( begin(xs), end(xs), back_inserter(r),
-               forward<F>(f) );
-    return r;
-}
-
-template< class X, size_t N, class F, class R = decltype( declval<F>()(declval<X>()) ) >
-array< R, N > map( F&& f, const array< X, N >& xs ) {
-    array< R, N > r;
-    transform( begin(xs), end(xs), begin(r),
-               forward<F>(f) );
-    return r;
-}
-
 
 /* 
  * Functor F:
@@ -467,96 +564,6 @@ template< class F, class M >
 constexpr decltype( fmap(declval<F>(), declval<M>()) )
 operator^ ( F&& f, M&& m ) {
     return fmap( forward<F>(f), forward<M>(m) );
-}
-
-/* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
-template< typename Container, typename Value, typename F >
-constexpr Value foldl( F&& f, Value&& val, const Container& cont )
-{
-    return accumulate( begin(cont), end(cont), forward<Value>(val), 
-                       forward<F>(f) );
-}
-
-template< typename Value, typename F, typename Container >
-constexpr Value foldl( F&& f, const Container& cont )
-{
-    return accumulate( next(begin(cont)), end(cont), 
-                            cont.front(), forward<F>(f) );
-}
-
-/* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
-template< typename F, typename Value, typename Container >
-constexpr Value foldr( F&& f, Value&& val, const Container& cont )
-{
-    return accumulate( cont.rbegin(), cont.rend(), 
-                       forward<Value>(val), forward<F>(f) );
-}
-
-template< typename Value, typename F, typename Container >
-constexpr Value foldr( F&& f, const Container& cont )
-{
-    return accumulate( next(cont.rbegin()), cont.rend(), 
-                       cont.back(), forward<F>(f) );
-}
-
-/* 
- * append({1},{2,3},{4}) -> {1,2,3,4} 
- * Similar to [1]++[2,3]++[4]
- */
-template< typename A, typename B >
-A append( A a, const B& b ) {
-    copy( begin(b), end(b), back_inserter(a) );
-    return move(a);
-}
-
-template< typename A, typename B, typename C, typename ...D >
-A append( A&& a, const B& b, const C& c, const D& ... d )
-{
-    return append( append(forward<A>(a), b), c, d... );
-}
-
-
-template< class SS, class S = typename SS::value_type >
-S concat( const SS& ss ) {
-    return foldl( append<S,S>, S(), forward<SS>(ss) );
-}
-
-/* 
- * concatMap f s = concat (map f s)
- *      where f is a function: a -> [b]
- *            map f s produces a type: [[b]]
- * The operation "map then concat" may be inefficient compared to an inlined
- * loop, which would not require allocating a sequence of sequences to be
- * concatenated. This is an optimization that should be equivalent to the
- * inlined loop.
- */
-template< class F, class S,
-          class R = decltype( declval<F>()( declval<S>().front() ) ) > 
-R concatMap( F&& f, S&& xs ) {
-    return foldr ( 
-        // \ acc x = append( acc, f(x) )
-        flip( translate(append<R,R>,forward<F>(f)) ), 
-        R(), forward<S>(xs)
-    );
-}
-
-template< typename Container, typename F >
-void for_each( F&& f, const Container& cont ) {
-    for_each( begin(cont), end(cont), forward<F>(f) );
-}
-
-template< class F, class I, class J >
-void for_ij( const F& f, I i, const I& imax, J j, const J& jmax ) {
-    for( ; j != jmax; j++ )
-        for( ; i != imax; i++ )
-            f( i, j );
-}
-
-template< class F, class I, class J >
-void for_ij( const F& f, const I& imax, const J& jmax ) {
-    for( J j = J(); j != jmax; j++ )
-        for( I i = I(); i != imax; i++ )
-            f( i, j );
 }
 
 /*
