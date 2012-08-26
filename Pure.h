@@ -31,6 +31,13 @@ using namespace std;
  */
 template< class S > struct sequence_tag { using type = S; };
 
+template< class Seq > struct sequence_traits {
+    using sequence   = Seq;
+    using iterator   = decltype( begin(declval<Seq>()) );
+    using reference  = decltype( *declval<iterator>() );
+    using value_type = typename decay<reference>::type;
+};
+
 /*
  * Maybe 
  * Any type that: 
@@ -67,7 +74,7 @@ template< class M >
 auto _tag( const M& m ) -> decltype( *m, (bool)m, maybe_tag<M>{} );
 
 template< class T > struct Tag {
-    typedef decltype( _tag<T>(declval<T>()) ) type;
+    using type = decltype( _tag<T>(declval<T>()) );
 };
 
 // Prevent function pointers from being deduced as maybe types.
@@ -576,14 +583,11 @@ operator^ ( F&& f, M&& m ) {
  */
 template< class ...M > struct Monoid;
 
-template< class M, class Mo = Monoid<M> >
-decltype( Mo::mempty() )
-mempty() { return Mo::mempty(); }
+template< class M, class Mo = Monoid<typename Tag<M>::type> >
+decltype( Mo::mempty() ) mempty() { return Mo::mempty(); }
 
-/* mempty [] */
-template< class M > decltype( M() ) mempty() { return M(); }
-
-template< class M1, class M2, class Mo = Monoid<M1> >
+template< class M1, class M2, 
+          class Mo = Monoid<typename Tag<M1>::type> >
 decltype( Mo::mappend(declval<M1>(),declval<M2>()) )
 mappend( M1&& a, M2&& b ) {
     return Mo::mappend( forward<M1>(a), forward<M2>(b) );
@@ -594,32 +598,20 @@ mappend( M1&& a, M2&& b ) {
  * The above && version will always be preferred, except in the case of a
  * const&. In other words, this version will NEVER be preferred otherwise.
  */
-template< class M1, class M2, class Mo = Monoid<M1> >
+template< class M1, class M2, 
+          class Mo = Monoid<typename Tag<M1>::type> >
 decltype( Mo::mappend(declval<M1>(),declval<M2>()) )
 mappend( const M1& a, M2&& b ) {
     return Mo::mappend( a, forward<M2>(b) );
 }
 
-/* mappend [] */
-template< class XS, class YS >
-typename ESeq< XS, XS >::type
-mappend( XS xs, YS&& ys ) { 
-    return append( move(xs), forward<YS>(ys) ); 
-}
-
-template< class S, class M = typename S::value_type >
-decltype( Monoid<M>::mconcat(declval<S>()) ) mconcat( const S& s ) 
+template< class S, class V = typename sequence_traits<S>::value_type,
+          class M = Monoid<typename Tag<V>::type> >
+decltype( M::mconcat(declval<S>()) ) mconcat( S&& s ) 
 {
-    return Monoid<M>::mconcat( s );
+    return M::mconcat( forward<S>(s) );
 }
 
-/* mconcat [] */
-template< class SS >
-typename ESeq< typename SS::value_type,
-               decltype( concat(declval<SS>()) ) >::type
-mconcat( SS&& ss ) {
-    return concat( forward<SS>(ss) );
-}
 
 // When we call mappend from within Monoid<M>, lookup deduction will see its
 // own implementation of mappend. This ensures a recursive mappend gets
@@ -633,40 +625,44 @@ fwd_mappend( XS&& xs, YS&& ys ) {
 template< class M > 
 decltype( mempty<M>() ) fwd_mempty() { return mempty<M>(); }
 
-/* Monoid (Maybe X) -- where X is a monoid. */
-template< class X > struct Monoid< X* > {
-    static X* mempty() { return nullptr; }
+template< class Seq > struct Monoid< sequence_tag<Seq> > {
+    static Seq mempty() { return Seq{}; }
 
-    static unique_ptr<X> mappend( X* x, X* y ) {
-        return x and y ? Just( fwd_mappend(*x,*y) ) : x || y;
+    template< class XS, class YS >
+    static decltype( append(declval<XS>(),declval<YS>()) )
+    mappend( XS&& xs, YS&& ys ) {
+        return append( forward<XS>(xs), forward<YS>(ys) );
     }
 
-    template< class S >
-    static unique_ptr<X> mconcat( const S& s ) {
-        typedef unique_ptr<X> (*F) ( X*, X* );
-        return foldl( (F)mappend, mempty(), s );
+    template< class SS >
+    static decltype( concat(declval<SS>()) )
+    mconcat( SS&& ss ) {
+        return concat( forward<SS>(ss) ); 
     }
 };
 
-template< class X > struct Monoid< unique_ptr<X> > {
-    typedef unique_ptr<X> P;
+/* Monoid (Maybe X) -- where X is a monoid. */
+template< class Ptr > struct Monoid< maybe_tag<Ptr> > {
+    static Ptr mempty() { return nullptr; }
 
-    static P mempty() { return P(nullptr); }
-
-    static P mappend( const P& x, const P& y ) {
+    /*
+     * Just x <> Just y = Just (x <> y)
+     *      a <> b      = a | b
+     */
+    static Ptr mappend( const Ptr& x, const Ptr& y ) {
         return x and y ? Just( fwd_mappend(*x,*y) )
             : x ? Just(*x) : y ? Just(*y) : nullptr;
     }
 
-    static P mappend( P&& x, P&& y ) {
-        return x and y ? Just( fwd_mappend(*x,*y) )
-            : move(x) || move(y);
+    static Ptr mappend( Ptr&& x, Ptr&& y ) {
+        return x and y ? Just( fwd_mappend(*forward<Ptr>(x), *forward<Ptr>(y)) )
+            : forward<Ptr>(x) || forward<Ptr>(y);
     }
 
-    template< class S >
-    static P mconcat( const S& s ) {
-        typedef P (*F) ( const P&, const P& );
-        return foldl( (F)mappend, mempty(), s );
+    /* mconcat [Maybe x] -> Maybe x -- where mappend x x is defined. */
+    template< class S > static Ptr mconcat( S&& s ) {
+        typedef Ptr (*F) ( const Ptr&, const Ptr& );
+        return foldl( (F)mappend, mempty(), forward<S>(s) );
     }
 };
 
