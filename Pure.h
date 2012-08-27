@@ -17,19 +17,33 @@ namespace pure {
 
 using namespace std;
 
-/* 
- * TAGS:
- * In order to easily implement algorithms for different categories of types,
- * we define tags and a type, Tag<T>, which defines type as either a tag type
- * or T. This way, we can implement algorithms in terms of either tags
- * (categories) or specific types.
- */
-
 /*
  * Sequence "[ ]"
  * Any type that defines begin() and end().
  */
-template< class S > struct sequence_tag { using type = S; };
+
+namespace cata {
+
+/* 
+ * CATEGORIES:
+ * In order to easily implement algorithms for different categories of types,
+ * we define categories and a type, Cat<T>, which defines Cat<T>::type as
+ * either a category or T. This way, we can implement algorithms in terms of
+ * either tags (categories) or specific types.
+ *
+ * This is similar to the tag dispatch pattern used in the STL (see:
+ * random_access_iterator_tag, forward_iterator_tag, etc...) except that the
+ * type is not erased.
+ *
+ * The following traits classes merely act as a shortcut to using decltype.
+ */
+
+/*
+ * []
+ * Any type that:
+ *      Has a defined begin(s) and end(s).
+ */
+template< class S > struct sequence { using type = S; };
 
 template< class Seq > struct sequence_traits {
     using sequence   = Seq;
@@ -45,7 +59,7 @@ template< class Seq > struct sequence_traits {
  *      Can be converted to a boolean. (isJust/isNothing)
  *      But is not a function
  */
-template< class Ptr > struct maybe_tag { using type = Ptr; };
+template< class M > struct maybe { using type = M; };
 
 // If we want to return a pointer that defines ownership, we want a smart
 // pointer. Consider any non-raw pointer good 'nuff.
@@ -60,27 +74,29 @@ template< class Ptr > struct maybe_traits {
 };
 
 /*
- * _tag performs the actual type deduction via its argument. If no other
- * definition of _tag is valid, it returns a variable of the same type as its
+ * cat performs the actual type deduction via its argument. If no other
+ * definition of cat is valid, it returns a variable of the same type as its
  * argument. It is only for use in decltype expressions.
  */
 template< class X >
-X _tag( ... );
+X cat( ... );
 
 template< class S >
-auto _tag( const S& s ) -> decltype( begin(s), end(s), sequence_tag<S>{} );
+auto cat( const S& s ) -> decltype( begin(s), end(s), sequence<S>() );
 
 template< class M >
-auto _tag( const M& m ) -> decltype( *m, (bool)m, maybe_tag<M>{} );
+auto cat( const M& m ) -> decltype( *m, (bool)m, maybe<M>() );
 
-template< class T > struct Tag {
-    using type = decltype( _tag<T>(declval<T>()) );
+template< class T > struct Cat {
+    using type = decltype( cat<T>(declval<T>()) );
 };
 
 // Prevent function pointers from being deduced as maybe types.
-template< class R, class ...X > struct Tag< R(&)(X...) > {
+template< class R, class ...X > struct Cat< R(&)(X...) > {
     typedef R(&type)(X...);
 };
+
+} // namespace cata
 
 /* 
  * FUNCTION TRANSFORMERS
@@ -512,21 +528,21 @@ struct Functor< pair<X,Y> > {
     }
 };
 
-template< class Ptr >
-struct Functor< maybe_tag<Ptr> > {
+template< class M >
+struct Functor< cata::maybe<M> > {
     /*
      * f <$> Just x = Just (f x)
      * f <$> Nothing = Nothing
      */
-    template< class F, class M,
-              class R = decltype( declval<F>()(*declval<M>()) ) >
-    static unique_ptr<R> fmap( F&& f, M&& m ) {
+    template< class F, class _M,
+              class R = decltype( declval<F>()(*declval<_M>()) ) >
+    static unique_ptr<R> fmap( F&& f, _M&& m ) {
         return m ? Just( forward<F>(f)(*m) ) : nullptr;
     }
 };
 
 template< class Seq >
-struct Functor< sequence_tag<Seq> > {
+struct Functor< cata::sequence<Seq> > {
     /* f <$> [x0,x1,...] = [f x0, f x1, ...] */
     template< class F, class S >
     static decltype( map(declval<F>(),declval<S>()) )
@@ -560,7 +576,7 @@ template< class C, class R > struct ESeq : enable_if<IsSeq<C>::value,R> { };
 template< class C, class R > struct XSeq : enable_if<not IsSeq<C>::value,R> { };
 
 template< class F, class G, 
-          class Fn = Functor< typename Tag<G>::type > >
+          class Fn = Functor< typename cata::Cat<G>::type > >
 constexpr auto fmap( F&& f, G&& g )
     -> decltype( Fn::fmap(forward<F>(f),forward<G>(g)) ) 
 {
@@ -583,11 +599,11 @@ operator^ ( F&& f, M&& m ) {
  */
 template< class ...M > struct Monoid;
 
-template< class M, class Mo = Monoid<typename Tag<M>::type> >
+template< class M, class Mo = Monoid<typename cata::Cat<M>::type> >
 decltype( Mo::mempty() ) mempty() { return Mo::mempty(); }
 
 template< class M1, class M2, 
-          class Mo = Monoid<typename Tag<M1>::type> >
+          class Mo = Monoid<typename cata::Cat<M1>::type> >
 decltype( Mo::mappend(declval<M1>(),declval<M2>()) )
 mappend( M1&& a, M2&& b ) {
     return Mo::mappend( forward<M1>(a), forward<M2>(b) );
@@ -599,14 +615,14 @@ mappend( M1&& a, M2&& b ) {
  * const&. In other words, this version will NEVER be preferred otherwise.
  */
 template< class M1, class M2, 
-          class Mo = Monoid<typename Tag<M1>::type> >
+          class Mo = Monoid<typename cata::Cat<M1>::type> >
 decltype( Mo::mappend(declval<M1>(),declval<M2>()) )
 mappend( const M1& a, M2&& b ) {
     return Mo::mappend( a, forward<M2>(b) );
 }
 
-template< class S, class V = typename sequence_traits<S>::value_type,
-          class M = Monoid<typename Tag<V>::type> >
+template< class S, class V = typename cata::sequence_traits<S>::value_type,
+          class M = Monoid<typename cata::Cat<V>::type> >
 decltype( M::mconcat(declval<S>()) ) mconcat( S&& s ) 
 {
     return M::mconcat( forward<S>(s) );
@@ -625,7 +641,7 @@ fwd_mappend( XS&& xs, YS&& ys ) {
 template< class M > 
 decltype( mempty<M>() ) fwd_mempty() { return mempty<M>(); }
 
-template< class Seq > struct Monoid< sequence_tag<Seq> > {
+template< class Seq > struct Monoid< cata::sequence<Seq> > {
     static Seq mempty() { return Seq{}; }
 
     template< class XS, class YS >
@@ -642,26 +658,26 @@ template< class Seq > struct Monoid< sequence_tag<Seq> > {
 };
 
 /* Monoid (Maybe X) -- where X is a monoid. */
-template< class Ptr > struct Monoid< maybe_tag<Ptr> > {
-    static Ptr mempty() { return nullptr; }
+template< class M > struct Monoid< cata::maybe<M> > {
+    static M mempty() { return nullptr; }
 
     /*
      * Just x <> Just y = Just (x <> y)
      *      a <> b      = a | b
      */
-    static Ptr mappend( const Ptr& x, const Ptr& y ) {
+    static M mappend( const M& x, const M& y ) {
         return x and y ? Just( fwd_mappend(*x,*y) )
             : x ? Just(*x) : y ? Just(*y) : nullptr;
     }
 
-    static Ptr mappend( Ptr&& x, Ptr&& y ) {
-        return x and y ? Just( fwd_mappend(*forward<Ptr>(x), *forward<Ptr>(y)) )
-            : forward<Ptr>(x) || forward<Ptr>(y);
+    static M mappend( M&& x, M&& y ) {
+        return x and y ? Just( fwd_mappend(*forward<M>(x), *forward<M>(y)) )
+            : forward<M>(x) || forward<M>(y);
     }
 
     /* mconcat [Maybe x] -> Maybe x -- where mappend x x is defined. */
-    template< class S > static Ptr mconcat( S&& s ) {
-        typedef Ptr (*F) ( const Ptr&, const Ptr& );
+    template< class S > static M mconcat( S&& s ) {
+        typedef M (*F) ( const M&, const M& );
         return foldl( (F)mappend, mempty(), forward<S>(s) );
     }
 };
@@ -696,7 +712,7 @@ template< class ...M > struct Monad;
 
 /* m >> k */
 template< class A, class B,
-          class Mo = Monad<typename Tag<A>::type> >
+          class Mo = Monad<typename cata::Cat<A>::type> >
 decltype( Mo::mdo(declval<A>(),declval<B>()) ) 
 mdo( A&& a, B&& b ) {
     return Mo::mdo( forward<A>(a), forward<B>(b) ); 
@@ -704,7 +720,7 @@ mdo( A&& a, B&& b ) {
 
 /* m >>= k */
 template< class M, class F,
-          class Mo = Monad<typename Tag<M>::type> >
+          class Mo = Monad<typename cata::Cat<M>::type> >
 decltype( Mo::mbind(declval<M>(),declval<F>()) ) 
 mbind( M&& m, F&& f ) {
     return Mo::mbind( forward<M>(m), forward<F>(f) ); 
@@ -712,18 +728,18 @@ mbind( M&& m, F&& f ) {
 
 /* return<M> x = M x */
 template< class M, class X > M mreturn( X&& x ) {
-    return Monad< typename Tag<M>::type >::mreturn( forward<X>(x) );
+    return Monad< typename cata::Cat<M>::type >::mreturn( forward<X>(x) );
 }
 
 /* mreturn () = (\x -> return x) */
-template< class M, class Mo = Monad<typename Tag<M>::type> > 
+template< class M, class Mo = Monad<typename cata::Cat<M>::type> > 
 decltype( Mo::mreturn() ) mreturn() { 
     return Mo::mreturn();
 }
 
 template< class M >
 M mfail( const char* const why ) {
-    return Monad< typename Tag<M>::type >::mfail( why );
+    return Monad< typename cata::Cat<M>::type >::mfail( why );
 }
 
 template< class X, class Y >
@@ -739,7 +755,7 @@ operator >> ( X&& x, Y&& y ) {
 }
 
 template< class Seq >
-struct Monad< sequence_tag<Seq> > {
+struct Monad< cata::sequence<Seq> > {
     template< class X >
     static Seq mreturn( X&& x ) { 
         return Seq{ forward<X>(x) }; 
@@ -761,7 +777,7 @@ struct Monad< sequence_tag<Seq> > {
         return c;
     }
 
-    /* m >>= k -- where m is a sequence. */
+    /* m >>= k -- where m is a cata::sequence. */
     template< class S, class F >
     static decltype( concatMap(declval<F>(),declval<S>()) )
     mbind( S&& xs, F&& f ) { 
@@ -777,9 +793,9 @@ template< class P > struct IsPointerImpl {
     using bool_type = decltype( (bool)declval<P>() );
 };
 
-template< class Ptr > 
-struct Monad< maybe_tag<Ptr> > {
-    using traits = maybe_traits<Ptr>;
+template< class M > 
+struct Monad< cata::maybe<M> > {
+    using traits = cata::maybe_traits<M>;
     using value_type = typename traits::value_type;
     using smart_ptr  = typename traits::smart_ptr;
 
@@ -794,14 +810,14 @@ struct Monad< maybe_tag<Ptr> > {
     static smart_ptr mfail(const char*) { return nullptr; }
 
     template< class PZ >
-    static PZ mdo( const Ptr& x, PZ&& z ) {
+    static PZ mdo( const M& x, PZ&& z ) {
         return x ? forward<PZ>(z) : nullptr;
     }
 
     template< class F,
               class R = decltype( declval<F>()(declval<value_type>()) ) >
-    static R mbind( Ptr&& x, F&& f ) {
-        return x ? forward<F>(f)( *forward<Ptr>(x) ) : nullptr;
+    static R mbind( M&& x, F&& f ) {
+        return x ? forward<F>(f)( *forward<M>(x) ) : nullptr;
     }
 };
 
@@ -814,18 +830,18 @@ struct Monad< maybe_tag<Ptr> > {
  */
 template< class ...F > struct MonadPlus;
 
-template< class M, class Mo = MonadPlus<typename Tag<M>::type> >
+template< class M, class Mo = MonadPlus<typename cata::Cat<M>::type> >
 decltype( Mo::mzero() ) mzero() { return Mo::mzero(); }
 
 template< class M1, class M2, 
-          class Mo = MonadPlus<typename Tag<M1>::type> >
+          class Mo = MonadPlus<typename cata::Cat<M1>::type> >
 decltype( Mo::mplus(declval<M1>(),declval<M2>()) )
 mplus( M1&& a, M2&& b ) {
     return Mo::mplus( forward<M1>(a), forward<M2>(b) );
 }
 
 template< class Seq >
-struct MonadPlus< sequence_tag<Seq> > {
+struct MonadPlus< cata::sequence<Seq> > {
     static Seq mzero() { return Seq(); }
 
     template< class SX, class SY >
@@ -835,9 +851,9 @@ struct MonadPlus< sequence_tag<Seq> > {
     }
 };
 
-template< class Ptr > 
-struct MonadPlus< maybe_tag<Ptr> > {
-    static Ptr mzero() { return nullptr; }
+template< class M > 
+struct MonadPlus< cata::maybe<M> > {
+    static M mzero() { return nullptr; }
 
     template< class A, class B >
     static decltype(declval<A>() || declval<B>())
