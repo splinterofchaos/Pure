@@ -148,52 +148,52 @@ template< class F > Flip<F> flip( F&& f ) {
  * partial( f, x ) -> g(y)
  * partial( f, x, y ) -> g()
  */
-template< class F, class ...Arg >
+template< class F, class ...X >
 struct PartialApplication;
 
-template< class F, class Arg >
-struct PartialApplication< F, Arg >
+template< class F, class X >
+struct PartialApplication< F, X >
 {
     F f;
-    Arg arg;
+    X x;
 
-    template< class _F, class _Arg >
-    constexpr PartialApplication( _F&& f, _Arg&& arg )
-        : f(forward<_F>(f)), arg(forward<_Arg>(arg))
+    template< class _F, class _X >
+    constexpr PartialApplication( _F&& f, _X&& x )
+        : f(forward<_F>(f)), x(forward<_X>(x))
     {
     }
 
     /* 
-     * The return type of F only gets deduced based on the number of arguments
-     * supplied. PartialApplication otherwise has no idea whether f takes 1 or 10 args.
+     * The return type of F only gets deduced based on the number of xuments
+     * supplied. PartialApplication otherwise has no idea whether f takes 1 or 10 xs.
      */
-    template< class ... Args >
-    constexpr auto operator() ( Args&& ...args )
-        -> decltype( f(arg,declval<Args>()...) )
+    template< class ... Xs >
+    constexpr auto operator() ( Xs&& ...xs )
+        -> decltype( f(x,declval<Xs>()...) )
     {
-        return f( arg, forward<Args>(args)... );
+        return f( x, forward<Xs>(xs)... );
     }
 };
 
 /* Recursive, variadic version. */
-template< class F, class Arg1, class ...Args >
-struct PartialApplication< F, Arg1, Args... > 
-    : public PartialApplication< PartialApplication<F,Arg1>, Args... >
+template< class F, class X1, class ...Xs >
+struct PartialApplication< F, X1, Xs... > 
+    : public PartialApplication< PartialApplication<F,X1>, Xs... >
 {
-    template< class _F, class _Arg1, class ..._Args >
-    constexpr PartialApplication( _F&& f, _Arg1&& arg1, _Args&& ...args )
-        : PartialApplication< PartialApplication<F,Arg1>, Args... > (
-            PartialApplication<F,Arg1>( forward<_F>(f), forward<_Arg1>(arg1) ),
-            forward<_Args>(args)...
+    template< class _F, class _X1, class ..._Xs >
+    constexpr PartialApplication( _F&& f, _X1&& x1, _Xs&& ...xs )
+        : PartialApplication< PartialApplication<F,X1>, Xs... > (
+            PartialApplication<F,X1>( forward<_F>(f), forward<_X1>(x1) ),
+            forward<_Xs>(xs)...
         )
     {
     }
 };
 
-template< class F, class ...A >
-constexpr PartialApplication<F,A...> partial( F&& f, A&& ...a )
+template< class F, class ...X >
+constexpr PartialApplication<F,X...> partial( F&& f, X&& ...x )
 {
-    return PartialApplication<F,A...>( forward<F>(f), forward<A>(a)... );
+    return PartialApplication<F,X...>( forward<F>(f), forward<X>(x)... );
 }
 
 /* 
