@@ -388,17 +388,104 @@ comp( F&& f, G&& ...g ) {
  */
 template< class F, class G >
 constexpr decltype( comp(declval<G>(), declval<F>()) )
-rcomp( F&& f, G&& g ) { return comp( forward<G>(g), forward<F>(f) ); }
+fcomp( F&& f, G&& g ) { return comp( forward<G>(g), forward<F>(f) ); }
 
-/* Since the above covers the two-arg case, 
- * ...H contains at least one type. */
-template< class F, class G, class ...H>
-constexpr decltype( comp( rcomp(declval<G>(),declval<H>()...), 
+struct Id {
+    template< class X >
+    constexpr X operator() ( X&& x ) { return forward<X>(x); }
+};
+
+template< class F, class G, class H, class ...I>
+constexpr decltype( comp( fcomp(declval<G>(),declval<H>(),declval<I>()...), 
                           declval<F>() ) )
-fcomp( F&& f, G&& g, H&& ...h ) {
-    return comp( rcomp( forward<G>(g), forward<H>(h)... ),
+fcomp( F&& f, G&& g, H&& h, I&& ...i ) {
+    return comp( fcomp( forward<G>(g), forward<H>(h), forward<I>(i)... ),
                  forward<F>(f) );
 }
+
+template< class ... > struct Arrow;
+
+template< class A, class F, class Arr = Arrow<A> >
+decltype( Arr::arr( declval<F>() ) )
+arr( F&& f ) { return Arr::arr( forward<F>(f) ); }
+
+/* (f *** g) (x,y) = (f x, g y) */
+template< class F, class G, class A = Arrow<F> >
+decltype( A::split(declval<F>(), declval<G>()) )
+split( F&& f, G&& g ) {
+    return A::split( forward<F>(f), forward<G>(g) );
+}
+
+/* (f &&& g) x = (f x, g x) */
+template< class F, class G, class A = Arrow<F> >
+decltype( A::fanout(declval<F>(),declval<G>()) )
+fanout( F&& f, G&& g ) {
+    return A::fanout( forward<F>(f), forward<G>(g) );
+}
+
+/* (first f) (x,y) = (f x, y) */
+template< class F, class A = Arrow<F> >
+decltype( A::first(declval<F>()) )
+first( F&& f ) {
+    return A::first( forward<F>(f) );
+}
+
+/* (second f) (x,y) = (x, f y) */
+template< class F, class A = Arrow<F> >
+decltype( A::second(declval<F>()) )
+second( F&& f ) {
+    return A::second( forward<F>(f) );
+}
+
+template< class Func > struct Arrow<Func> {
+    template< class F > static 
+    constexpr F arr( F&& f ) { return forward<F>(f); }
+
+    template< class F, class G > struct FSplit {
+        F f; G g;
+
+        template< class _F, class _G >
+        constexpr FSplit( _F&& f, _G&& g ) 
+            : f(forward<_F>(f)), g(forward<_G>(g)) { }
+
+        template< class P/*air*/ >
+        auto operator() ( P&& p ) const
+            -> decltype( make_pair(f(get<0>(declval<P>())),
+                                   g(get<1>(declval<P>()))) )
+        {
+            return make_pair( f(get<0>(p)), g(get<1>(p)) );
+        }
+    };
+
+    template< class F, class G, class S = FSplit<F,G> >
+    static S split ( F&& f, G&& g ) {
+        return S( forward<F>(f), forward<G>(g) );
+    }
+
+    template< class F, class S = FSplit<F,Id> > static 
+    S first( F&& f ) { return S( forward<F>(f), Id() ); }
+
+    template< class F, class S = FSplit<Id,F> > static 
+    S second( F&& f ) { return S( Id(), forward<F>(f) ); }
+
+    template< class F, class G > struct Fan {
+        F f; G g;
+
+        template< class _F, class _G >
+        constexpr Fan( _F&& f, _G&& g ) : f(forward<_F>(f)), g(forward<_G>(g)) { }
+
+        template< class X >
+        decltype( make_pair( f(declval<X>()), g(declval<X>()) ) )
+        operator() ( X&& x ) const {
+            return make_pair( f(forward<X>(x)), g(forward<X>(x)) );
+        }
+    };
+
+    template< class F, class G, class Fan = Fan<F,G> >
+    static Fan fanout( F&& f, G&& g ) {
+        return Fan( forward<F>(f), forward<G>(g) );
+    }
+};
 
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< template<class...> class S, class X, class ...XS, class F,

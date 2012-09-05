@@ -280,4 +280,12 @@ int main()
             show( mplus(Just(1),Just(2)) ).c_str() );
     printf( "[1] `mplus` [2] = %s\n",
             show( mplus(vector<int>{1},vector<int>{2}) ).c_str() );
+
+    pair<int,int> p( 1, 2 );
+    using Show = string(int);
+    auto showInt = [](int x){ return show(x); };
+    printf( "first show >>> second (+2) $ (1,2) = %s\n", 
+            show( comp(first(showInt), second(plus_two))( p ) ).c_str() );
+    printf( "show *** (+2) $ (1,2) = %s\n",
+            show( split( showInt, plus_two )( p ) ).c_str() );
 }
