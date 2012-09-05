@@ -325,6 +325,34 @@ constexpr C ncompose( F&& f, G&& ...g ) {
     return C( forward<F>(f), forward<G>(g)... );
 }
 
+/*
+ * Binary composition 
+ *      (compose2 http://www.sgi.com/tech/stl/binary_compose.html)
+ * Given g(x)=y,  h(x)=z, and f(y,z), let bf(x) = f( g(x), h(x) )
+ * This implementation diverges from compose2 in that it allows g and h to be
+ * n-ary.
+ */
+template< class F, class G, class H >
+struct BCompoposition
+{
+    F f; G g; H h;
+
+    template< class _F, class _G, class _H >
+    constexpr BCompoposition( _F&& f, _G&& g, _H&& h ) 
+        : f(forward<_F>(f)), g(forward<_G>(g)), h(forward<_H>(h)) { }
+
+    template< class ...X >
+    constexpr decltype( f(g(declval<X>()...), h(declval<X>()...)) )
+    operator() ( X&& ...x ) {
+        return f( g( forward<X>(x)... ), h( forward<X>(x)... ) );
+    }
+};
+
+template< class F, class G, class H, class C = BCompoposition<F,G,H> >
+constexpr C bcompose( F&& f, G&& g, H&& h ) {
+    return C( forward<F>(f), forward<G>(g), forward<H>(h) );
+}
+
 
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< template<class...> class S, class X, class ...XS, class F,
@@ -1129,9 +1157,11 @@ constexpr Squash<F> squash( F&& f )
 }
 
 /* 
- * f( x, y ) = f( l(z), r(z) ) = g(z)
+ * f( x, y, a... ) = f( l(z), r(z), a... ) = g(z,a...)
  *  where x = l(z) and y = r(z)
  * join( f, l, r ) = g
+ *
+ * Similar to bcompose, but expects a unary l and r and an nary f.
  */
 template< class F, class Left, class Right >
 struct Join

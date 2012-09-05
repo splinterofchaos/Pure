@@ -170,7 +170,7 @@ int main()
     Vec fiveTwo = {{5,2}}, twoFive = {{2,5}};
 
     // Join lets us adapt an N-ary function to an (N-1) one.
-    printf( "\t5 * 2 = %d\n", join(times, get_x, get_y)(fiveTwo) );
+    printf( "\t5 * 2 = %d\n", bcompose(times, get_x, get_y)(fiveTwo) );
     // is the same as times(get_x(fiveTwo),get_y(fiveTwo)).
 
     auto sevens = fiveTwo + twoFive;
