@@ -198,10 +198,10 @@ constexpr PartialApplication<F,A...> partial( F&& f, A&& ...a )
 
 /* 
  * Composition. 
- * normal notation:  h = f( g() )
- * Haskell notation: h = f . g
- * compose(f,g) -> f . g
- * compose(f,g,h...) -> f . g . h ...
+ * Given f(x,y...) and g(z)
+ * The composition of f and g, f . g, equals h(z,y...)
+ *      h(z,y...) = f( g(z), y... )
+ *
  */
 
 template< class F, class ...G >
@@ -214,15 +214,12 @@ struct Composition<F,G>
 
     template< class _F, class _G >
     constexpr Composition( _F&& f, _G&& g ) 
-        : f(forward<_F>(f)), g(forward<_G>(g)) 
-    {
-    }
+        : f(forward<_F>(f)), g(forward<_G>(g)) { }
 
-    template< class ...Args >
-    constexpr auto operator() ( Args&& ...args )
-        -> decltype( f(g(declval<Args>()...)) )
-    {
-        return f( g(forward<Args>(args)...) );
+    template< class X, class ...Y >
+    constexpr decltype( f(g(declval<X>()), declval<Y>()...) )
+    operator() ( X&& x, Y&& ...y ) {
+        return f( g( forward<X>(x) ), forward<Y>(y)... );
     }
 };
 
@@ -245,6 +242,89 @@ template< class F, class ...G >
 constexpr Composition<F,G...> compose( F&& f, G&& ...g ) {
     return Composition<F,G...>( forward<F>(f), forward<G>(g)... );
 }
+
+/* A const composition for when g is a constant function. */
+template< class F, class ...G >
+struct CComposition;
+
+template< class F, class G >
+struct CComposition<F,G>
+{
+    F f; G g;
+
+    template< class _F, class _G >
+    constexpr CComposition( _F&& f, _G&& g ) 
+        : f(forward<_F>(f)), g(forward<_G>(g)) { }
+
+    template< class ...Y >
+    constexpr decltype( f(g(), declval<Y>()...) )
+    operator() ( Y&& ...y ) {
+        return f( g(), forward<Y>(y)... );
+    }
+};
+
+template< class F, class G, class ...H >
+struct CComposition<F,G,H...> : CComposition<Composition<F,G>,H...>
+{
+    typedef Composition<F,G> Then;
+    typedef CComposition<Then,H...> CComp;
+
+    template< class _F, class _G, class ..._H >
+    constexpr CComposition( _F&& f, _G&& g, _H&& ...h )
+        : CComp ( 
+            Then( forward<_F>(f), forward<_G>(g) ),
+            forward<_H>(h)...
+        )
+    {
+    }
+};
+
+template< class F, class ...G, class C = CComposition<F,G...> >
+constexpr C ccompose( F&& f, G&& ...g ) {
+    return C( forward<F>(f), forward<G>(g)... );
+}
+
+/* N-ary composition assumes a unary f and N-ary g. */
+template< class F, class ...G >
+struct NCompoposition;
+
+template< class F, class G >
+struct NCompoposition<F,G>
+{
+    F f; G g;
+
+    template< class _F, class _G >
+    constexpr NCompoposition( _F&& f, _G&& g ) 
+        : f(forward<_F>(f)), g(forward<_G>(g)) { }
+
+    template< class ...X >
+    constexpr decltype( f(g(declval<X>()...)) )
+    operator() ( X&& ...x ) {
+        return f( g( forward<X>(x)... ) );
+    }
+};
+
+template< class F, class G, class ...H >
+struct NCompoposition<F,G,H...> : NCompoposition<Composition<F,G>,H...>
+{
+    typedef Composition<F,G> Then;
+    typedef NCompoposition<Then,H...> NComp;
+
+    template< class _F, class _G, class ..._H >
+    constexpr NCompoposition( _F&& f, _G&& g, _H&& ...h )
+        : NComp ( 
+            Then( forward<_F>(f), forward<_G>(g) ),
+            forward<_H>(h)...
+        )
+    {
+    }
+};
+
+template< class F, class ...G, class C = NCompoposition<F,G...> >
+constexpr C ncompose( F&& f, G&& ...g ) {
+    return C( forward<F>(f), forward<G>(g)... );
+}
+
 
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< template<class...> class S, class X, class ...XS, class F,

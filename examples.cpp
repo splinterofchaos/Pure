@@ -189,8 +189,9 @@ int main()
     printf( "5 * 2 = %d\n", partial(times,5)(2) );
     printf( "5 * 2 = %d\n", partial(times,5,2)() );
 
-    printf( "(+2) <$> (pure 1) ( ) = %d\n", fmap(plus_two, pure::pure(1))() );
-    printf( "(+2) <$> (+2)      1  = %d\n", fmap(plus_two, plus_two)(1) );
+    printf( "(+2) <$> (pure 1) (100) = %d\n", fmap(plus_two, pure::pure(1))(100) );
+    printf( "\tccomp (+2) (pure 1) $ () = %d\n", ccompose(plus_two,pure::pure(1))() );
+    printf( "(+2) <$> (+2) 1 = %d\n", fmap(plus_two, plus_two)(1) );
 
     printf( "(+2) <$> (Pair 1 2) = %s\n", 
             show( plus_two ^ std::make_pair(1,2) ).c_str() );
