@@ -190,10 +190,35 @@ struct PartialApplication< F, X1, Xs... >
     }
 };
 
+/* 
+ * Some languages implement partial application through closures, which hold
+ * references to the function's arguments. But they also often use reference
+ * counting. We must consider the scope of the variables we want to apply. If
+ * we apply references and then return the applied function, its references
+ * will dangle.
+ *
+ * See: 
+ * upward funarg problem http://en.wikipedia.org/wiki/Upward_funarg_problem
+ */
+
+/*
+ * closure http://en.wikipedia.org/wiki/Closure_%28computer_science%29
+ * Here, closure forwards the arguments, which may be references or rvalues--it
+ * does not matter. A regular closure works for passing functions down.
+ */
 template< class F, class ...X >
-constexpr PartialApplication<F,X...> partial( F&& f, X&& ...x )
-{
+constexpr PartialApplication<F,X...> closure( F&& f, X&& ...x ) {
     return PartialApplication<F,X...>( forward<F>(f), forward<X>(x)... );
+}
+
+/*
+ * Thinking as closures as open (having references to variables outside of
+ * itself), let's refer to a closet as closed. It contains a function and its
+ * arguments (or environment).
+ */
+template< class F, class ...X >
+constexpr PartialApplication<F,X...> closet( F f, X ...x ) {
+    return PartialApplication<F,X...>( move(f), move(x)... );
 }
 
 /* 
