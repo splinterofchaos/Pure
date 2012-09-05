@@ -221,6 +221,54 @@ constexpr PartialApplication<F,X...> closet( F f, X ...x ) {
     return PartialApplication<F,X...>( move(f), move(x)... );
 }
 
+/*
+ * Reverse partial application. 
+ * g(z) = f( x, y, z )
+ * rpartial( f, y, z ) -> g(x)
+ */
+template< class F, class ...X >
+struct RPartialApplication;
+
+template< class F, class X >
+struct RPartialApplication< F, X > {
+    F f;
+    X x;
+
+    template< class _F, class _X >
+    constexpr RPartialApplication( _F&& f, _X&& x ) 
+        : f( forward<_F>(f) ), x( forward<_X>(x) ) { }
+
+    template< class ...Y >
+    decltype( f(declval<Y>()..., x) )
+    operator() ( Y&& ...y ) const {
+        return f( forward<Y>(y)..., x );
+    }
+};
+
+template< class F, class X1, class ...Xs >
+struct RPartialApplication< F, X1, Xs... > 
+    : public RPartialApplication< RPartialApplication<F,Xs...>, X1 >
+{
+    template< class _F, class _X1, class ..._Xs >
+    constexpr RPartialApplication( _F&& f, _X1&& x1, _Xs&& ...xs )
+        : RPartialApplication< RPartialApplication<F,Xs...>, X1 > (
+            RPartialApplication<F,Xs...>( forward<_F>(f), forward<_Xs>(xs)... ),
+            forward<_X1>(x1)
+        )
+    {
+    }
+};
+
+template< class F, class ...X, class P = RPartialApplication<F,X...> >
+constexpr P rclosure( F&& f, X&& ...x ) {
+    return P( forward<F>(f), forward<X>(x)... );
+}
+
+template< class F, class ...X, class P = RPartialApplication<F,X...> >
+constexpr P rcloset( F f, X ...x ) {
+    return P( move(f), move(x)... );
+}
+
 /* 
  * Composition. 
  * normal notation:  h = f( g() )

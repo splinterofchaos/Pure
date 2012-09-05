@@ -151,8 +151,14 @@ vector<int> pos_neg( int x ) { return { x, -x }; }
 
 bool even( int x ) { return x % 2 == 0; }
 
+void print_xyz( int x, int y, int z ) {
+    printf( "%d %d %d\n", x, y, z );
+}
+
 int main()
 {
+    rcloset( print_xyz, 2, 3 )( 1 );
+
     vector<int> evens = filter( even, vector<int>{1,2,3,4,5,6,7,8} );
     printf( "evens = %s\n", show(evens).c_str() );
 
