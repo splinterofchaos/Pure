@@ -171,7 +171,7 @@ int main()
 
     // Join lets us adapt an N-ary function to an (N-1) one.
     printf( "\t5 * 2 = %d\n", bcompose(times, get_x, get_y)(fiveTwo) );
-    // is the same as times(get_x(fiveTwo),get_y(fiveTwo)).
+    //         is the same as times(get_x(fiveTwo), get_y(fiveTwo)).
 
     auto sevens = fiveTwo + twoFive;
     printf( "<5,2> + <2,5> = <%f,%f>\n", sevens[0], sevens[1] );
@@ -183,8 +183,10 @@ int main()
     printf( "quadratic root of x^2 + 4 = 0 : %s\n",
             show( quadratic_root(1,0,4) ).c_str() );
 
-    constexpr auto sqrDoublePlus2 = compose( plus_two, times_two, square );
+    constexpr auto sqrDoublePlus2 = comp( plus_two, times_two, square );
+    constexpr auto rsqrDoublePlus2 = fcomp( square, times_two, plus_two );
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", sqrDoublePlus2(3) );
+    printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", rsqrDoublePlus2(3) );
 
     printf( "5 * 2 = %d\n", partial(times,5)(2) );
     printf( "5 * 2 = %d\n", partial(times,5,2)() );

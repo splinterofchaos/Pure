@@ -98,6 +98,8 @@ template< class R, class ...X > struct Cat< R(&)(X...) > {
 
 } // namespace cata
 
+template< class ... > struct Category;
+
 /* 
  * FUNCTION TRANSFORMERS
  * The fallowing are types that contain one or more functions and act like a
@@ -353,6 +355,50 @@ constexpr C bcompose( F&& f, G&& g, H&& h ) {
     return C( forward<F>(f), forward<G>(g), forward<H>(h) );
 }
 
+/* Default category: function. */
+template< class F > struct Category<F> {
+    template< class _F > static 
+    constexpr _F id( _F&& f ) { return forward<_F>(f); }
+
+    template< class _F, class ..._G > static
+    constexpr decltype( compose(declval<_F>(),declval<_G>()...) )
+    comp( _F&& f, _G&& ...g ) {
+        return compose( forward<_F>(f), forward<_G>(g)... );
+    }
+};
+
+template< class X, class C = Category<X> >
+decltype( C::id( declval<X>() ) ) id( X&& x ) {
+    return C::id( forward<X>(x) );
+}
+
+/* 
+ * Let comp be a generalization of compose. 
+ * Haskell's <<<.
+ */
+template< class F, class ...G, class C = Category<F> > 
+constexpr decltype( Category<F>::comp( declval<F>(), declval<G>()... ) )
+comp( F&& f, G&& ...g ) {
+    return C::comp( forward<F>(f), forward<G>(g)... );
+}
+
+/*
+ * fcomp (forward compose): the reverse of comp.
+ * Haskell's >>>.
+ */
+template< class F, class G >
+constexpr decltype( comp(declval<G>(), declval<F>()) )
+rcomp( F&& f, G&& g ) { return comp( forward<G>(g), forward<F>(f) ); }
+
+/* Since the above covers the two-arg case, 
+ * ...H contains at least one type. */
+template< class F, class G, class ...H>
+constexpr decltype( comp( rcomp(declval<G>(),declval<H>()...), 
+                          declval<F>() ) )
+fcomp( F&& f, G&& g, H&& ...h ) {
+    return comp( rcomp( forward<G>(g), forward<H>(h)... ),
+                 forward<F>(f) );
+}
 
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< template<class...> class S, class X, class ...XS, class F,
