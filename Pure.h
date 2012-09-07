@@ -462,15 +462,15 @@ template< class Func > struct Arrow<Func> {
     };
 
     template< class F, class G, class S = FSplit<F,G> >
-    static S split ( F&& f, G&& g ) {
-        return S( forward<F>(f), forward<G>(g) );
+    static S split ( F f, G g ) {
+        return S( move(f), move(g) );
     }
 
     template< class F, class S = FSplit<F,Id> > static 
-    S first( F&& f ) { return S( forward<F>(f), Id() ); }
+    S first( F f ) { return S( move(f), Id() ); }
 
     template< class F, class S = FSplit<Id,F> > static 
-    S second( F&& f ) { return S( Id(), forward<F>(f) ); }
+    S second( F f ) { return S( Id(), move(f) ); }
 
     /*
      * Fan f g = fan
@@ -490,8 +490,8 @@ template< class Func > struct Arrow<Func> {
     };
 
     template< class F, class G, class Fan = Fan<F,G> >
-    static Fan fanout( F&& f, G&& g ) {
-        return Fan( forward<F>(f), forward<G>(g) );
+    static Fan fanout( F f, G g ) {
+        return Fan( move(f), move(g) );
     }
 };
 
