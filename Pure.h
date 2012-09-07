@@ -441,6 +441,10 @@ template< class Func > struct Arrow<Func> {
     template< class F > static 
     constexpr F arr( F&& f ) { return forward<F>(f); }
 
+    /* 
+     * FSplit f g = fs.
+     * fs (x,y)  = (f x, g y)
+     */
     template< class F, class G > struct FSplit {
         F f; G g;
 
@@ -468,6 +472,10 @@ template< class Func > struct Arrow<Func> {
     template< class F, class S = FSplit<Id,F> > static 
     S second( F&& f ) { return S( Id(), forward<F>(f) ); }
 
+    /*
+     * Fan f g = fan
+     * fan x = (f x, g x)
+     */
     template< class F, class G > struct Fan {
         F f; G g;
 
