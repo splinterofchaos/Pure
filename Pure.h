@@ -241,8 +241,8 @@ struct Composition<F,G,H...> : Composition<F,Composition<G,H...>>
 };
 
 template< class F, class ...G >
-constexpr Composition<F,G...> compose( F&& f, G&& ...g ) {
-    return Composition<F,G...>( forward<F>(f), forward<G>(g)... );
+constexpr Composition<F,G...> compose( F f, G ...g ) {
+    return Composition<F,G...>( move(f), move(g)... );
 }
 
 /* A const composition for when g is a constant function. */
@@ -282,8 +282,8 @@ struct CComposition<F,G,H...> : CComposition<Composition<F,G>,H...>
 };
 
 template< class F, class ...G, class C = CComposition<F,G...> >
-constexpr C ccompose( F&& f, G&& ...g ) {
-    return C( forward<F>(f), forward<G>(g)... );
+constexpr C ccompose( F f, G ...g ) {
+    return C( move(f), move(g)... );
 }
 
 /* N-ary composition assumes a unary f and N-ary g. */
@@ -323,8 +323,8 @@ struct NCompoposition<F,G,H...> : NCompoposition<Composition<F,G>,H...>
 };
 
 template< class F, class ...G, class C = NCompoposition<F,G...> >
-constexpr C ncompose( F&& f, G&& ...g ) {
-    return C( forward<F>(f), forward<G>(g)... );
+constexpr C ncompose( F f, G ...g ) {
+    return C( move(f), move(g)... );
 }
 
 /*
@@ -351,8 +351,8 @@ struct BCompoposition
 };
 
 template< class F, class G, class H, class C = BCompoposition<F,G,H> >
-constexpr C bcompose( F&& f, G&& g, H&& h ) {
-    return C( forward<F>(f), forward<G>(g), forward<H>(h) );
+constexpr C bcompose( F f, G g, H h ) {
+    return C( move(f), move(g), move(h) );
 }
 
 /* Default category: function. */
@@ -747,8 +747,10 @@ template< class ...F > struct Functor;
 template< class Function >
 struct Functor<Function> {
     template< class F, class G >
-    static Composition<F,G> fmap( F&& f, G&& g ) {
-        return compose( forward<F>(f), forward<G>(g) );
+    static auto fmap( F&& f, G&& g ) 
+        -> decltype( comp(declval<F>(),declval<G>()) )
+    {
+        return comp( forward<F>(f), forward<G>(g) );
     }
 };
 

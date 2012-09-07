@@ -183,8 +183,8 @@ int main()
     printf( "quadratic root of x^2 + 4 = 0 : %s\n",
             show( quadratic_root(1,0,4) ).c_str() );
 
-    constexpr auto sqrDoublePlus2 = comp( plus_two, times_two, square );
-    constexpr auto rsqrDoublePlus2 = fcomp( square, times_two, plus_two );
+    auto sqrDoublePlus2 = comp( plus_two, times_two, square );
+    auto rsqrDoublePlus2 = fcomp( square, times_two, plus_two );
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", sqrDoublePlus2(3) );
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", rsqrDoublePlus2(3) );
 
