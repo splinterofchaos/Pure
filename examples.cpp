@@ -288,4 +288,7 @@ int main()
             show( comp(first(showInt), second(plus_two))( p ) ).c_str() );
     printf( "show *** (+2) $ (1,2) = %s\n",
             show( split( showInt, plus_two )( p ) ).c_str() );
+
+    printf( "show &&& (+2) $ 5 = %s\n",
+            show( fan( showInt, plus_two )( 5 ) ).c_str() );
 }
