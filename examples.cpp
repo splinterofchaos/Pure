@@ -151,6 +151,19 @@ vector<int> pos_neg( int x ) { return { x, -x }; }
 
 bool even( int x ) { return x % 2 == 0; }
 
+// The typical monadic Maybe example.
+unique_ptr<int> addM( const unique_ptr<int>& a, const unique_ptr<int>& b ) {
+    return a >>= [&](int x){ 
+        return b >>= [x](int y){ 
+            return Just(x+y); 
+        }; 
+    };
+};
+
+unique_ptr<int> addM2( const unique_ptr<int>& a, const unique_ptr<int>& b ) {
+    return fmap( std::plus<int>(), a, b );
+};
+
 int main()
 {
     vector<int> evens = filter( even, vector<int>{1,2,3,4,5,6,7,8} );
@@ -185,6 +198,13 @@ int main()
 
     constexpr auto sqrDoublePlus2 = compose( plus_two, times_two, square );
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", sqrDoublePlus2(3) );
+
+    puts( "\naddM a b = do\n\tx <- a\n\ty <- b\n\tx + y" );
+    printf( "addM 2 4 = %s\n", 
+            show( addM(Just(2), Just(4)) ).c_str() );
+    puts( "addM2 a b = (+) <$> a <*> b" );
+    printf( "addM2 2 4 = %s\n\n",
+            show( addM2(Just(2), Just(4)) ).c_str() );
 
     printf( "5 * 2 = %d\n", partial(times,5)(2) );
     printf( "5 * 2 = %d\n", partial(times,5,2)() );

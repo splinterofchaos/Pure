@@ -528,16 +528,27 @@ struct Functor< pair<X,Y> > {
     }
 };
 
-template< class M >
-struct Functor< cata::maybe<M> > {
+template< class _M >
+struct Functor< cata::maybe<_M> > {
+    template< class M > 
+    static constexpr bool each( const M& m ) {
+        return (bool)m;
+    }
+
+    template< class M1, class ...Ms >
+    static constexpr bool each( const M1& m1, const Ms& ...ms ) {
+        return (bool)m1 && each( ms... );
+    }
+
     /*
      * f <$> Just x = Just (f x)
      * f <$> Nothing = Nothing
      */
-    template< class F, class _M,
-              class R = decltype( declval<F>()(*declval<_M>()) ) >
-    static unique_ptr<R> fmap( F&& f, _M&& m ) {
-        return m ? Just( forward<F>(f)(*m) ) : nullptr;
+    template< class F, class ...M,
+              class R = decltype( declval<F>()(*declval<M>()...) ) >
+    static unique_ptr<R> fmap( F&& f, M&& ...m ) {
+        return each( m... ) ? 
+            Just( forward<F>(f)( *forward<M>(m)... ) ) : nullptr;
     }
 };
 
@@ -575,12 +586,12 @@ template< class C, class R > struct ESeq : enable_if<IsSeq<C>::value,R> { };
 /* Disable if is sequence. */
 template< class C, class R > struct XSeq : enable_if<not IsSeq<C>::value,R> { };
 
-template< class F, class G, 
+template< class F, class G, class ...H,
           class Fn = Functor< typename cata::Cat<G>::type > >
-constexpr auto fmap( F&& f, G&& g )
-    -> decltype( Fn::fmap(forward<F>(f),forward<G>(g)) ) 
+constexpr auto fmap( F&& f, G&& g, H&& ...h )
+    -> decltype( Fn::fmap(declval<F>(),declval<G>(),declval<H>()...) ) 
 {
-    return Fn::fmap( forward<F>(f), forward<G>(g) );
+    return Fn::fmap( forward<F>(f), forward<G>(g), forward<H>(h)... );
 }
 
 template< class F, class M >
