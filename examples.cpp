@@ -228,6 +228,12 @@ int main()
     printf( "(+2) <$> (Right 5)     = %s\n",
             show( plus_two ^ Right<string>(5) ).c_str() );
 
+    printf( "(+) <$> [1,2] <*> [3,4] = %s\n",
+            show ( 
+                fmap( std::plus<int>(), 
+                      vector<int>{1,2}, vector<int>{3,4}) 
+            ).c_str() );
+
     vector<int> N = {1,2,3,4,5,6,7,8};
     int n = 5;
     auto equalsN = partial( equal_to<int>(), n );

@@ -49,7 +49,7 @@ template< class Seq > struct sequence_traits {
     using sequence   = Seq;
     using iterator   = decltype( begin(declval<Seq>()) );
     using reference  = decltype( *declval<iterator>() );
-    using value_type = typename decay<reference>::type;
+    using value_type = typename remove_reference<reference>::type;
 };
 
 /*
@@ -559,6 +559,29 @@ struct Functor< cata::sequence<Seq> > {
     static decltype( map(declval<F>(),declval<S>()) )
     fmap( F&& f, S&& s ) {
         return map( forward<F>(f), forward<S>(s) );
+    }
+
+    template< class F, class ...X >
+    using Part = decltype( partial( declval<F>(), declval<X>()... ) );
+
+    template< class S >
+    using Val = typename cata::sequence_traits<S>::value_type;;
+
+    template< class F, class S >
+    using FMap = decltype( fmap( declval<F>(), declval<S>() ) );
+
+    template< class F, class XS, class ZS,
+              //class R = decltype( fmap( partial(declval<F>(),declval<Val<XS>>()), declval<ZS>()) ) > 
+              class R = FMap< Part<F,Val<XS>>, ZS > >
+    static R fmap( F&& f, XS&& xs, ZS&& zs ) {
+        //using X = typename cata::sequence_traits<XS>::value_type;
+        using X = Val<XS>;
+        return concatMap ( 
+            [&]( X x ) {
+                return fmap( partial(forward<F>(f),x), forward<ZS>(zs) );
+            },
+            forward<XS>(xs) 
+        );
     }
 };
 
