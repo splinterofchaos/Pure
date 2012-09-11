@@ -36,7 +36,7 @@ Vec operator + ( const Vec& a, const Vec& b ) { return a + Vec(b); }
 
 Vec operator * ( Vec&& a, float x )
 {
-    return map( partial(multiplies<float>(),x), move(a) ); 
+    return map( closure(multiplies<float>(),x), move(a) ); 
 }
 Vec operator * ( float x, Vec&& a )      { return move(a) * x; }
 Vec operator * ( const Vec& a, float x ) { return Vec(a) * x; }
@@ -58,12 +58,12 @@ Vec qroot_impl( float a, float b, float root ) {
 /* quadratic root(a,b,c) = Maybe [x,y] */
 unique_ptr<Vec> quadratic_root( float a, float b, float c )
 {
-    return partial(qroot_impl,a,b) ^ sqroot(b*b - 4*a*c);
+    return closet(qroot_impl,a,b) ^ sqroot(b*b - 4*a*c);
 }
 
 int five() { return 5; }
 constexpr int times(int x,int y) { return x*y; }
-auto times_two = partial( times, 2 );
+auto times_two = closet( times, 2 );
 constexpr int plus_two(int x) { return x + 2; }
 
 // squash(f) returns a functor that duplicates its first argument.
@@ -164,8 +164,14 @@ unique_ptr<int> addM2( const unique_ptr<int>& a, const unique_ptr<int>& b ) {
     return fmap( std::plus<int>(), a, b );
 };
 
+void print_xyz( int x, int y, int z ) {
+    printf( "%d %d %d\n", x, y, z );
+}
+
 int main()
 {
+    rcloset( print_xyz, 2, 3 )( 1 );
+
     vector<int> evens = filter( even, vector<int>{1,2,3,4,5,6,7,8} );
     printf( "evens = %s\n", show(evens).c_str() );
 
@@ -206,8 +212,8 @@ int main()
     printf( "addM2 2 4 = %s\n\n",
             show( addM2(Just(2), Just(4)) ).c_str() );
 
-    printf( "5 * 2 = %d\n", partial(times,5)(2) );
-    printf( "5 * 2 = %d\n", partial(times,5,2)() );
+    printf( "5 * 2 = %d\n", closet(times,5)(2) );
+    printf( "5 * 2 = %d\n", closet(times,5,2)() );
 
     printf( "(+2) <$> (pure 1) ( ) = %d\n", fmap(plus_two, pure::pure(1))() );
     printf( "(+2) <$> (+2)      1  = %d\n", fmap(plus_two, plus_two)(1) );
@@ -236,7 +242,7 @@ int main()
 
     vector<int> N = {1,2,3,4,5,6,7,8};
     int n = 5;
-    auto equalsN = partial( equal_to<int>(), n );
+    auto equalsN = closure( equal_to<int>(), n );
     printf( "find (==5) [1,2,3,4,5,6,7,8] = %s\n", 
             show( find(equalsN, N) ).c_str() );
     n = 9;
@@ -266,7 +272,7 @@ int main()
     printf( "Just 1 >> Nothing >>= return = %s\n",
             show( Just(1) >> Nothing<int>() >>= mreturn<unique_ptr<int>>() ).c_str() );
 
-    auto qr = partial( quadratic_root, 1, 3 );
+    auto qr = closet( quadratic_root, 1, 3 );
     typedef pair<float,float> QR;
     printf( "Just -4  >>= (quadraticRoot 1 3) = %s\n",
             show( Just(-4) >>= qr ).c_str() );

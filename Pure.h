@@ -148,52 +148,125 @@ template< class F > Flip<F> flip( F&& f ) {
  * partial( f, x ) -> g(y)
  * partial( f, x, y ) -> g()
  */
-template< class F, class ...Arg >
+template< class F, class ...X >
 struct PartialApplication;
 
-template< class F, class Arg >
-struct PartialApplication< F, Arg >
+template< class F, class X >
+struct PartialApplication< F, X >
 {
     F f;
-    Arg arg;
+    X x;
 
-    template< class _F, class _Arg >
-    constexpr PartialApplication( _F&& f, _Arg&& arg )
-        : f(forward<_F>(f)), arg(forward<_Arg>(arg))
+    template< class _F, class _X >
+    constexpr PartialApplication( _F&& f, _X&& x )
+        : f(forward<_F>(f)), x(forward<_X>(x))
     {
     }
 
     /* 
-     * The return type of F only gets deduced based on the number of arguments
-     * supplied. PartialApplication otherwise has no idea whether f takes 1 or 10 args.
+     * The return type of F only gets deduced based on the number of xuments
+     * supplied. PartialApplication otherwise has no idea whether f takes 1 or 10 xs.
      */
-    template< class ... Args >
-    constexpr auto operator() ( Args&& ...args )
-        -> decltype( f(arg,declval<Args>()...) )
+    template< class ... Xs >
+    constexpr auto operator() ( Xs&& ...xs )
+        -> decltype( f(x,declval<Xs>()...) )
     {
-        return f( arg, forward<Args>(args)... );
+        return f( x, forward<Xs>(xs)... );
     }
 };
 
 /* Recursive, variadic version. */
-template< class F, class Arg1, class ...Args >
-struct PartialApplication< F, Arg1, Args... > 
-    : public PartialApplication< PartialApplication<F,Arg1>, Args... >
+template< class F, class X1, class ...Xs >
+struct PartialApplication< F, X1, Xs... > 
+    : public PartialApplication< PartialApplication<F,X1>, Xs... >
 {
-    template< class _F, class _Arg1, class ..._Args >
-    constexpr PartialApplication( _F&& f, _Arg1&& arg1, _Args&& ...args )
-        : PartialApplication< PartialApplication<F,Arg1>, Args... > (
-            PartialApplication<F,Arg1>( forward<_F>(f), forward<_Arg1>(arg1) ),
-            forward<_Args>(args)...
+    template< class _F, class _X1, class ..._Xs >
+    constexpr PartialApplication( _F&& f, _X1&& x1, _Xs&& ...xs )
+        : PartialApplication< PartialApplication<F,X1>, Xs... > (
+            PartialApplication<F,X1>( forward<_F>(f), forward<_X1>(x1) ),
+            forward<_Xs>(xs)...
         )
     {
     }
 };
 
-template< class F, class ...A >
-constexpr PartialApplication<F,A...> partial( F&& f, A&& ...a )
+/* 
+ * Some languages implement partial application through closures, which hold
+ * references to the function's arguments. But they also often use reference
+ * counting. We must consider the scope of the variables we want to apply. If
+ * we apply references and then return the applied function, its references
+ * will dangle.
+ *
+ * See: 
+ * upward funarg problem http://en.wikipedia.org/wiki/Upward_funarg_problem
+ */
+
+/*
+ * closure http://en.wikipedia.org/wiki/Closure_%28computer_science%29
+ * Here, closure forwards the arguments, which may be references or rvalues--it
+ * does not matter. A regular closure works for passing functions down.
+ */
+template< class F, class ...X >
+constexpr PartialApplication<F,X...> closure( F&& f, X&& ...x ) {
+    return PartialApplication<F,X...>( forward<F>(f), forward<X>(x)... );
+}
+
+/*
+ * Thinking as closures as open (having references to variables outside of
+ * itself), let's refer to a closet as closed. It contains a function and its
+ * arguments (or environment).
+ */
+template< class F, class ...X >
+constexpr PartialApplication<F,X...> closet( F f, X ...x ) {
+    return PartialApplication<F,X...>( move(f), move(x)... );
+}
+
+/*
+ * Reverse partial application. 
+ * g(z) = f( x, y, z )
+ * rpartial( f, y, z ) -> g(x)
+ */
+template< class F, class ...X >
+struct RPartialApplication;
+
+template< class F, class X >
+struct RPartialApplication< F, X > {
+    F f;
+    X x;
+
+    template< class _F, class _X >
+    constexpr RPartialApplication( _F&& f, _X&& x ) 
+        : f( forward<_F>(f) ), x( forward<_X>(x) ) { }
+
+    template< class ...Y >
+    decltype( f(declval<Y>()..., x) )
+    operator() ( Y&& ...y ) const {
+        return f( forward<Y>(y)..., x );
+    }
+};
+
+template< class F, class X1, class ...Xs >
+struct RPartialApplication< F, X1, Xs... > 
+    : public RPartialApplication< RPartialApplication<F,Xs...>, X1 >
 {
-    return PartialApplication<F,A...>( forward<F>(f), forward<A>(a)... );
+    template< class _F, class _X1, class ..._Xs >
+    constexpr RPartialApplication( _F&& f, _X1&& x1, _Xs&& ...xs )
+        : RPartialApplication< RPartialApplication<F,Xs...>, X1 > (
+            RPartialApplication<F,Xs...>( forward<_F>(f), forward<_Xs>(xs)... ),
+            forward<_X1>(x1)
+        )
+    {
+    }
+};
+
+template< class F, class ...X, class P = RPartialApplication<F,X...> >
+constexpr P rclosure( F&& f, X&& ...x ) {
+    return P( forward<F>(f), forward<X>(x)... );
+}
+
+template< class F, class ...X, class P = RPartialApplication<F,X...> >
+constexpr P rcloset( F f, X ...x ) {
+    return P( move(f), move(x)... );
 }
 
 /* 
@@ -562,7 +635,7 @@ struct Functor< cata::sequence<Seq> > {
     }
 
     template< class F, class ...X >
-    using Part = decltype( partial( declval<F>(), declval<X>()... ) );
+    using Part = decltype( closure( declval<F>(), declval<X>()... ) );
 
     template< class S >
     using Val = typename cata::sequence_traits<S>::value_type;;
@@ -571,14 +644,14 @@ struct Functor< cata::sequence<Seq> > {
     using FMap = decltype( fmap( declval<F>(), declval<S>() ) );
 
     template< class F, class XS, class ZS,
-              //class R = decltype( fmap( partial(declval<F>(),declval<Val<XS>>()), declval<ZS>()) ) > 
+              //class R = decltype( fmap( closures(declval<F>(),declval<Val<XS>>()), declval<ZS>()) ) > 
               class R = FMap< Part<F,Val<XS>>, ZS > >
     static R fmap( F&& f, XS&& xs, ZS&& zs ) {
         //using X = typename cata::sequence_traits<XS>::value_type;
         using X = Val<XS>;
         return concatMap ( 
             [&]( X x ) {
-                return fmap( partial(forward<F>(f),x), forward<ZS>(zs) );
+                return fmap( closure(forward<F>(f),x), forward<ZS>(zs) );
             },
             forward<XS>(xs) 
         );
