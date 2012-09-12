@@ -609,26 +609,33 @@ auto to_map( X&& ...x ) -> decltype(rclosure(FMap(),declval<X>()...))
 /* fmap f g = compose( f, g ) */
 template< class Function >
 struct Functor<Function> {
-    template< class F, class G >
-    static Composition<F,G> fmap( F&& f, G&& g ) {
-        return compose( forward<F>(f), forward<G>(g) );
+    template< class F, class ...G >
+    static Composition<F,G...> fmap( F&& f, G&& ...g ) {
+        return compose( forward<F>(f), forward<G>(g)... );
     }
 };
 
 /* fmap f Pair(x,y) = Pair( f x, f y ) */
 template< class X, class Y >
 struct Functor< pair<X,Y> > {
-    template< class F, class R = decltype(declval<F>()(declval<X>())) >
-    static pair<R,R> fmap( F&& f, const pair<X,Y>& p ) {
-        return make_pair( f(p.first), f(p.second) );
-    }
+    //template< class F, class R = decltype(declval<F>()(declval<X>())) >
+    //static pair<R,R> fmap( F&& f, const pair<X,Y>& p ) {
+    //    return make_pair( f(p.first), f(p.second) );
+    //}
 
-    template< class F >
-    static pair<X,Y> fmap( F&& f, pair<X,Y>&& p ) {
-        F _f = forward<F>(f);
-        p.first  = _f( p.first );
-        p.second = _f( p.second );
-        return move( p );
+    template< class F, class ...P >
+    using PX = decltype( declval<F>()( declval<P>().first... ) );
+    template< class F, class ...P >
+    using PY = decltype( declval<F>()( declval<P>().second... ) );
+
+    template< class F, class ...P >
+    static constexpr auto fmap( F&& f, P&& ...p ) 
+        -> decltype (
+            make_pair( declval<PX<F,P...>>(), declval<PY<F,P...>>() )
+        )
+    {
+        return make_pair( forward<F>(f)(forward<P>(p).first...),
+                  forward<F>(f)(forward<P>(p).second...) );
     }
 };
 
@@ -704,7 +711,6 @@ struct Functor< cata::sequence<Seq> > {
         -> decltype ( 
             mapper(f,declval<YS>(),declval<ZS>()...)(xs.front())
         )
-
     {
         return concatMap ( 
             mapper( f, forward<YS>(ys), forward<ZS>(zs)... ),
