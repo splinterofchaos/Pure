@@ -600,17 +600,36 @@ struct FMap {
 
 /* to_map x = \f -> fmap f x */
 template< class ...X > 
-auto to_map( X&& ...x ) -> decltype(rclosure(FMap(),declval<X>()...))
+constexpr auto to_map( X&& ...x ) -> decltype(rclosure(FMap(),declval<X>()...))
 {
     return rclosure( FMap(), forward<X>(x)... );
 }
 
+/* lift f = \x -> fnap f x */
+template< class F > struct Lift {
+    F f;
+
+    template< class _F > 
+    constexpr Lift( _F&& f ) : f(forward<_F>(f)) { }
+
+    template< class ...X >
+    constexpr auto operator() ( X&& ...x ) 
+        -> decltype( fmap(f,declval<X>()...) )
+    {
+        return fmap( f, forward<X>(x)... );
+    }
+};
+
+template< class F, class L = Lift<F> >
+constexpr L lift( F&& f ) {
+    return L( forward<F>(f) );
+}
 
 /* fmap f g = compose( f, g ) */
 template< class Function >
 struct Functor<Function> {
     template< class F, class ...G >
-    static Composition<F,G...> fmap( F&& f, G&& ...g ) {
+    static constexpr Composition<F,G...> fmap( F&& f, G&& ...g ) {
         return compose( forward<F>(f), forward<G>(g)... );
     }
 };
@@ -618,11 +637,6 @@ struct Functor<Function> {
 /* fmap f Pair(x,y) = Pair( f x, f y ) */
 template< class X, class Y >
 struct Functor< pair<X,Y> > {
-    //template< class F, class R = decltype(declval<F>()(declval<X>())) >
-    //static pair<R,R> fmap( F&& f, const pair<X,Y>& p ) {
-    //    return make_pair( f(p.first), f(p.second) );
-    //}
-
     template< class F, class ...P >
     using PX = decltype( declval<F>()( declval<P>().first... ) );
     template< class F, class ...P >
@@ -657,8 +671,8 @@ struct Functor< cata::maybe<_M> > {
      */
     template< class F, class ...M,
               class R = decltype( declval<F>()(*declval<M>()...) ) >
-    static unique_ptr<R> fmap( F&& f, M&& ...m ) {
-        return each( m... ) ? 
+    static constexpr unique_ptr<R> fmap( F&& f, M&& ...m ) {
+        return each( forward<M>(m)... ) ? 
             Just( forward<F>(f)( *forward<M>(m)... ) ) : nullptr;
     }
 };
@@ -683,7 +697,7 @@ template< class F > struct Enclose {
 };
 
 template< class F, class E = Enclose<F> >
-E enclosure( F&& f ) {
+constexpr E enclosure( F&& f ) {
     return E( forward<F>(f) );
 }
 
@@ -691,7 +705,7 @@ template< class Seq >
 struct Functor< cata::sequence<Seq> > {
     /* f <$> [x0,x1,...] = [f x0, f x1, ...] */
     template< class F, class S >
-    static decltype( map(declval<F>(),declval<S>()) )
+    static constexpr decltype( map(declval<F>(),declval<S>()) )
     fmap( F&& f, S&& s ) {
         return map( forward<F>(f), forward<S>(s) );
     }
@@ -706,8 +720,8 @@ struct Functor< cata::sequence<Seq> > {
     }
 
     template< class F, class XS, class YS, class ...ZS > 
-              //class R = FMap< Part<F,Val<XS>>, ZS > >
-    static auto fmap( const F& f, const XS& xs, YS&& ys, ZS&& ...zs ) 
+    static constexpr auto fmap( const F& f, const XS& xs, 
+                                YS&& ys, ZS&& ...zs ) 
         -> decltype ( 
             mapper(f,declval<YS>(),declval<ZS>()...)(xs.front())
         )
