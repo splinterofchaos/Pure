@@ -239,8 +239,8 @@ struct RPartialApplication< F, X > {
         : f( forward<_F>(f) ), x( forward<_X>(x) ) { }
 
     template< class ...Y >
-    decltype( f(declval<Y>()..., x) )
-    operator() ( Y&& ...y ) const {
+    constexpr decltype( f(declval<Y>()..., x) )
+    operator() ( Y&& ...y ) {
         return f( forward<Y>(y)..., x );
     }
 };
@@ -319,9 +319,12 @@ constexpr Composition<F,G...> compose( F&& f, G&& ...g ) {
     return Composition<F,G...>( forward<F>(f), forward<G>(g)... );
 }
 
+template< class F, class ...X >
+using Result = decltype( declval<F>()( declval<X>()... ) );
+
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< template<class...> class S, class X, class ...XS, class F,
-          class R = typename result_of<F(X)>::type >
+          class R = Result<F,X> > 
 S<R,XS...> map( F&& f, const S<X,XS...>& xs ) 
 {
     S<R,XS...> r;
@@ -331,7 +334,7 @@ S<R,XS...> map( F&& f, const S<X,XS...>& xs )
 }
 
 template< class X, size_t N, class F, 
-          class R = class result_of<F(X)>::type >
+          class R = Result<F,X> >
 array< R, N > map( F&& f, const array< X, N >& xs ) {
     array< R, N > r;
     transform( begin(xs), end(xs), begin(r), forward<F>(f) );
@@ -575,6 +578,34 @@ constexpr Pure<X> pure( X&& x )
  */
 template< class ...F > struct Functor;
 
+template< class F, class G, class ...H,
+          class Fn = Functor< typename cata::Cat<G>::type > >
+constexpr auto fmap( F&& f, G&& g, H&& ...h )
+    -> decltype( Fn::fmap(declval<F>(),declval<G>(),declval<H>()...) ) 
+{
+    return Fn::fmap( forward<F>(f), forward<G>(g), forward<H>(h)... );
+}
+
+struct FMap {
+    template< class F, class ...X >
+    using Result = decltype( fmap(declval<F>(),declval<X>()...) );
+
+    template< class F, class ...X >
+    constexpr auto operator() ( F&& f, X&& ...x ) 
+        -> decltype( fmap(declval<F>(),declval<X>()...) )
+    {
+        return fmap( forward<F>(f), forward<X>(x)... );
+    }
+};
+
+/* to_map x = \f -> fmap f x */
+template< class ...X > 
+auto to_map( X&& ...x ) -> decltype(rclosure(FMap(),declval<X>()...))
+{
+    return rclosure( FMap(), forward<X>(x)... );
+}
+
+
 /* fmap f g = compose( f, g ) */
 template< class Function >
 struct Functor<Function> {
@@ -625,6 +656,30 @@ struct Functor< cata::maybe<_M> > {
     }
 };
 
+/* 
+ * Given f(x,y...) and fx(y...)
+ *  enclose f = fx
+ */
+template< class F > struct Enclose {
+    F f;
+
+    template< class _F >
+    constexpr Enclose( _F&& f ) : f(forward<_F>(f)) { }
+
+    template< class ...X >
+    using Result = decltype( closure(f,declval<X>()...) );
+
+    template< class ...X > 
+    constexpr Result<X...> operator() ( X&& ...x ) {
+        return closure( f, forward<X>(x)... );
+    }
+};
+
+template< class F, class E = Enclose<F> >
+E enclosure( F&& f ) {
+    return E( forward<F>(f) );
+}
+
 template< class Seq >
 struct Functor< cata::sequence<Seq> > {
     /* f <$> [x0,x1,...] = [f x0, f x1, ...] */
@@ -634,27 +689,35 @@ struct Functor< cata::sequence<Seq> > {
         return map( forward<F>(f), forward<S>(s) );
     }
 
-    template< class F, class ...X >
-    using Part = decltype( closure( declval<F>(), declval<X>()... ) );
+    template< class F, class ...YS >
+    static constexpr auto mapper( F&& f, YS&& ...ys ) 
+        -> decltype( compose( to_map(declval<YS>()...), 
+                              enclosure(declval<F>()) ) )
+    {
+        return compose( to_map( forward<YS>(ys)... ),
+                        enclosure( forward<F>(f) ) );
+    }
 
-    template< class S >
-    using Val = typename cata::sequence_traits<S>::value_type;;
+    template< class F, class XS, class YS, class ...ZS > 
+              //class R = FMap< Part<F,Val<XS>>, ZS > >
+    static auto fmap( const F& f, const XS& xs, YS&& ys, ZS&& ...zs ) 
+        -> decltype ( 
+            mapper(f,declval<YS>(),declval<ZS>()...)(xs.front())
+        )
 
-    template< class F, class S >
-    using FMap = decltype( fmap( declval<F>(), declval<S>() ) );
-
-    template< class F, class XS, class ZS,
-              //class R = decltype( fmap( closures(declval<F>(),declval<Val<XS>>()), declval<ZS>()) ) > 
-              class R = FMap< Part<F,Val<XS>>, ZS > >
-    static R fmap( F&& f, XS&& xs, ZS&& zs ) {
-        //using X = typename cata::sequence_traits<XS>::value_type;
-        using X = Val<XS>;
+    {
         return concatMap ( 
-            [&]( X x ) {
-                return fmap( closure(forward<F>(f),x), forward<ZS>(zs) );
-            },
-            forward<XS>(xs) 
+            mapper( f, forward<YS>(ys), forward<ZS>(zs)... ),
+            xs 
         );
+
+        // Alternate:
+        //return concatMap ( 
+        //    [&]( X x ) {
+        //        return fmap( closure(f,x), zs );
+        //    },
+        //    xs 
+        //);
     }
 };
 
@@ -681,14 +744,6 @@ template< class C, class R > struct ESeq : enable_if<IsSeq<C>::value,R> { };
 
 /* Disable if is sequence. */
 template< class C, class R > struct XSeq : enable_if<not IsSeq<C>::value,R> { };
-
-template< class F, class G, class ...H,
-          class Fn = Functor< typename cata::Cat<G>::type > >
-constexpr auto fmap( F&& f, G&& g, H&& ...h )
-    -> decltype( Fn::fmap(declval<F>(),declval<G>(),declval<H>()...) ) 
-{
-    return Fn::fmap( forward<F>(f), forward<G>(g), forward<H>(h)... );
-}
 
 template< class F, class M >
 constexpr decltype( fmap(declval<F>(), declval<M>()) )

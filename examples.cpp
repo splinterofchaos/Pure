@@ -234,10 +234,10 @@ int main()
     printf( "(+2) <$> (Right 5)     = %s\n",
             show( plus_two ^ Right<string>(5) ).c_str() );
 
-    printf( "(+) <$> [1,2] <*> [3,4] = %s\n",
+    printf( "\n(+) <$> [1,2] <*> [3,4] <*> [5,6] = %s\n\n",
             show ( 
-                fmap( std::plus<int>(), 
-                      vector<int>{1,2}, vector<int>{3,4}) 
+                fmap( [](int x, int y, int z){return x+y+z;}, 
+                      vector<int>{1,2}, vector<int>{3,4}, vector<int>{5,6}) 
             ).c_str() );
 
     vector<int> N = {1,2,3,4,5,6,7,8};
