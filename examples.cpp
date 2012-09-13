@@ -189,8 +189,8 @@ int main()
     Vec fiveTwo = {{5,2}}, twoFive = {{2,5}};
 
     // Join lets us adapt an N-ary function to an (N-1) one.
-    printf( "\t5 * 2 = %d\n", join(times, get_x, get_y)(fiveTwo) );
-    // is the same as times(get_x(fiveTwo),get_y(fiveTwo)).
+    printf( "\t5 * 2 = %d\n", bcompose(times, get_x, get_y)(fiveTwo) );
+    //         is the same as times(get_x(fiveTwo), get_y(fiveTwo)).
 
     auto sevens = fiveTwo + twoFive;
     printf( "<5,2> + <2,5> = <%f,%f>\n", sevens[0], sevens[1] );
@@ -202,8 +202,10 @@ int main()
     printf( "quadratic root of x^2 + 4 = 0 : %s\n",
             show( quadratic_root(1,0,4) ).c_str() );
 
-    constexpr auto sqrDoublePlus2 = compose( plus_two, times_two, square );
+    auto sqrDoublePlus2 = comp( plus_two, times_two, square );
+    auto rsqrDoublePlus2 = fcomp( square, times_two, plus_two );
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", sqrDoublePlus2(3) );
+    printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", rsqrDoublePlus2(3) );
 
     puts( "\naddM a b = do\n\tx <- a\n\ty <- b\n\tx + y" );
     printf( "addM 2 4 = %s\n", 
@@ -215,8 +217,9 @@ int main()
     printf( "5 * 2 = %d\n", closet(times,5)(2) );
     printf( "5 * 2 = %d\n", closet(times,5,2)() );
 
-    printf( "(+2) <$> (pure 1) ( ) = %d\n", fmap(plus_two, pure::pure(1))() );
-    printf( "(+2) <$> (+2)      1  = %d\n", fmap(plus_two, plus_two)(1) );
+    printf( "(+2) <$> (pure 1) (100) = %d\n", fmap(plus_two, pure::pure(1))(100) );
+    printf( "\tccomp (+2) (pure 1) $ () = %d\n", ccompose(plus_two,pure::pure(1))() );
+    printf( "(+2) <$> (+2) 1 = %d\n", fmap(plus_two, plus_two)(1) );
 
     printf( "(+2) <$> (Pair 1 2) = %s\n", 
             show( plus_two ^ std::make_pair(1,2) ).c_str() );
@@ -314,4 +317,12 @@ int main()
             show( mplus(Just(1),Just(2)) ).c_str() );
     printf( "[1] `mplus` [2] = %s\n",
             show( mplus(vector<int>{1},vector<int>{2}) ).c_str() );
+
+    pair<int,int> p( 1, 2 );
+    using Show = string(int);
+    auto showInt = [](int x){ return show(x); };
+    printf( "first show >>> second (+2) $ (1,2) = %s\n", 
+            show( comp(first(showInt), second(plus_two))( p ) ).c_str() );
+    printf( "show *** (+2) $ (1,2) = %s\n",
+            show( split( showInt, plus_two )( p ) ).c_str() );
 }

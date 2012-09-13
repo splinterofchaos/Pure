@@ -98,6 +98,8 @@ template< class R, class ...X > struct Cat< R(&)(X...) > {
 
 } // namespace cata
 
+template< class ... > struct Category;
+
 /* 
  * FUNCTION TRANSFORMERS
  * The fallowing are types that contain one or more functions and act like a
@@ -271,10 +273,10 @@ constexpr P rcloset( F f, X ...x ) {
 
 /* 
  * Composition. 
- * normal notation:  h = f( g() )
- * Haskell notation: h = f . g
- * compose(f,g) -> f . g
- * compose(f,g,h...) -> f . g . h ...
+ * Given f(x,y...) and g(z)
+ * The composition of f and g, f . g, equals h(z,y...)
+ *      h(z,y...) = f( g(z), y... )
+ *
  */
 
 template< class F, class ...G >
@@ -287,15 +289,12 @@ struct Composition<F,G>
 
     template< class _F, class _G >
     constexpr Composition( _F&& f, _G&& g ) 
-        : f(forward<_F>(f)), g(forward<_G>(g)) 
-    {
-    }
+        : f(forward<_F>(f)), g(forward<_G>(g)) { }
 
-    template< class ...Args >
-    constexpr auto operator() ( Args&& ...args )
-        -> decltype( f(g(declval<Args>()...)) )
-    {
-        return f( g(forward<Args>(args)...) );
+    template< class X, class ...Y >
+    constexpr decltype( f(g(declval<X>()), declval<Y>()...) )
+    operator() ( X&& x, Y&& ...y ) {
+        return f( g( forward<X>(x) ), forward<Y>(y)... );
     }
 };
 
@@ -315,12 +314,254 @@ struct Composition<F,G,H...> : Composition<F,Composition<G,H...>>
 };
 
 template< class F, class ...G >
-constexpr Composition<F,G...> compose( F&& f, G&& ...g ) {
-    return Composition<F,G...>( forward<F>(f), forward<G>(g)... );
+constexpr Composition<F,G...> compose( F f, G ...g ) {
+    return Composition<F,G...>( move(f), move(g)... );
+}
+
+/* A const composition for when g is a constant function. */
+template< class F, class ...G >
+struct CComposition;
+
+template< class F, class G >
+struct CComposition<F,G>
+{
+    F f; G g;
+
+    template< class _F, class _G >
+    constexpr CComposition( _F&& f, _G&& g ) 
+        : f(forward<_F>(f)), g(forward<_G>(g)) { }
+
+    template< class ...Y >
+    constexpr decltype( f(g(), declval<Y>()...) )
+    operator() ( Y&& ...y ) {
+        return f( g(), forward<Y>(y)... );
+    }
+};
+
+template< class F, class G, class ...H >
+struct CComposition<F,G,H...> : CComposition<Composition<F,G>,H...>
+{
+    typedef Composition<F,G> Then;
+    typedef CComposition<Then,H...> CComp;
+
+    template< class _F, class _G, class ..._H >
+    constexpr CComposition( _F&& f, _G&& g, _H&& ...h )
+        : CComp ( 
+            Then( forward<_F>(f), forward<_G>(g) ),
+            forward<_H>(h)...
+        )
+    {
+    }
+};
+
+template< class F, class ...G, class C = CComposition<F,G...> >
+constexpr C ccompose( F f, G ...g ) {
+    return C( move(f), move(g)... );
+}
+
+/* N-ary composition assumes a unary f and N-ary g. */
+template< class F, class ...G >
+struct NCompoposition;
+
+template< class F, class G >
+struct NCompoposition<F,G>
+{
+    F f; G g;
+
+    template< class _F, class _G >
+    constexpr NCompoposition( _F&& f, _G&& g ) 
+        : f(forward<_F>(f)), g(forward<_G>(g)) { }
+
+    template< class ...X >
+    constexpr decltype( f(g(declval<X>()...)) )
+    operator() ( X&& ...x ) {
+        return f( g( forward<X>(x)... ) );
+    }
+};
+
+template< class F, class G, class ...H >
+struct NCompoposition<F,G,H...> : NCompoposition<Composition<F,G>,H...>
+{
+    typedef Composition<F,G> Then;
+    typedef NCompoposition<Then,H...> NComp;
+
+    template< class _F, class _G, class ..._H >
+    constexpr NCompoposition( _F&& f, _G&& g, _H&& ...h )
+        : NComp ( 
+            Then( forward<_F>(f), forward<_G>(g) ),
+            forward<_H>(h)...
+        )
+    {
+    }
+};
+
+template< class F, class ...G, class C = NCompoposition<F,G...> >
+constexpr C ncompose( F f, G ...g ) {
+    return C( move(f), move(g)... );
+}
+
+/*
+ * Binary composition 
+ *      (compose2 http://www.sgi.com/tech/stl/binary_compose.html)
+ * Given g(x)=y,  h(x)=z, and f(y,z), let bf(x) = f( g(x), h(x) )
+ * This implementation diverges from compose2 in that it allows g and h to be
+ * n-ary.
+ */
+template< class F, class G, class H >
+struct BCompoposition
+{
+    F f; G g; H h;
+
+    template< class _F, class _G, class _H >
+    constexpr BCompoposition( _F&& f, _G&& g, _H&& h ) 
+        : f(forward<_F>(f)), g(forward<_G>(g)), h(forward<_H>(h)) { }
+
+    template< class ...X >
+    constexpr decltype( f(g(declval<X>()...), h(declval<X>()...)) )
+    operator() ( X&& ...x ) {
+        return f( g( forward<X>(x)... ), h( forward<X>(x)... ) );
+    }
+};
+
+template< class F, class G, class H, class C = BCompoposition<F,G,H> >
+constexpr C bcompose( F f, G g, H h ) {
+    return C( move(f), move(g), move(h) );
+}
+
+/* Default category: function. */
+template< class F > struct Category<F> {
+    template< class _F > static 
+    constexpr _F id( _F&& f ) { return forward<_F>(f); }
+
+    template< class _F, class ..._G > static
+    constexpr decltype( compose(declval<_F>(),declval<_G>()...) )
+    comp( _F&& f, _G&& ...g ) {
+        return compose( forward<_F>(f), forward<_G>(g)... );
+    }
+};
+
+template< class X, class C = Category<X> >
+decltype( C::id( declval<X>() ) ) id( X&& x ) {
+    return C::id( forward<X>(x) );
+}
+
+/* 
+ * Let comp be a generalization of compose. 
+ * Haskell's <<<.
+ */
+template< class F, class ...G, class C = Category<F> > 
+constexpr decltype( Category<F>::comp( declval<F>(), declval<G>()... ) )
+comp( F&& f, G&& ...g ) {
+    return C::comp( forward<F>(f), forward<G>(g)... );
+}
+
+/*
+ * fcomp (forward compose): the reverse of comp.
+ * Haskell's >>>.
+ */
+template< class F, class G >
+constexpr decltype( comp(declval<G>(), declval<F>()) )
+fcomp( F&& f, G&& g ) { return comp( forward<G>(g), forward<F>(f) ); }
+
+struct Id {
+    template< class X >
+    constexpr X operator() ( X&& x ) { return forward<X>(x); }
+};
+
+template< class F, class G, class H, class ...I>
+constexpr decltype( comp( fcomp(declval<G>(),declval<H>(),declval<I>()...), 
+                          declval<F>() ) )
+fcomp( F&& f, G&& g, H&& h, I&& ...i ) {
+    return comp( fcomp( forward<G>(g), forward<H>(h), forward<I>(i)... ),
+                 forward<F>(f) );
+}
+
+template< class ... > struct Arrow;
+
+template< class A, class F, class Arr = Arrow<A> >
+decltype( Arr::arr( declval<F>() ) )
+arr( F&& f ) { return Arr::arr( forward<F>(f) ); }
+
+/* (f *** g) (x,y) = (f x, g y) */
+template< class F, class G, class A = Arrow<F> >
+decltype( A::split(declval<F>(), declval<G>()) )
+split( F&& f, G&& g ) {
+    return A::split( forward<F>(f), forward<G>(g) );
+}
+
+/* (f &&& g) x = (f x, g x) */
+template< class F, class G, class A = Arrow<F> >
+decltype( A::fanout(declval<F>(),declval<G>()) )
+fanout( F&& f, G&& g ) {
+    return A::fanout( forward<F>(f), forward<G>(g) );
+}
+
+/* (first f) (x,y) = (f x, y) */
+template< class F, class A = Arrow<F> >
+decltype( A::first(declval<F>()) )
+first( F&& f ) {
+    return A::first( forward<F>(f) );
 }
 
 template< class F, class ...X >
 using Result = decltype( declval<F>()( declval<X>()... ) );
+
+/* (second f) (x,y) = (x, f y) */
+template< class F, class A = Arrow<F> >
+decltype( A::second(declval<F>()) )
+second( F&& f ) {
+    return A::second( forward<F>(f) );
+}
+
+template< class Func > struct Arrow<Func> {
+    template< class F > static 
+    constexpr F arr( F&& f ) { return forward<F>(f); }
+
+    template< class F, class G > struct FSplit {
+        F f; G g;
+
+        template< class _F, class _G >
+        constexpr FSplit( _F&& f, _G&& g ) 
+            : f(forward<_F>(f)), g(forward<_G>(g)) { }
+
+        template< class P/*air*/ >
+        auto operator() ( P&& p ) const
+            -> decltype( make_pair(f(get<0>(declval<P>())),
+                                   g(get<1>(declval<P>()))) )
+        {
+            return make_pair( f(get<0>(p)), g(get<1>(p)) );
+        }
+    };
+
+    template< class F, class G, class S = FSplit<F,G> >
+    static S split ( F&& f, G&& g ) {
+        return S( forward<F>(f), forward<G>(g) );
+    }
+
+    template< class F, class S = FSplit<F,Id> > static 
+    S first( F&& f ) { return S( forward<F>(f), Id() ); }
+
+    template< class F, class S = FSplit<Id,F> > static 
+    S second( F&& f ) { return S( Id(), forward<F>(f) ); }
+
+    template< class F, class G > struct Fan {
+        F f; G g;
+
+        template< class _F, class _G >
+        constexpr Fan( _F&& f, _G&& g ) : f(forward<_F>(f)), g(forward<_G>(g)) { }
+
+        template< class X >
+        decltype( make_pair( f(declval<X>()), g(declval<X>()) ) )
+        operator() ( X&& x ) const {
+            return make_pair( f(forward<X>(x)), g(forward<X>(x)) );
+        }
+    };
+
+    template< class F, class G, class Fan = Fan<F,G> >
+    static Fan fanout( F&& f, G&& g ) {
+        return Fan( forward<F>(f), forward<G>(g) );
+    }
+};
 
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< template<class...> class S, class X, class ...XS, class F,
@@ -628,9 +869,11 @@ constexpr L lift( F&& f ) {
 /* fmap f g = compose( f, g ) */
 template< class Function >
 struct Functor<Function> {
-    template< class F, class ...G >
-    static constexpr Composition<F,G...> fmap( F&& f, G&& ...g ) {
-        return compose( forward<F>(f), forward<G>(g)... );
+    template< class F, class G >
+    static auto fmap( F&& f, G&& g ) 
+        -> decltype( compose(declval<F>(),declval<G>()) )
+    {
+        return compose( forward<F>(f), forward<G>(g) );
     }
 };
 
@@ -1231,9 +1474,11 @@ constexpr Squash<F> squash( F&& f )
 }
 
 /* 
- * f( x, y ) = f( l(z), r(z) ) = g(z)
+ * f( x, y, a... ) = f( l(z), r(z), a... ) = g(z,a...)
  *  where x = l(z) and y = r(z)
  * join( f, l, r ) = g
+ *
+ * Similar to bcompose, but expects a unary l and r and an nary f.
  */
 template< class F, class Left, class Right >
 struct Join
