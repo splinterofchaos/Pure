@@ -49,7 +49,7 @@ template< class Seq > struct sequence_traits {
     using sequence   = Seq;
     using iterator   = decltype( begin(declval<Seq>()) );
     using reference  = decltype( *declval<iterator>() );
-    using value_type = typename decay<reference>::type;
+    using value_type = typename remove_reference<reference>::type;
 };
 
 /*
@@ -148,52 +148,125 @@ template< class F > Flip<F> flip( F&& f ) {
  * partial( f, x ) -> g(y)
  * partial( f, x, y ) -> g()
  */
-template< class F, class ...Arg >
+template< class F, class ...X >
 struct PartialApplication;
 
-template< class F, class Arg >
-struct PartialApplication< F, Arg >
+template< class F, class X >
+struct PartialApplication< F, X >
 {
     F f;
-    Arg arg;
+    X x;
 
-    template< class _F, class _Arg >
-    constexpr PartialApplication( _F&& f, _Arg&& arg )
-        : f(forward<_F>(f)), arg(forward<_Arg>(arg))
+    template< class _F, class _X >
+    constexpr PartialApplication( _F&& f, _X&& x )
+        : f(forward<_F>(f)), x(forward<_X>(x))
     {
     }
 
     /* 
-     * The return type of F only gets deduced based on the number of arguments
-     * supplied. PartialApplication otherwise has no idea whether f takes 1 or 10 args.
+     * The return type of F only gets deduced based on the number of xuments
+     * supplied. PartialApplication otherwise has no idea whether f takes 1 or 10 xs.
      */
-    template< class ... Args >
-    constexpr auto operator() ( Args&& ...args )
-        -> decltype( f(arg,declval<Args>()...) )
+    template< class ... Xs >
+    constexpr auto operator() ( Xs&& ...xs )
+        -> decltype( f(x,declval<Xs>()...) )
     {
-        return f( arg, forward<Args>(args)... );
+        return f( x, forward<Xs>(xs)... );
     }
 };
 
 /* Recursive, variadic version. */
-template< class F, class Arg1, class ...Args >
-struct PartialApplication< F, Arg1, Args... > 
-    : public PartialApplication< PartialApplication<F,Arg1>, Args... >
+template< class F, class X1, class ...Xs >
+struct PartialApplication< F, X1, Xs... > 
+    : public PartialApplication< PartialApplication<F,X1>, Xs... >
 {
-    template< class _F, class _Arg1, class ..._Args >
-    constexpr PartialApplication( _F&& f, _Arg1&& arg1, _Args&& ...args )
-        : PartialApplication< PartialApplication<F,Arg1>, Args... > (
-            PartialApplication<F,Arg1>( forward<_F>(f), forward<_Arg1>(arg1) ),
-            forward<_Args>(args)...
+    template< class _F, class _X1, class ..._Xs >
+    constexpr PartialApplication( _F&& f, _X1&& x1, _Xs&& ...xs )
+        : PartialApplication< PartialApplication<F,X1>, Xs... > (
+            PartialApplication<F,X1>( forward<_F>(f), forward<_X1>(x1) ),
+            forward<_Xs>(xs)...
         )
     {
     }
 };
 
-template< class F, class ...A >
-constexpr PartialApplication<F,A...> partial( F&& f, A&& ...a )
+/* 
+ * Some languages implement partial application through closures, which hold
+ * references to the function's arguments. But they also often use reference
+ * counting. We must consider the scope of the variables we want to apply. If
+ * we apply references and then return the applied function, its references
+ * will dangle.
+ *
+ * See: 
+ * upward funarg problem http://en.wikipedia.org/wiki/Upward_funarg_problem
+ */
+
+/*
+ * closure http://en.wikipedia.org/wiki/Closure_%28computer_science%29
+ * Here, closure forwards the arguments, which may be references or rvalues--it
+ * does not matter. A regular closure works for passing functions down.
+ */
+template< class F, class ...X >
+constexpr PartialApplication<F,X...> closure( F&& f, X&& ...x ) {
+    return PartialApplication<F,X...>( forward<F>(f), forward<X>(x)... );
+}
+
+/*
+ * Thinking as closures as open (having references to variables outside of
+ * itself), let's refer to a closet as closed. It contains a function and its
+ * arguments (or environment).
+ */
+template< class F, class ...X >
+constexpr PartialApplication<F,X...> closet( F f, X ...x ) {
+    return PartialApplication<F,X...>( move(f), move(x)... );
+}
+
+/*
+ * Reverse partial application. 
+ * g(z) = f( x, y, z )
+ * rpartial( f, y, z ) -> g(x)
+ */
+template< class F, class ...X >
+struct RPartialApplication;
+
+template< class F, class X >
+struct RPartialApplication< F, X > {
+    F f;
+    X x;
+
+    template< class _F, class _X >
+    constexpr RPartialApplication( _F&& f, _X&& x ) 
+        : f( forward<_F>(f) ), x( forward<_X>(x) ) { }
+
+    template< class ...Y >
+    constexpr decltype( f(declval<Y>()..., x) )
+    operator() ( Y&& ...y ) {
+        return f( forward<Y>(y)..., x );
+    }
+};
+
+template< class F, class X1, class ...Xs >
+struct RPartialApplication< F, X1, Xs... > 
+    : public RPartialApplication< RPartialApplication<F,Xs...>, X1 >
 {
-    return PartialApplication<F,A...>( forward<F>(f), forward<A>(a)... );
+    template< class _F, class _X1, class ..._Xs >
+    constexpr RPartialApplication( _F&& f, _X1&& x1, _Xs&& ...xs )
+        : RPartialApplication< RPartialApplication<F,Xs...>, X1 > (
+            RPartialApplication<F,Xs...>( forward<_F>(f), forward<_Xs>(xs)... ),
+            forward<_X1>(x1)
+        )
+    {
+    }
+};
+
+template< class F, class ...X, class P = RPartialApplication<F,X...> >
+constexpr P rclosure( F&& f, X&& ...x ) {
+    return P( forward<F>(f), forward<X>(x)... );
+}
+
+template< class F, class ...X, class P = RPartialApplication<F,X...> >
+constexpr P rcloset( F f, X ...x ) {
+    return P( move(f), move(x)... );
 }
 
 /* 
@@ -246,9 +319,12 @@ constexpr Composition<F,G...> compose( F&& f, G&& ...g ) {
     return Composition<F,G...>( forward<F>(f), forward<G>(g)... );
 }
 
+template< class F, class ...X >
+using Result = decltype( declval<F>()( declval<X>()... ) );
+
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< template<class...> class S, class X, class ...XS, class F,
-          class R = typename result_of<F(X)>::type >
+          class R = Result<F,X> > 
 S<R,XS...> map( F&& f, const S<X,XS...>& xs ) 
 {
     S<R,XS...> r;
@@ -258,7 +334,7 @@ S<R,XS...> map( F&& f, const S<X,XS...>& xs )
 }
 
 template< class X, size_t N, class F, 
-          class R = class result_of<F(X)>::type >
+          class R = Result<F,X> >
 array< R, N > map( F&& f, const array< X, N >& xs ) {
     array< R, N > r;
     transform( begin(xs), end(xs), begin(r), forward<F>(f) );
@@ -502,52 +578,166 @@ constexpr Pure<X> pure( X&& x )
  */
 template< class ...F > struct Functor;
 
+template< class F, class G, class ...H,
+          class Fn = Functor< typename cata::Cat<G>::type > >
+constexpr auto fmap( F&& f, G&& g, H&& ...h )
+    -> decltype( Fn::fmap(declval<F>(),declval<G>(),declval<H>()...) ) 
+{
+    return Fn::fmap( forward<F>(f), forward<G>(g), forward<H>(h)... );
+}
+
+struct FMap {
+    template< class F, class ...X >
+    using Result = decltype( fmap(declval<F>(),declval<X>()...) );
+
+    template< class F, class ...X >
+    constexpr auto operator() ( F&& f, X&& ...x ) 
+        -> decltype( fmap(declval<F>(),declval<X>()...) )
+    {
+        return fmap( forward<F>(f), forward<X>(x)... );
+    }
+};
+
+/* to_map x = \f -> fmap f x */
+template< class ...X > 
+constexpr auto to_map( X&& ...x ) -> decltype(rclosure(FMap(),declval<X>()...))
+{
+    return rclosure( FMap(), forward<X>(x)... );
+}
+
+/* lift f = \x -> fnap f x */
+template< class F > struct Lift {
+    F f;
+
+    template< class _F > 
+    constexpr Lift( _F&& f ) : f(forward<_F>(f)) { }
+
+    template< class ...X >
+    constexpr auto operator() ( X&& ...x ) 
+        -> decltype( fmap(f,declval<X>()...) )
+    {
+        return fmap( f, forward<X>(x)... );
+    }
+};
+
+template< class F, class L = Lift<F> >
+constexpr L lift( F&& f ) {
+    return L( forward<F>(f) );
+}
+
 /* fmap f g = compose( f, g ) */
 template< class Function >
 struct Functor<Function> {
-    template< class F, class G >
-    static Composition<F,G> fmap( F&& f, G&& g ) {
-        return compose( forward<F>(f), forward<G>(g) );
+    template< class F, class ...G >
+    static constexpr Composition<F,G...> fmap( F&& f, G&& ...g ) {
+        return compose( forward<F>(f), forward<G>(g)... );
     }
 };
 
 /* fmap f Pair(x,y) = Pair( f x, f y ) */
 template< class X, class Y >
 struct Functor< pair<X,Y> > {
-    template< class F, class R = decltype(declval<F>()(declval<X>())) >
-    static pair<R,R> fmap( F&& f, const pair<X,Y>& p ) {
-        return make_pair( f(p.first), f(p.second) );
-    }
+    template< class F, class ...P >
+    using PX = decltype( declval<F>()( declval<P>().first... ) );
+    template< class F, class ...P >
+    using PY = decltype( declval<F>()( declval<P>().second... ) );
 
-    template< class F >
-    static pair<X,Y> fmap( F&& f, pair<X,Y>&& p ) {
-        F _f = forward<F>(f);
-        p.first  = _f( p.first );
-        p.second = _f( p.second );
-        return move( p );
+    template< class F, class ...P >
+    static constexpr auto fmap( F&& f, P&& ...p ) 
+        -> decltype (
+            make_pair( declval<PX<F,P...>>(), declval<PY<F,P...>>() )
+        )
+    {
+        return make_pair( forward<F>(f)(forward<P>(p).first...),
+                  forward<F>(f)(forward<P>(p).second...) );
     }
 };
 
-template< class M >
-struct Functor< cata::maybe<M> > {
+template< class _M >
+struct Functor< cata::maybe<_M> > {
+    template< class M > 
+    static constexpr bool each( const M& m ) {
+        return (bool)m;
+    }
+
+    template< class M1, class ...Ms >
+    static constexpr bool each( const M1& m1, const Ms& ...ms ) {
+        return (bool)m1 && each( ms... );
+    }
+
     /*
      * f <$> Just x = Just (f x)
      * f <$> Nothing = Nothing
      */
-    template< class F, class _M,
-              class R = decltype( declval<F>()(*declval<_M>()) ) >
-    static unique_ptr<R> fmap( F&& f, _M&& m ) {
-        return m ? Just( forward<F>(f)(*m) ) : nullptr;
+    template< class F, class ...M,
+              class R = decltype( declval<F>()(*declval<M>()...) ) >
+    static constexpr unique_ptr<R> fmap( F&& f, M&& ...m ) {
+        return each( forward<M>(m)... ) ? 
+            Just( forward<F>(f)( *forward<M>(m)... ) ) : nullptr;
     }
 };
+
+/* 
+ * Given f(x,y...) and fx(y...)
+ *  enclose f = fx
+ */
+template< class F > struct Enclose {
+    F f;
+
+    template< class _F >
+    constexpr Enclose( _F&& f ) : f(forward<_F>(f)) { }
+
+    template< class ...X >
+    using Result = decltype( closure(f,declval<X>()...) );
+
+    template< class ...X > 
+    constexpr Result<X...> operator() ( X&& ...x ) {
+        return closure( f, forward<X>(x)... );
+    }
+};
+
+template< class F, class E = Enclose<F> >
+constexpr E enclosure( F&& f ) {
+    return E( forward<F>(f) );
+}
 
 template< class Seq >
 struct Functor< cata::sequence<Seq> > {
     /* f <$> [x0,x1,...] = [f x0, f x1, ...] */
     template< class F, class S >
-    static decltype( map(declval<F>(),declval<S>()) )
+    static constexpr decltype( map(declval<F>(),declval<S>()) )
     fmap( F&& f, S&& s ) {
         return map( forward<F>(f), forward<S>(s) );
+    }
+
+    template< class F, class ...YS >
+    static constexpr auto mapper( F&& f, YS&& ...ys ) 
+        -> decltype( compose( to_map(declval<YS>()...), 
+                              enclosure(declval<F>()) ) )
+    {
+        return compose( to_map( forward<YS>(ys)... ),
+                        enclosure( forward<F>(f) ) );
+    }
+
+    template< class F, class XS, class YS, class ...ZS > 
+    static constexpr auto fmap( const F& f, const XS& xs, 
+                                YS&& ys, ZS&& ...zs ) 
+        -> decltype ( 
+            mapper(f,declval<YS>(),declval<ZS>()...)(xs.front())
+        )
+    {
+        return concatMap ( 
+            mapper( f, forward<YS>(ys), forward<ZS>(zs)... ),
+            xs 
+        );
+
+        // Alternate:
+        //return concatMap ( 
+        //    [&]( X x ) {
+        //        return fmap( closure(f,x), zs );
+        //    },
+        //    xs 
+        //);
     }
 };
 
@@ -574,14 +764,6 @@ template< class C, class R > struct ESeq : enable_if<IsSeq<C>::value,R> { };
 
 /* Disable if is sequence. */
 template< class C, class R > struct XSeq : enable_if<not IsSeq<C>::value,R> { };
-
-template< class F, class G, 
-          class Fn = Functor< typename cata::Cat<G>::type > >
-constexpr auto fmap( F&& f, G&& g )
-    -> decltype( Fn::fmap(forward<F>(f),forward<G>(g)) ) 
-{
-    return Fn::fmap( forward<F>(f), forward<G>(g) );
-}
 
 template< class F, class M >
 constexpr decltype( fmap(declval<F>(), declval<M>()) )
