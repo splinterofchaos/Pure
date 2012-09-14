@@ -468,6 +468,7 @@ struct Id {
     constexpr X operator() ( X&& x ) { return forward<X>(x); }
 };
 
+
 template< class F, class G, class H, class ...I>
 constexpr decltype( comp( fcomp(declval<G>(),declval<H>(),declval<I>()...), 
                           declval<F>() ) )
@@ -1628,6 +1629,163 @@ constexpr auto min( const Container& cont )
 {
     return min_element( begin(cont), end(cont) );
 }
+
+template< class F > struct Cont {
+    /*
+     * A Cont represents a computation that requires another function to do
+     * something with its output, generally k for continuation. For example, a
+     * Cont that passes on some given value, x:
+     *      cont (\k -> k x)
+     * or a Cont that squares its continuator
+     *      cont (\k -> k (k x) )
+     */
+
+    F f; // The function that takes a k.
+
+    template< class _F >
+    constexpr Cont( _F&& f ) : f( forward<_F>(f) ) { }
+
+    template< class K >
+    using Result = Result< F, K >;
+
+    template< class K >
+    constexpr Result<K> run( K&& k ) {
+        return f( forward<K>(k) );
+    }
+};
+
+template< class F > 
+constexpr Cont<F> cont( F&& f ) {
+    return Cont<F>( forward<F>(f) );
+}
+
+/*
+ * kont x = \k -> k x 
+ * The simplest Cont will look like this. (Required for mreturn<Cont<T>>.)
+ * Note that this is NOT a Cont and must be lifted.
+ */
+template< class X > struct Kontunue {
+    X x;
+
+    template< class _X >
+    constexpr Kontunue( _X&& x ) : x( forward<_X>(x) ) { }
+
+    template< class K >
+    using Result = Result< K, X >;
+
+    template< class K >
+    constexpr Result<K> operator() ( K&& k ) {
+        return forward<K>(k)( x );
+    }
+};
+
+template< class X, class K = Kontunue<X> >
+constexpr K kont( X&& x ) {
+    return K( forward<X>(x) );
+}
+
+/*
+ * cont_with x = Cont (\k -> k x)
+ * Lifts x to a Cont.
+ */
+template< class X >
+constexpr auto cont_with( X&& x ) 
+    -> decltype( cont(kont(declval<X>())) )
+{
+    return cont( kont(forward<X>(x)) );
+}
+
+template< class X, class F >
+constexpr auto run_cont( const Cont<X>& c, F&& f ) 
+    -> decltype( c.run(declval<F>()) )
+{
+    return c.run( forward<F>(f) );
+}
+
+
+struct RunCont {
+    template< class C, class F >
+    using Result = decltype( run_cont(declval<C>(),declval<F>()) );
+    
+
+    template< class C, class F >
+    constexpr Result<C,F> operator() ( C&& c, F&& f ) {
+        return run_cont( forward<C>(c), forward<F>(f) );
+    }
+};
+
+/* map_cont f c = Cont (\k -> f $ runCont c k) */
+template< class F, class C, class R = decltype( run_cont_with(declval<C>()) ) >
+constexpr auto map_cont( F&& f, C&& c ) 
+    -> decltype( cont( compose(declval<F>(),
+                               closure(RunCont(),declval<C>()) ) ) )
+{
+    return cont( 
+        compose( forward<F>(f), closure(RunCont(), forward<C>(c)) ) 
+    );
+}
+
+/*
+ * kmap f c = \k -> runCont c (k . f)
+ * Required for Cont fmap.
+ */
+template< class F, class C > struct KMap {
+    F f; // The mapped function.
+    C c; // The Cont object.
+
+    template< class _F, class _C >
+    constexpr KMap( _F&& f, _C&& c ) 
+        : f( forward<_F>(f) ), c( forward<_C>(c) )
+    {
+    }
+
+    template< class K >
+    using Result = decltype( run_cont( c, compose(declval<K>(),f) ) );
+
+    template< class K >
+    constexpr Result<K> operator() ( K&& k ) {
+        return run_cont( c, compose(forward<K>(k), f) );
+    }
+};
+
+template< class _C > struct Functor< Cont<_C> > {
+    template< class F, class C >
+    using K = KMap<F,C>;
+
+    template< class F, class C >
+    using Result = decltype (
+        cont( declval< K<F,C> >() ) 
+    );
+
+    /* f <$> c = Cont (\k -> runCont c (k . f)) */
+    template< class F, class C, class K = K<F,C> >
+    static constexpr Result<F,C> fmap( F&& f, C&& c ) {
+        return cont( K(forward<F>(f), forward<C>(c)) );
+    }
+};
+
+
+template< class _C > struct Monad< Cont<_C> > {
+    /* return a = Cont (\k -> k a) */
+    template< class X >
+    static constexpr auto mreturn( X&& x ) 
+        -> decltype( cont_with(declval<X>() ) )
+    {
+        return cont_with( forward<X>(x) );
+    }
+
+    /* 
+     * c >>= k = runCont c k where k returns a Cont
+     * Not an accurate implementation, but it seems to work.
+     */
+    template< class C, class K >
+    static constexpr auto mbind( C&& c, K&& k ) 
+        -> decltype( run_cont(declval<C>(),declval<K>()) )
+    {
+        return run_cont( forward<C>(c), forward<K>(k) );
+    }
+};
+
 
 } // namespace pure
 

@@ -72,6 +72,14 @@ constexpr auto square = squash( times );
 
 float to_float( int x ) { return x; }
 
+constexpr decltype(cont_with(0)) add_cont( int x, int y ) {
+    return cont_with( x + y );
+}
+
+constexpr decltype(cont_with(0)) plus_two_cont( int x ) {
+    return cont_with( x + 2 );
+}
+
 string show( int x ) {
     char digits[20];
     sprintf( digits, "%d", x );
@@ -325,4 +333,14 @@ int main()
             show( comp(first(showInt), second(plus_two))( p ) ).c_str() );
     printf( "show *** (+2) $ (1,2) = %s\n",
             show( split( showInt, plus_two )( p ) ).c_str() );
+
+    puts( "" );
+    puts( "addCont :: Int -> Int -> Cont r Int" );
+    puts( "addCont x y = return (x + y)" );
+    printf( "runCont ((+2) <$> addCont 10 10) showInt = %s\n",
+            run_cont(plus_two ^ add_cont(10,10), showInt).c_str() );
+    puts( "plusTwoCont :: Int -> Cont r Int" );
+    puts( "plusTwoCont x = return (x + 2)" );
+    printf( "runCont (addCont 10 10 >>= plusTwoCont) showInt = %s\n",
+            run_cont(add_cont(10,10) >>= plus_two_cont, showInt).c_str() );
 }
