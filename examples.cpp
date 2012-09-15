@@ -176,6 +176,8 @@ void print_xyz( int x, int y, int z ) {
     printf( "%d %d %d\n", x, y, z );
 }
 
+string showInt( int x ) { return show(x); }
+
 int main()
 {
     rcloset( print_xyz, 2, 3 )( 1 );
@@ -327,8 +329,6 @@ int main()
             show( mplus(vector<int>{1},vector<int>{2}) ).c_str() );
 
     pair<int,int> p( 1, 2 );
-    using Show = string(int);
-    auto showInt = [](int x){ return show(x); };
     printf( "first show >>> second (+2) $ (1,2) = %s\n", 
             show( comp(first(showInt), second(plus_two))( p ) ).c_str() );
     printf( "show *** (+2) $ (1,2) = %s\n",
@@ -339,6 +339,12 @@ int main()
     puts( "addCont x y = return (x + y)" );
     printf( "runCont ((+2) <$> addCont 10 10) showInt = %s\n",
             run_cont(plus_two ^ add_cont(10,10), showInt).c_str() );
+    printf( "runCont (mapCont showInt $ addCont 10 10) (+2) = %s\n",
+            run_cont ( 
+                // Haskell would require showInt return an Intt. (r->r)
+                map_cont( showInt, add_cont(10,10) ), 
+                plus_two
+            ).c_str() );
     puts( "plusTwoCont :: Int -> Cont r Int" );
     puts( "plusTwoCont x = return (x + 2)" );
     printf( "runCont (addCont 10 10 >>= plusTwoCont) showInt = %s\n",

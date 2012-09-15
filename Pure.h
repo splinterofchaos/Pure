@@ -1714,14 +1714,17 @@ struct RunCont {
     }
 };
 
-/* map_cont f c = Cont (\k -> f $ runCont c k) */
-template< class F, class C, class R = decltype( run_cont_with(declval<C>()) ) >
-constexpr auto map_cont( F&& f, C&& c ) 
+/* 
+ * map_cont f c = Cont (\k -> (f . runCont c) k) 
+ * f gets run as the final process. Even if further continuations are added.
+ */
+template< class F, class C >
+constexpr auto map_cont( F&& finally, C&& c ) 
     -> decltype( cont( compose(declval<F>(),
-                               closure(RunCont(),declval<C>()) ) ) )
+                               closet(RunCont(),declval<C>()) ) ) )
 {
     return cont( 
-        compose( forward<F>(f), closure(RunCont(), forward<C>(c)) ) 
+        compose( forward<F>(finally), closet(RunCont(), forward<C>(c)) ) 
     );
 }
 
@@ -1764,7 +1767,6 @@ template< class _C > struct Functor< Cont<_C> > {
     }
 };
 
-
 template< class _C > struct Monad< Cont<_C> > {
     /* return a = Cont (\k -> k a) */
     template< class X >
@@ -1774,15 +1776,41 @@ template< class _C > struct Monad< Cont<_C> > {
         return cont_with( forward<X>(x) );
     }
 
+    template< class K >
+    struct Runner {
+        K k;
+
+        constexpr Runner( K k ) : k(move(k)) { }
+
+        template< class X >
+        using KResult = decltype( k(declval<X>()) );
+
+        template< class X >
+        using Result = decltype( closure(RunCont(), declval<KResult<X>>()) );
+
+        template< class X >
+        constexpr Result<X> operator() ( X&& x ) {
+            return closure(RunCont(), k(forward<X>(x)));
+        }
+    };
+
+    template< class C, class K >
+    using Ran = decltype( run_cont(declval<C>(),declval<Runner<K>>()) );
+    template< class C, class K >
+    using Result = decltype( cont( declval<Ran<C,K>>() ) );
+
     /* 
-     * c >>= k = runCont c k where k returns a Cont
-     * Not an accurate implementation, but it seems to work.
+     * let runner k k' = \x -> runCont (k x) k'
+     * c >>= k = Cont (\k' -> runCont c (runner k k'))
      */
     template< class C, class K >
-    static constexpr auto mbind( C&& c, K&& k ) 
-        -> decltype( run_cont(declval<C>(),declval<K>()) )
+    static constexpr Result<C,K> mbind( C c, K k ) 
     {
-        return run_cont( forward<C>(c), forward<K>(k) );
+        // Lift g.
+        return cont ( 
+            // Returns our k' taking function, g.
+            run_cont( move(c), Runner<K>(move(k)) )
+        );
     }
 };
 
