@@ -610,6 +610,14 @@ R map( F&& f, const S<X,XS...>& xs )
     return r;
 }
 
+template< class F, class X, class V = vector< Result<F,X> > >
+V map( F&& f, const initializer_list<X>& l ) {
+    V v; 
+    v.reserve( l.size() );
+    map_impl( forward<F>(f), v, l );
+    return v;
+}
+
 /*
  * Variadic map.
  * In Haskell, one might write with Control.Applicative...
@@ -644,32 +652,56 @@ array< R, N > map( F&& f, const array< X, N >& xs ) {
 
 /* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
 template< class F, class X, class S >
-constexpr X foldl( F&& f, X&& val, const S& cont )
-{
+constexpr X foldl( F&& f, X&& val, const S& cont ) {
     return accumulate( begin(cont), end(cont), forward<X>(val), 
                        forward<F>(f) );
 }
 
-template< class X, class F, class S >
-constexpr X foldl( F&& f, const S& cont )
-{
+template< class F, class X, class Y >
+constexpr X foldl( F&& f, X&& x, const initializer_list<Y>& cont ) {
+    return accumulate( begin(cont), end(cont), forward<X>(x), 
+                       forward<F>(f) );
+}
+
+template< class F, class S, 
+          class X = typename cata::sequence_traits<S>::value_type >
+constexpr X foldl( F&& f, const S& cont ) {
     return accumulate( next(begin(cont)), end(cont), 
-                            cont.front(), forward<F>(f) );
+                       *begin(cont), forward<F>(f) );
+}
+
+template< class F, class X >
+constexpr X foldl( F&& f, const initializer_list<X>& cont ) {
+    return accumulate( next(begin(cont)), end(cont), 
+                       *begin(cont), forward<F>(f) );
 }
 
 /* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
 template< class F, class X, class S >
-constexpr X foldr( F&& f, X&& val, const S& cont )
-{
+constexpr X foldr( F&& f, X&& val, const S& cont ) {
     return accumulate( cont.rbegin(), cont.rend(), 
                        forward<X>(val), forward<F>(f) );
 }
 
-template< class X, class F, class S >
-constexpr X foldr( F&& f, const S& cont )
-{
+template< class F, class X, class Y >
+constexpr X foldr( F&& f, X&& val, const initializer_list<Y>& cont ) {
+    return accumulate( cont.rbegin(), cont.rend(), 
+                       forward<X>(val), forward<F>(f) );
+}
+
+template< class F, class S, 
+          class X = typename cata::sequence_traits<S>::value_type >
+constexpr X foldr( F&& f, const S& cont ) {
     return accumulate( next(cont.rbegin()), cont.rend(), 
                        cont.back(), forward<F>(f) );
+}
+
+template< class F, class Y >
+constexpr Y foldr( F&& f, const initializer_list<Y>& cont ) {
+    using I = typename initializer_list<Y>::const_iterator;
+    using RI = reverse_iterator<I>;
+    return accumulate( next(RI(end(cont))), RI(begin(cont)), 
+                       *prev(end(cont)), forward<F>(f) );
 }
 
 /* 
@@ -1555,6 +1587,14 @@ Container filter( F&& f, Container cont )
         end( cont )
     );
     return cont;
+}
+
+template< class X, class F, class V = vector<X> >
+V filter( F&& f, const initializer_list<X>& cont ) {
+    V v;
+    v.reserve( cont.size() );
+    copy_if( begin(cont), end(cont), back_inserter(v), forward<F>(f) );
+    return v;
 }
 
 /* find pred xs -> Maybe x */

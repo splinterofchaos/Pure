@@ -172,18 +172,18 @@ int main()
 {
     rcloset( print_xyz, 2, 3 )( 1 );
 
-    vector<int> evens = filter( even, vector<int>{1,2,3,4,5,6,7,8} );
+    vector<int> evens = filter( even, {1,2,3,4,5,6,7,8} );
     printf( "evens = %s\n", show(evens).c_str() );
 
     printf( "3^2 = %d\n", square(3) );
 
     printf (
         "sum of (1,2,3,4) = %d\n", // = 10
-        foldl<int>( std::plus<int>(), vector<int>{1,2,3,4} )
+        foldl( std::plus<int>(), {1,2,3,4} )
     );
     printf(
         "sum of (4,3,2,1) = %d\n", // = 10
-        foldr<int>( std::plus<int>(), vector<int>{1,2,3,4} )
+        foldr( std::plus<int>(), {1,2,3,4} )
     );
 
     Vec fiveTwo = {{5,2}}, twoFive = {{2,5}};
