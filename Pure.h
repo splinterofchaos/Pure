@@ -131,23 +131,23 @@ constexpr Flip<F> flip( F&& f ) {
  * partial( f, x, y ) -> g()
  */
 template< class F, class ...X >
-struct PartialApplication;
+struct Part;
 
 template< class F, class X >
-struct PartialApplication< F, X >
+struct Part< F, X >
 {
     F f;
     X x;
 
     template< class _F, class _X >
-    constexpr PartialApplication( _F&& f, _X&& x )
+    constexpr Part( _F&& f, _X&& x )
         : f(forward<_F>(f)), x(forward<_X>(x))
     {
     }
 
     /* 
      * The return type of F only gets deduced based on the number of xuments
-     * supplied. PartialApplication otherwise has no idea whether f takes 1 or 10 xs.
+     * supplied. Part otherwise has no idea whether f takes 1 or 10 xs.
      */
     template< class ... Xs >
     constexpr auto operator() ( Xs&& ...xs )
@@ -159,13 +159,13 @@ struct PartialApplication< F, X >
 
 /* Recursive, variadic version. */
 template< class F, class X1, class ...Xs >
-struct PartialApplication< F, X1, Xs... > 
-    : public PartialApplication< PartialApplication<F,X1>, Xs... >
+struct Part< F, X1, Xs... > 
+    : public Part< Part<F,X1>, Xs... >
 {
     template< class _F, class _X1, class ..._Xs >
-    constexpr PartialApplication( _F&& f, _X1&& x1, _Xs&& ...xs )
-        : PartialApplication< PartialApplication<F,X1>, Xs... > (
-            PartialApplication<F,X1>( forward<_F>(f), forward<_X1>(x1) ),
+    constexpr Part( _F&& f, _X1&& x1, _Xs&& ...xs )
+        : Part< Part<F,X1>, Xs... > (
+            Part<F,X1>( forward<_F>(f), forward<_X1>(x1) ),
             forward<_Xs>(xs)...
         )
     {
@@ -189,8 +189,8 @@ struct PartialApplication< F, X1, Xs... >
  * does not matter. A regular closure works for passing functions down.
  */
 template< class F, class ...X >
-constexpr PartialApplication<F,X...> closure( F&& f, X&& ...x ) {
-    return PartialApplication<F,X...>( forward<F>(f), forward<X>(x)... );
+constexpr Part<F,X...> closure( F&& f, X&& ...x ) {
+    return Part<F,X...>( forward<F>(f), forward<X>(x)... );
 }
 
 /*
@@ -199,8 +199,8 @@ constexpr PartialApplication<F,X...> closure( F&& f, X&& ...x ) {
  * arguments (or environment).
  */
 template< class F, class ...X >
-constexpr PartialApplication<F,X...> closet( F f, X ...x ) {
-    return PartialApplication<F,X...>( move(f), move(x)... );
+constexpr Part<F,X...> closet( F f, X ...x ) {
+    return Part<F,X...>( move(f), move(x)... );
 }
 
 /*
@@ -209,15 +209,15 @@ constexpr PartialApplication<F,X...> closet( F f, X ...x ) {
  * rpartial( f, y, z ) -> g(x)
  */
 template< class F, class ...X >
-struct RPartialApplication;
+struct RPart;
 
 template< class F, class X >
-struct RPartialApplication< F, X > {
+struct RPart< F, X > {
     F f;
     X x;
 
     template< class _F, class _X >
-    constexpr RPartialApplication( _F&& f, _X&& x ) 
+    constexpr RPart( _F&& f, _X&& x ) 
         : f( forward<_F>(f) ), x( forward<_X>(x) ) { }
 
     template< class ...Y >
@@ -228,25 +228,25 @@ struct RPartialApplication< F, X > {
 };
 
 template< class F, class X1, class ...Xs >
-struct RPartialApplication< F, X1, Xs... > 
-    : public RPartialApplication< RPartialApplication<F,Xs...>, X1 >
+struct RPart< F, X1, Xs... > 
+    : public RPart< RPart<F,Xs...>, X1 >
 {
     template< class _F, class _X1, class ..._Xs >
-    constexpr RPartialApplication( _F&& f, _X1&& x1, _Xs&& ...xs )
-        : RPartialApplication< RPartialApplication<F,Xs...>, X1 > (
-            RPartialApplication<F,Xs...>( forward<_F>(f), forward<_Xs>(xs)... ),
+    constexpr RPart( _F&& f, _X1&& x1, _Xs&& ...xs )
+        : RPart< RPart<F,Xs...>, X1 > (
+            RPart<F,Xs...>( forward<_F>(f), forward<_Xs>(xs)... ),
             forward<_X1>(x1)
         )
     {
     }
 };
 
-template< class F, class ...X, class P = RPartialApplication<F,X...> >
+template< class F, class ...X, class P = RPart<F,X...> >
 constexpr P rclosure( F&& f, X&& ...x ) {
     return P( forward<F>(f), forward<X>(x)... );
 }
 
-template< class F, class ...X, class P = RPartialApplication<F,X...> >
+template< class F, class ...X, class P = RPart<F,X...> >
 constexpr P rcloset( F f, X ...x ) {
     return P( move(f), move(x)... );
 }
@@ -1283,49 +1283,49 @@ struct MonadPlus< cata::maybe<M> > {
  * elements.
  */
 template< class F, class ...Args >
-struct PartialLast; // Apply the last argument.
+struct PartLast; // Apply the last argument.
 
 template< class F, class Last >
-struct PartialLast< F, Last > : public PartialApplication< F, Last > 
+struct PartLast< F, Last > : public Part< F, Last > 
 { 
     template< class _F, class _Last >
-    constexpr PartialLast( _F&& f, _Last&& last )
-        : PartialApplication<F,Last>( forward<_F>(f), forward<_Last>(last) )
+    constexpr PartLast( _F&& f, _Last&& last )
+        : Part<F,Last>( forward<_F>(f), forward<_Last>(last) )
     {
     }
 };
 
 // Remove one argument each recursion.
 template< class F, class Arg1, class ...Args >
-struct PartialLast< F, Arg1, Args... > : public PartialLast< F, Args... > 
+struct PartLast< F, Arg1, Args... > : public PartLast< F, Args... > 
 {
     template< class _F, class _Arg1, class ..._Args >
-    constexpr PartialLast( _F&& f, _Arg1&&, _Args&& ...args )
-        : PartialLast<F,Args...>( forward<_F>(f), forward<_Args>(args)... )
+    constexpr PartLast( _F&& f, _Arg1&&, _Args&& ...args )
+        : PartLast<F,Args...>( forward<_F>(f), forward<_Args>(args)... )
     {
     }
 };
 
 template< class F, class ...Args >
-struct PartialInitial; // Apply all but the last argument.
+struct PartInit; // Apply all but the last argument.
 
 template< class F, class Arg1, class Arg2 >
-struct PartialInitial< F, Arg1, Arg2 > : public PartialApplication< F, Arg1 >
+struct PartInit< F, Arg1, Arg2 > : public Part< F, Arg1 >
 {
     template< class _F, class _Arg1, class _Arg2 >
-    constexpr PartialInitial( _F&& f, _Arg1&& arg1, _Arg2&& )
-        : PartialApplication<F,Arg1>( forward<_F>(f), forward<_Arg1>(arg1) )
+    constexpr PartInit( _F&& f, _Arg1&& arg1, _Arg2&& )
+        : Part<F,Arg1>( forward<_F>(f), forward<_Arg1>(arg1) )
     {
     }
 };
 
 template< class F, class Arg1, class ...Args >
-struct PartialInitial< F, Arg1, Args... > 
-    : public PartialInitial< PartialApplication<F,Arg1>, Args... >
+struct PartInit< F, Arg1, Args... > 
+    : public PartInit< Part<F,Arg1>, Args... >
 {
     template< class _F, class _Arg1, class ..._Args >
-    PartialInitial( _F&& f, _Arg1&& arg1, _Args&& ...args )
-        : PartialInitial<PartialApplication<F,Arg1>,Args...> (
+    PartInit( _F&& f, _Arg1&& arg1, _Args&& ...args )
+        : PartInit<Part<F,Arg1>,Args...> (
             partial( forward<_F>(f), forward<_Arg1>(arg1) ),
             forward<_Args>(args)...
         )
@@ -1344,7 +1344,7 @@ struct Rot
     template< class ...Args >
     constexpr auto operator() ( Args&& ...args )
         -> decltype ( 
-            declval< PartialInitial<PartialLast<F,Args...>,Args...> >()() 
+            declval< PartInit<PartLast<F,Args...>,Args...> >()() 
         )
     {
         /* We can't just (to my knowledge) pull the initial and final args
@@ -1352,8 +1352,8 @@ struct Rot
          * argument forward until the last. The result is a zero-arity function
          * to invoke.
          */
-        return PartialInitial< PartialLast<F,Args...>, Args... > (
-            PartialLast< F, Args... >( f, forward<Args>(args)... ),
+        return PartInit< PartLast<F,Args...>, Args... > (
+            PartLast< F, Args... >( f, forward<Args>(args)... ),
             forward<Args>( args )...
         )();
     }
