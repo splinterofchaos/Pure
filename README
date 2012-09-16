@@ -1,0 +1,179 @@
+
+INTODUCTION (skip ahead if you like)
+
+Ya' know, there's an old Linux joke about documentation: read the source. What
+ensues is experimental and requires gcc 4.7, or something with equivalent or
+better c++11 support. It is imperfect and liable to change in small, subtle
+ways.
+
+Even so, there are a few things that can be said off the bat. When one
+#includes <algorithm>, one ends up writing code like this:
+
+    std::transform( begin(v), end(v), begin(v), f );
+    std::transform( begin(v), end(v), begin(v), g );
+
+Using move semantics and perfect forwarding, we can write code that is just as
+efficient, although it may not seem so.
+
+    v = map( f, v );
+    v = map( g, v );
+
+We can even write that
+
+    v = map( g, map(f,v) );
+
+Here, where it may seem like we are moving a container around, we actually just
+pass along the pointer to the buffer. However, we can improve this by using
+function composition.
+
+    v = map( compose(g,f), v );
+
+The core idea of this library is to apply functional concepts to C++ to
+encourage more terse, clear, and simple code, while attempting to maintain
+zero-overhead abstractions. However, to favor comprehensiveness over optimal
+efficiency or absolute correctness.
+
+BASIC LIST FUNCTIONS
+
+Most of Pure's functions work on standard STL containers. We have map, which is
+like std::transform:
+
+    v = map( f, v );
+
+This works just like "map f v" would in Haskell. map is specialized to work on
+initializer_lists, returning a vector, but otherwise returns whatever type of
+container it's called with.
+
+    auto v = map( f, {x,y,z} );
+
+The next in terms of relevance in fold. It works like std::accumulate, but we
+specify whether we want to fold left or right.
+
+    auto sum1 = foldl( std::plus<int>(), {1,2,3,4} ); // Left fold.
+    auto sum2 = foldr( std::plus<int>(), {1,2,3,4} ); // Right fold.
+
+foldr and foldl do essentially the same thing, but foldr accumulates from the
+end of the list and foldr accumulates from the start.
+
+filter(pred,xs) creates a new sequence of every member of xs that fulfils pred.
+
+    auto even = [](int x){ return x%2 == 0; };
+    auto evens = filter( even, xs );
+    auto sumOfEvens = foldl( std::plus<int>(), filter(even,xs) );
+    auto fOfEvens   = map( f, filter(even,xs) );
+    
+Next, we have append, which concatenates two sequences. It, as well as the
+fallowing functions, is not specialized for initializer lists.
+
+    xs = append( move(xs), vector<int>{1,2,3} );
+
+This code is equivalent to
+
+    vector<int> ys = { 1, 2, 3 };
+    std::copy( begin(ys), end(ys), back_inserter(xs) );
+
+Because we moved xs into the first argument of append, it did not get copied.
+
+concat takes a sequence of sequences and flattens it into one sequence by
+appending each sub-sequence in order.
+
+    using V = vector<int>
+    using V2D = vector<V>;
+    auto xs = concat( V2D{ V{1,2}, V{3,4}, V{5,6} } ) // = {1,2,3,4,5,6}
+
+A more advanced function, concatMap, is for rare occasions when one wants to
+map a sequence returning function.
+
+    using V = vector<int>
+    auto plus_minus = [](int x) { return V{-x,x} };
+    auto xs1 = concat( map(plus_minus, V{1,2,3}) ) // {-1,1,-2,2,-3,3}
+    auto xs2 = concatMap( plus_minus, V{1,2,3} )
+
+FMAP
+
+fmap is a generic form of map. When applied a sequence, it acts as a synonym
+for map. Other types produce more interesting results. As of this writing, fmap
+works on sequences, pointers, std::pair, and regular functions/function
+objects.
+
+    auto xs = fmap( f, xs ) // Just like map(f,xs).
+
+
+fmap on a pointer type merely checks that it is non-null, then calls f,
+returning a new pointer to the result.
+
+    auto half = [](int x) -> float { return x / 2; };
+    unique_ptr<int> ptr = new int(5);
+    unique_ptr<float> rptr = fmap( half, ptr );
+    unique_ptr<float> safe = fmap( half, nullptr ); // returns nullptr.
+    
+fmap on regular functions does simple composition.
+
+    fmap( f, g )( x ) = fmap( f, fmap(g,x) )
+
+Because of how common fmap is used, a symbolic version is supplied.
+
+    auto xs = f ^ xs // Or, in Haskell: f <$> xs
+
+Unfortunately, due to the state of operator overloading in C++, whether this is
+a good idea or not is debatable. Still, I have used it without trouble, so far.
+
+At times, one might want to map a function that takes more than one argument.
+This is fine as fmap has been written variadically.
+
+    using U = unique_ptr<int>;
+    fmap( std::plus<int>(), U(new int(4)), U(new int(5)) );
+
+Note that supplying sequences to fmap will work differently.
+
+    fmap( std::plus<int>(), vector<int>{1,2}, vector<int>{3,4} );
+    // Will return: { 1+3, 1+4, 2+3, 3+4 }
+
+The equivalent Haskell code for the two above examples:
+
+    (+) <$> Just 4 <*> Just 5
+    (+) <$> [1,2]  <*> [3,4]
+
+There, (+) <$> [1,2] actually returns a new sequence, [(+1),(+2)], and with 
+<*> [3,4] produces the result by applying 3 and 4 to (+1), then to (+2).
+
+MONAD
+
+This implementation of Haskell's Monads works with almost the exact same
+syntax. The main interesting functions are (>>), or mdo, and (>>=), or mbind.
+mbind is similar to fmap, but works on functions returning monads.
+
+    using U = unique_ptr<int>;
+    auto halfM = [](int x){ return U( new float(x/2) ); };
+    U twentyFive = U(new int(100)) >>= halfM >>= halfM
+
+    // using refular half:
+    U twentyFive = fmap( half, fmap(half,U(new int(100))) );
+
+For a sequence, >>= is a synonym for concatMap. Using plus_minus from a
+previous example,
+
+    auto xs2 = V{1,2,3} >>= plus_minus;
+
+A classic example of a monadic function in Haskell:
+
+    addM mx my = do
+        x <- mx
+        y <- my
+        return (x + y)
+
+We can write that like so:
+
+    template< class X >
+    using U = unique_ptr<X>;
+
+    template< class X >
+    U<X> addM( const U<X>& mx, const U<X>& my ) {
+        return mx >>= [&]( const X& x ) {
+            return my >>= [x]( const X& y ) {
+                return U<X>( new X(x+y) );
+            }
+        }
+    }
+
+It certainly does not look so pretty, but does essentially the same thing.
