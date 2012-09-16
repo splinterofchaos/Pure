@@ -99,6 +99,30 @@ template< class ... > struct Category;
 template< class F, class ...X >
 using Result = decltype( declval<F>()( declval<X>()... ) );
 
+template< class X, class C = Category<X> >
+auto cid( X&& x ) -> decltype( C::id( declval<X>() ) ) {
+    return C::id( forward<X>(x) );
+}
+
+struct Id {
+    template< class X >
+    constexpr X operator() ( X&& x ) { return forward<X>(x); }
+};
+
+struct CId {
+    template< class X >
+    constexpr X operator() ( X&& x ) { return cid( forward<X>(x) ); }
+};
+
+/* 
+ * Let comp be a generalization of compose. 
+ */
+template< class F, class ...G, class C = Category<F> > 
+constexpr decltype( Category<F>::comp( declval<F>(), declval<G>()... ) )
+comp( F&& f, G&& ...g ) {
+    return C::comp( forward<F>(f), forward<G>(g)... );
+}
+
 /* 
  * FUNCTION TRANSFORMERS
  * The fallowing are types that contain one or more functions and act like a
@@ -112,10 +136,10 @@ template< class F > struct Flip {
     template< class _F >
     constexpr Flip( _F&& f ) : f(forward<_F>(f)) { }
 
-    template< class X, class Y, class ...XS >
-    constexpr decltype( f(declval<Y>(),declval<X>(),declval<XS>()...) )
-    operator() ( X&& x, Y&& y, XS&& ...xs ) {
-        return f( forward<Y>(y), forward<X>(x), forward<XS>(xs)... );
+    template< class X, class Y, class ...Z >
+    constexpr decltype( f(declval<Y>(),declval<X>(),declval<Z>()...) )
+    operator() ( X&& x, Y&& y, Z&& ...z ) {
+        return f( forward<Y>(y), forward<X>(x), forward<Z>(z)... );
     }
 };
 
@@ -417,10 +441,40 @@ constexpr C bcompose( F f, G g, H h ) {
     return C( move(f), move(g), move(h) );
 }
 
+template< size_t N, class P >
+using Nth = decltype( get<N>( declval<P>() ) );
+
+/*
+ * Function Pair.
+ * pair_compose( f, g ) = \(x,y) -> (f x, g y) 
+ */
+template< class F, class G > struct PairCompose {
+    F f; G g;
+
+    template< class _F, class _G >
+    constexpr PairCompose( _F&& f, _G&& g ) 
+        : f(forward<_F>(f)), g(forward<_G>(g)) { }
+
+    template< class Fn, size_t N, class P >
+    using Nth = decltype( declval<Fn>()( declval<Nth<N,P>>() ) );
+
+    template< class P >
+    using Result = decltype( make_pair(declval<Nth<F,0,P>>(),
+                                       declval<Nth<G,1,P>>()) );
+
+    template< class P/*air*/ >
+    constexpr Result<P> operator() ( const P& p ) {
+        return make_pair( f(get<0>(p)), g(get<1>(p)) );
+    }
+};
+
+template< class F, class G, class P = PairCompose<F,G> > 
+constexpr P pair_compose( F f, G g ) {
+    return P( move(f), move(g) );
+}
 /* Default category: function. */
 template< class F > struct Category<F> {
-    template< class _F > static 
-    constexpr _F id( _F&& f ) { return forward<_F>(f); }
+    static constexpr Id id = Id();
 
     template< class _F, class ..._G > static
     constexpr decltype( compose(declval<_F>(),declval<_G>()...) )
@@ -429,33 +483,20 @@ template< class F > struct Category<F> {
     }
 };
 
-template< class X, class C = Category<X> >
-decltype( C::id( declval<X>() ) ) id( X&& x ) {
-    return C::id( forward<X>(x) );
-}
+template< class ... > struct Arrow;
 
-/* 
- * Let comp be a generalization of compose. 
- * Haskell's <<<.
- */
-template< class F, class ...G, class C = Category<F> > 
-constexpr decltype( Category<F>::comp( declval<F>(), declval<G>()... ) )
-comp( F&& f, G&& ...g ) {
-    return C::comp( forward<F>(f), forward<G>(g)... );
-}
+/* Haskell defines <<< as an alias for (.). */
 
 /*
  * fcomp (forward compose): the reverse of comp.
  * Haskell's >>>.
  */
 template< class F, class G >
-constexpr decltype( comp(declval<G>(), declval<F>()) )
-fcomp( F&& f, G&& g ) { return comp( forward<G>(g), forward<F>(f) ); }
-
-struct Id {
-    template< class X >
-    constexpr X operator() ( X&& x ) { return forward<X>(x); }
-};
+constexpr auto fcomp( F&& f, G&& g ) 
+    -> decltype( comp(declval<G>(), declval<F>()) ) 
+{
+    return comp( forward<G>(g), forward<F>(f) ); 
+}
 
 template< class F, class G, class H, class ...I>
 constexpr decltype( comp( fcomp(declval<G>(),declval<H>(),declval<I>()...), 
@@ -464,8 +505,6 @@ fcomp( F&& f, G&& g, H&& h, I&& ...i ) {
     return comp( fcomp( forward<G>(g), forward<H>(h), forward<I>(i)... ),
                  forward<F>(f) );
 }
-
-template< class ... > struct Arrow;
 
 template< class A, class F, class Arr = Arrow<A> >
 decltype( Arr::arr( declval<F>() ) )
@@ -480,9 +519,9 @@ split( F&& f, G&& g ) {
 
 /* (f &&& g) x = (f x, g x) */
 template< class F, class G, class A = Arrow<F> >
-decltype( A::fanout(declval<F>(),declval<G>()) )
-fanout( F&& f, G&& g ) {
-    return A::fanout( forward<F>(f), forward<G>(g) );
+decltype( A::fan(declval<F>(),declval<G>()) )
+fan( F&& f, G&& g ) {
+    return A::fan( forward<F>(f), forward<G>(g) );
 }
 
 /* (first f) (x,y) = (f x, y) */
@@ -500,57 +539,50 @@ second( F&& f ) {
 }
 
 template< class Func > struct Arrow<Func> {
-    template< class F > static 
-    constexpr F arr( F&& f ) { return forward<F>(f); }
+    static constexpr Id arr = Id();
 
-    template< class F, class G > struct FSplit {
-        F f; G g;
+    // Same decltype expression used many times. Save typing.
+    template< class F, class G >
+    using Split = decltype( pair_compose(declval<F>(), declval<G>()) );
 
-        template< class _F, class _G >
-        constexpr FSplit( _F&& f, _G&& g ) 
-            : f(forward<_F>(f)), g(forward<_G>(g)) { }
+    /*
+     * Note: It would seem that an easier way to define this class might be to
+     * have it define only split, and define first, second, and fan in terms
+     * of that. This goes against Haskell's version, but I don't see a reason,
+     * currently, why it would not be just as generic and more convenient.
+     */
 
-        template< class P >
-        using First = decltype( get<0>( declval<P>() ) );
-        template< class P >
-        using Second = decltype( get<1>( declval<P>() ) );
-
-        template< class P/*air*/ >
-        auto operator() ( P&& p ) const
-            -> decltype( make_pair(f(declval<First<P>>()),
-                                   g(declval<Second<P>>())) )
-        {
-            return make_pair( f(get<0>(p)), g(get<1>(p)) );
-        }
-    };
-
-    template< class F, class G, class S = FSplit<F,G> >
-    static S split ( F&& f, G&& g ) {
-        return S( forward<F>(f), forward<G>(g) );
+    template< class F, class G > static 
+    constexpr Split<F,G> split ( F&& f, G&& g ) 
+    {
+        return pair_compose( forward<F>(f), forward<G>(g) );
     }
 
-    template< class F, class S = FSplit<F,Id> > static 
-    S first( F&& f ) { return S( forward<F>(f), Id() ); }
+    template< class F > static 
+    constexpr Split<F,Id> first( F&& f ) 
+    { 
+        return pair_compose( forward<F>(f), Id() );
+    }
 
-    template< class F, class S = FSplit<Id,F> > static 
-    S second( F&& f ) { return S( Id(), forward<F>(f) ); }
+    template< class F > static 
+    constexpr Split<Id,F> second( F&& f ) 
+    {
+        return pair_compose( Id(), forward<F>(f) );
+    }
 
-    template< class F, class G > struct Fan {
-        F f; G g;
-
-        template< class _F, class _G >
-        constexpr Fan( _F&& f, _G&& g ) : f(forward<_F>(f)), g(forward<_G>(g)) { }
-
-        template< class X >
-        decltype( make_pair( f(declval<X>()), g(declval<X>()) ) )
-        operator() ( X&& x ) const {
-            return make_pair( f(forward<X>(x)), g(forward<X>(x)) );
-        }
+    struct Splitter {
+        template< class X, class P = pair<X,X> > 
+            constexpr P operator() ( const X& x ) {
+                return P( x, x );
+            }
     };
 
-    template< class F, class G, class Fan = Fan<F,G> >
-    static Fan fanout( F&& f, G&& g ) {
-        return Fan( forward<F>(f), forward<G>(g) );
+    template< class F, class G > static 
+    constexpr auto fan( F&& f, G&& g ) 
+        -> decltype( compose(declval< Split<F,G> >(), Splitter()) )
+    {
+        return compose( pair_compose( forward<F>(f), forward<G>(g) ), 
+                        Splitter() );
     }
 };
 
