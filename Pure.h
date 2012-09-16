@@ -710,9 +710,6 @@ constexpr M Just( T t ) {
     return M( new T(move(t)) );
 }
 
-template< class X >
-constexpr X* Just( X* x ) { return x; }
-
 template< class T, class M = std::unique_ptr<T> > 
 constexpr M Nothing() {
     return nullptr;
@@ -733,16 +730,20 @@ constexpr R maybe( R&& nothingVal, F&& f, P&& m ) {
  * Nothing | Nothing = Nothing
  */
 template< class F, class P, 
-          class Ret = decltype( declval<F>()(*declval<P>()) ) >
-auto operator* ( F&& a, P&& b )
-    -> unique_ptr< Ret >
-{
+          class Ret = decltype( Just( (*declval<F>())(*declval<P>()) ) ) >
+Ret operator* ( F&& a, P&& b ) {
     return a and b ? Just( (*forward<F>(a))(*forward<P>(b)) ) 
                    : nullptr;
 }
 
-template< class P > P operator|| ( P&& a, P&& b ) {
+template< class P > 
+constexpr P operator|| ( P&& a, P&& b ) {
     return a ? forward<P>(a) : forward<P>(b); 
+}
+
+template< class P, class R = decltype( Just(*declval<P>()) ) > 
+constexpr R operator|| ( const P& a, const P& b ) {
+    return a ? Just(*a) : b ? Just(*b) : nullptr;
 }
 
 /* Either a b : Left a | Right b */
@@ -1068,17 +1069,12 @@ template< class M > struct Monoid< cata::maybe<M> > {
      * Just x <> Just y = Just (x <> y)
      *      a <> b      = a | b
      */
-    static constexpr M mappend( const M& x, const M& y ) {
-        return x and y ? Just( fwd_mappend(*x,*y) )
-            : x ? Just(*x) : y ? Just(*y) : nullptr;
-    }
-
     static constexpr M mappend( M&& x, M&& y ) {
         return x and y ? Just( fwd_mappend(*forward<M>(x), *forward<M>(y)) )
             : forward<M>(x) || forward<M>(y);
     }
 
-    /* mconcat [Maybe x] -> Maybe x -- where mappend x x is defined. */
+    /* mconcat [Just x, Just y, Nothing] = Just (x <> y <> Nothing)*/
     template< class S > 
     static M mconcat( S&& s ) {
         typedef M (*F) ( const M&, const M& );
