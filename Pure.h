@@ -251,6 +251,15 @@ constexpr P rcloset( F f, X ...x ) {
     return P( move(f), move(x)... );
 }
 
+template< class F, class ...X >
+using Closure = decltype( closure(declval<F>(), declval<X>()...) );
+template< class F, class ...X >
+using RClosure = decltype( rclosure(declval<F>(), declval<X>()...) );
+template< class F, class ...X >
+using Closet = decltype( closet(declval<F>(), declval<X>()...) );
+template< class F, class ...X >
+using RCloset = decltype( rcloset(declval<F>(), declval<X>()...) );
+
 /* 
  * Composition. 
  * Given f(x,y...) and g(z)
@@ -545,15 +554,52 @@ template< class Func > struct Arrow<Func> {
     }
 };
 
+template< class F, class RS, class XS >
+void map_impl( F&& f, RS&& rs, const XS& xs ) {
+    transform( begin(xs), end(xs), 
+               back_inserter(forward<RS>(rs)), forward<F>(f) );
+}
+
+template< class F, class RS, class XS, class YS, class ...ZS >
+void map_impl( F&& f, RS&& rs, 
+               const XS& xs, const YS& ys, const ZS& ...zs ) 
+{
+    for( const auto& x : xs )
+        map_impl( closure(forward<F>(f),x), rs, ys, zs... );
+}
+
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< template<class...> class S, class X, class ...XS, class F,
-          class R = Result<F,X> > 
-S<R,XS...> map( F&& f, const S<X,XS...>& xs ) 
+          class FX = Result<F,X>, class R = S<FX,XS...> > 
+R map( F&& f, const S<X,XS...>& xs ) 
 {
-    S<R,XS...> r;
-    transform( begin(xs), end(xs), back_inserter(r),
-               forward<F>(f) );
+    R r;
+    map_impl( forward<F>(f), r, xs );
     return r;
+}
+
+/*
+ * Variadic map.
+ * In Haskell, one might write with Control.Applicative...
+ *      (+) <$> [1,2] <*> [3,4]
+ * but if we make map variadic to begin with, we can duplicate this behaviour
+ * without Control.Applicative and just write
+ *      map( (+), [1,2], [3,4] )
+ *
+ * map f xs ys = concatMap (\x -> map (f x) ys) xs
+ * map is, however, more efficient because it does not construct a new sequence
+ * for every x.
+ */
+template< template<class...> class S, class ..._S,
+          class X, class Y, class ...Z,
+          class F, class FXYZ = Result<F,X,Y,Z...>,
+          class R = S<FXYZ,_S...> >
+R map( F&& f, const S<X,_S...>& xs, const S<Y,_S...>& ys,
+       const S<Z,_S...>& ...zs )
+{
+   R r;
+   map_impl( forward<F>(f), r, xs, ys, zs... );
+   return r;
 }
 
 template< class X, size_t N, class F, 
@@ -818,25 +864,9 @@ struct FMap {
     }
 };
 
-template< class F, class ...X >
-using Closure = decltype( closure(declval<F>(), declval<X>()...) );
-template< class F, class ...X >
-using RClosure = decltype( rclosure(declval<F>(), declval<X>()...) );
-template< class F, class ...X >
-using Closet = decltype( closet(declval<F>(), declval<X>()...) );
-template< class F, class ...X >
-using RCloset = decltype( rcloset(declval<F>(), declval<X>()...) );
-
 template< class F > 
 constexpr Closure<FMap,F> fmap( F&& f ) {
     return closure( FMap(), forward<F>(f) );
-}
-
-/* to_map x = \f -> fmap f x */
-template< class ...X > 
-constexpr auto to_map( X&& ...x ) -> decltype(rclosure(FMap(),declval<X>()...))
-{
-    return rclosure( FMap(), forward<X>(x)... );
 }
 
 /* fmap f g = compose( f, g ) */
@@ -925,40 +955,10 @@ constexpr E enclosure( F&& f ) {
 template< class Seq >
 struct Functor< cata::sequence<Seq> > {
     /* f <$> [x0,x1,...] = [f x0, f x1, ...] */
-    template< class F, class S >
-    static constexpr decltype( map(declval<F>(),declval<S>()) )
-    fmap( F&& f, S&& s ) {
-        return map( forward<F>(f), forward<S>(s) );
-    }
-
-    /* mapper f ys = \x -> fmap (f x) ys */
-    template< class F, class ...YS >
-    static constexpr auto mapper( F&& f, YS&& ...ys ) 
-        -> decltype( compose( to_map(declval<YS>()...), 
-                              enclosure(declval<F>()) ) )
-    {
-        // (\g -> fmap g ys) . f = \x -> fmap (f x) ys
-        return compose( to_map( forward<YS>(ys)... ),
-                        enclosure( forward<F>(f) ) );
-    }
-
-    template< class F, class XS, class YS, class ...ZS > 
-    static constexpr auto fmap( const F& f, const XS& xs, 
-                                YS&& ys, ZS&& ...zs ) 
-        -> decltype ( 
-            mapper(f,declval<YS>(),declval<ZS>()...)(xs.front())
-        )
-    {
-        // zs = f <$> xs <*> ys -- given f(x,y)
-        // fxs = map (\x -> f x) xs
-        // let mapfx ys fx = map (\y -> fx y) ys
-        //      fzs = map mapfx fxs
-        //      zs  = concat fzs
-        //      zs = concatMap (mapfx f ys) xs
-        return concatMap ( 
-            mapper( f, forward<YS>(ys), forward<ZS>(zs)... ),
-            xs 
-        );
+    template< class F, class ...S >
+    static constexpr decltype( map(declval<F>(),declval<S>()...) )
+    fmap( F&& f, S&& ...s ) {
+        return map( forward<F>(f), forward<S>(s)... );
     }
 };
 
@@ -1177,7 +1177,7 @@ struct Monad< cata::sequence<Seq> > {
         YS c;
         auto size = a.size();
         while( size-- )
-            c = append( c, b );
+            c = append( move(c), b );
         return c;
     }
 
