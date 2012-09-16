@@ -217,6 +217,14 @@ int main()
     printf( "5 * 2 = %d\n", closet(times,5)(2) );
     printf( "5 * 2 = %d\n", closet(times,5,2)() );
 
+    puts("");
+    puts("p2M = fmap (+2)");
+    auto plus_twoM = fmap( plus_two );
+    printf( "\tp2M (1,2) = %s\n\tp2M [1,2] = %s\n",
+            show( plus_twoM(make_pair(1,2)) ).c_str(),
+            show( plus_twoM(list<int>{1,2}) ).c_str() );
+    puts("");
+
     printf( "(+2) <$> (pure 1) (100) = %d\n", fmap(plus_two, pure::pure(1))(100) );
     printf( "\tccomp (+2) (pure 1) $ () = %d\n", ccompose(plus_two,pure::pure(1))() );
     printf( "(+2) <$> (+2) 1 = %d\n", fmap(plus_two, plus_two)(1) );
@@ -238,11 +246,13 @@ int main()
             show( plus_two ^ Right<string>(5) ).c_str() );
 
     puts("");
-    printf( "(+) <$> [1,2] <*> [3,4] <*> [5,6] = %s\n",
-            show ( 
-                fmap( [](int x, int y, int z){return x+y+z;}, 
-                      vector<int>{1,2}, vector<int>{3,4}, vector<int>{5,6}) 
-            ).c_str() );
+    puts("add3 a b c = (\\x y z -> x + y + z) <$> a <*> b <*> c");
+    auto add3 = fmap( [](int x, int y, int z){return x+y+z;} );
+    printf( "add3 (Just 1) (Just 2) (Just 3) = %s\n",
+            show( add3( Just(1), Just(2), Just(3) ) ).c_str() );
+    printf( "add3 [1,2] [3,4] [5,6] = %s\n",
+            show( add3(vector<int>{1,2}, vector<int>{3,4}, 
+                       vector<int>{5,6}) ).c_str() );
     printf( "(+) <$> Pair 1 2 <*> Pair 3 4 = %s\n", 
             show( fmap(std::plus<int>(), std::make_pair(1,2),
                                          std::make_pair(3,4)) ).c_str() );

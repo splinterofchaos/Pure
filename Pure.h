@@ -17,11 +17,6 @@ namespace pure {
 
 using namespace std;
 
-/*
- * Sequence "[ ]"
- * Any type that defines begin() and end().
- */
-
 namespace cata {
 
 /* 
@@ -100,47 +95,32 @@ template< class R, class ...X > struct Cat< R(&)(X...) > {
 
 template< class ... > struct Category;
 
+/* The result of a function applied against X. */
+template< class F, class ...X >
+using Result = decltype( declval<F>()( declval<X>()... ) );
+
 /* 
  * FUNCTION TRANSFORMERS
  * The fallowing are types that contain one or more functions and act like a
  * function. 
  */
 
-/* Translate f g : h(x,xs...) = f( g(x), xs... ) */
-template< class F, class G > struct Translate {
-    F f;
-    G g;
-
-    template< class _F, class _G >
-    Translate( _F&& f, _G&& g ) : f(forward<_F>(f)), g(forward<_G>(g)) { }
-
-    template< class X, class ...XS >
-    decltype( f(g(declval<X>()),declval<XS>()...) )
-    operator() ( X&& x, XS&& ...xs ) {
-        return f( g(forward<X>(x)), forward<XS>(xs)... );
-    }
-};
-
-template< class F, class G >
-Translate<F,G> translate( F&& f, G&& g ) {
-    return Translate<F,G>( forward<F>(f), forward<G>(g) );
-}
-
 /* Flip f : g(x,y) = f(y,x) */
 template< class F > struct Flip {
     F f;
 
     template< class _F >
-    Flip( _F&& f ) : f(forward<_F>(f)) { }
+    constexpr Flip( _F&& f ) : f(forward<_F>(f)) { }
 
     template< class X, class Y, class ...XS >
-    decltype( f(declval<Y>(),declval<X>(),declval<XS>()...) )
+    constexpr decltype( f(declval<Y>(),declval<X>(),declval<XS>()...) )
     operator() ( X&& x, Y&& y, XS&& ...xs ) {
         return f( forward<Y>(y), forward<X>(x), forward<XS>(xs)... );
     }
 };
 
-template< class F > Flip<F> flip( F&& f ) {
+template< class F > 
+constexpr Flip<F> flip( F&& f ) {
     return Flip<F>( forward<F>(f) );
 }
 
@@ -313,9 +293,9 @@ struct Composition<F,G,H...> : Composition<F,Composition<G,H...>>
     }
 };
 
-template< class F, class ...G >
-constexpr Composition<F,G...> compose( F f, G ...g ) {
-    return Composition<F,G...>( move(f), move(g)... );
+template< class F, class ...G, class C = Composition<F,G...> >
+constexpr C compose( F f, G ...g ) {
+    return C( move(f), move(g)... );
 }
 
 /* A const composition for when g is a constant function. */
@@ -503,9 +483,6 @@ first( F&& f ) {
     return A::first( forward<F>(f) );
 }
 
-template< class F, class ...X >
-using Result = decltype( declval<F>()( declval<X>()... ) );
-
 /* (second f) (x,y) = (x, f y) */
 template< class F, class A = Arrow<F> >
 decltype( A::second(declval<F>()) )
@@ -524,10 +501,15 @@ template< class Func > struct Arrow<Func> {
         constexpr FSplit( _F&& f, _G&& g ) 
             : f(forward<_F>(f)), g(forward<_G>(g)) { }
 
+        template< class P >
+        using First = decltype( get<0>( declval<P>() ) );
+        template< class P >
+        using Second = decltype( get<1>( declval<P>() ) );
+
         template< class P/*air*/ >
         auto operator() ( P&& p ) const
-            -> decltype( make_pair(f(get<0>(declval<P>())),
-                                   g(get<1>(declval<P>()))) )
+            -> decltype( make_pair(f(declval<First<P>>()),
+                                   g(declval<Second<P>>())) )
         {
             return make_pair( f(get<0>(p)), g(get<1>(p)) );
         }
@@ -648,7 +630,7 @@ template< class F, class S,
 R concatMap( F&& f, S&& xs ) {
     return foldr ( 
         // \ acc x = append( acc, f(x) )
-        flip( translate(append<R,R>,forward<F>(f)) ), 
+        flip( compose(append<R,R>,forward<F>(f)) ), 
         R(), forward<S>(xs)
     );
 }
@@ -829,9 +811,6 @@ constexpr auto fmap( F&& f, G&& g, H&& ...h )
 
 struct FMap {
     template< class F, class ...X >
-    using Result = decltype( fmap(declval<F>(),declval<X>()...) );
-
-    template< class F, class ...X >
     constexpr auto operator() ( F&& f, X&& ...x ) 
         -> decltype( fmap(declval<F>(),declval<X>()...) )
     {
@@ -839,31 +818,25 @@ struct FMap {
     }
 };
 
+template< class F, class ...X >
+using Closure = decltype( closure(declval<F>(), declval<X>()...) );
+template< class F, class ...X >
+using RClosure = decltype( rclosure(declval<F>(), declval<X>()...) );
+template< class F, class ...X >
+using Closet = decltype( closet(declval<F>(), declval<X>()...) );
+template< class F, class ...X >
+using RCloset = decltype( rcloset(declval<F>(), declval<X>()...) );
+
+template< class F > 
+constexpr Closure<FMap,F> fmap( F&& f ) {
+    return closure( FMap(), forward<F>(f) );
+}
+
 /* to_map x = \f -> fmap f x */
 template< class ...X > 
 constexpr auto to_map( X&& ...x ) -> decltype(rclosure(FMap(),declval<X>()...))
 {
     return rclosure( FMap(), forward<X>(x)... );
-}
-
-/* lift f = \x -> fnap f x */
-template< class F > struct Lift {
-    F f;
-
-    template< class _F > 
-    constexpr Lift( _F&& f ) : f(forward<_F>(f)) { }
-
-    template< class ...X >
-    constexpr auto operator() ( X&& ...x ) 
-        -> decltype( fmap(f,declval<X>()...) )
-    {
-        return fmap( f, forward<X>(x)... );
-    }
-};
-
-template< class F, class L = Lift<F> >
-constexpr L lift( F&& f ) {
-    return L( forward<F>(f) );
 }
 
 /* fmap f g = compose( f, g ) */
@@ -880,10 +853,13 @@ struct Functor<Function> {
 /* fmap f Pair(x,y) = Pair( f x, f y ) */
 template< class X, class Y >
 struct Functor< pair<X,Y> > {
+    template< unsigned N, class P >
+    using Nth = decltype( get<N>( declval<P>() ) );
+
     template< class F, class ...P >
-    using PX = decltype( declval<F>()( declval<P>().first... ) );
+    using PX = decltype( declval<F>()( declval<Nth<0,P>>()... ) );
     template< class F, class ...P >
-    using PY = decltype( declval<F>()( declval<P>().second... ) );
+    using PY = decltype( declval<F>()( declval<Nth<1,P>>()... ) );
 
     template< class F, class ...P >
     static constexpr auto fmap( F&& f, P&& ...p ) 
@@ -908,13 +884,15 @@ struct Functor< cata::maybe<_M> > {
         return (bool)m1 && each( ms... );
     }
 
+    template< class F, class ...M >
+    using Result = decltype( Just(declval<F>()( *declval<M>()... )) );
+
     /*
      * f <$> Just x = Just (f x)
      * f <$> Nothing = Nothing
      */
-    template< class F, class ...M,
-              class R = decltype( declval<F>()(*declval<M>()...) ) >
-    static constexpr unique_ptr<R> fmap( F&& f, M&& ...m ) {
+    template< class F, class ...M >
+    static constexpr Result<F,M...> fmap( F&& f, M&& ...m ) {
         return each( forward<M>(m)... ) ? 
             Just( forward<F>(f)( *forward<M>(m)... ) ) : nullptr;
     }
@@ -924,11 +902,11 @@ struct Functor< cata::maybe<_M> > {
  * Given f(x,y...) and fx(y...)
  *  enclose f = fx
  */
-template< class F > struct Enclose {
+template< class F > struct Enclosure {
     F f;
 
     template< class _F >
-    constexpr Enclose( _F&& f ) : f(forward<_F>(f)) { }
+    constexpr Enclosure( _F&& f ) : f(forward<_F>(f)) { }
 
     template< class ...X >
     using Result = decltype( closure(f,declval<X>()...) );
@@ -939,7 +917,7 @@ template< class F > struct Enclose {
     }
 };
 
-template< class F, class E = Enclose<F> >
+template< class F, class E = Enclosure<F> >
 constexpr E enclosure( F&& f ) {
     return E( forward<F>(f) );
 }
@@ -953,11 +931,13 @@ struct Functor< cata::sequence<Seq> > {
         return map( forward<F>(f), forward<S>(s) );
     }
 
+    /* mapper f ys = \x -> fmap (f x) ys */
     template< class F, class ...YS >
     static constexpr auto mapper( F&& f, YS&& ...ys ) 
         -> decltype( compose( to_map(declval<YS>()...), 
                               enclosure(declval<F>()) ) )
     {
+        // (\g -> fmap g ys) . f = \x -> fmap (f x) ys
         return compose( to_map( forward<YS>(ys)... ),
                         enclosure( forward<F>(f) ) );
     }
@@ -969,18 +949,16 @@ struct Functor< cata::sequence<Seq> > {
             mapper(f,declval<YS>(),declval<ZS>()...)(xs.front())
         )
     {
+        // zs = f <$> xs <*> ys -- given f(x,y)
+        // fxs = map (\x -> f x) xs
+        // let mapfx ys fx = map (\y -> fx y) ys
+        //      fzs = map mapfx fxs
+        //      zs  = concat fzs
+        //      zs = concatMap (mapfx f ys) xs
         return concatMap ( 
             mapper( f, forward<YS>(ys), forward<ZS>(zs)... ),
             xs 
         );
-
-        // Alternate:
-        //return concatMap ( 
-        //    [&]( X x ) {
-        //        return fmap( closure(f,x), zs );
-        //    },
-        //    xs 
-        //);
     }
 };
 
@@ -1084,24 +1062,25 @@ template< class Seq > struct Monoid< cata::sequence<Seq> > {
 
 /* Monoid (Maybe X) -- where X is a monoid. */
 template< class M > struct Monoid< cata::maybe<M> > {
-    static M mempty() { return nullptr; }
+    static constexpr M mempty() { return nullptr; }
 
     /*
      * Just x <> Just y = Just (x <> y)
      *      a <> b      = a | b
      */
-    static M mappend( const M& x, const M& y ) {
+    static constexpr M mappend( const M& x, const M& y ) {
         return x and y ? Just( fwd_mappend(*x,*y) )
             : x ? Just(*x) : y ? Just(*y) : nullptr;
     }
 
-    static M mappend( M&& x, M&& y ) {
+    static constexpr M mappend( M&& x, M&& y ) {
         return x and y ? Just( fwd_mappend(*forward<M>(x), *forward<M>(y)) )
             : forward<M>(x) || forward<M>(y);
     }
 
     /* mconcat [Maybe x] -> Maybe x -- where mappend x x is defined. */
-    template< class S > static M mconcat( S&& s ) {
+    template< class S > 
+    static M mconcat( S&& s ) {
         typedef M (*F) ( const M&, const M& );
         return foldl( (F)mappend, mempty(), forward<S>(s) );
     }
@@ -1230,18 +1209,20 @@ struct Monad< cata::maybe<M> > {
     }
 
     using Return = smart_ptr (*) ( value_type );
-    static Return mreturn() { return Just; }
+    static constexpr Return mreturn() { return Just; }
 
-    static smart_ptr mfail(const char*) { return nullptr; }
+    static constexpr smart_ptr mfail(const char*) { return nullptr; }
 
     template< class PZ >
-    static PZ mdo( const M& x, PZ&& z ) {
+    static constexpr PZ mdo( const M& x, PZ&& z ) {
         return x ? forward<PZ>(z) : nullptr;
     }
 
-    template< class F,
-              class R = decltype( declval<F>()(declval<value_type>()) ) >
-    static R mbind( M&& x, F&& f ) {
+    template< class F >
+    using Result = Result< F, value_type >;
+
+    template< class F >
+    static constexpr Result<F> mbind( M&& x, F&& f ) {
         return x ? forward<F>(f)( *forward<M>(x) ) : nullptr;
     }
 };
@@ -1281,8 +1262,12 @@ struct MonadPlus< cata::maybe<M> > {
     static M mzero() { return nullptr; }
 
     template< class A, class B >
-    static decltype(declval<A>() || declval<B>())
-    mplus( A&& a, B&& b ) { return forward<A>(a) || forward<B>(b); }
+    using Result = decltype( declval<A>() || declval<B>() );
+
+    template< class A, class B >
+    static constexpr Result<A,B> mplus( A&& a, B&& b ) { 
+        return forward<A>(a) || forward<B>(b); 
+    }
 };
 
 /*
@@ -1458,19 +1443,19 @@ struct Squash
     template< class _F >
     constexpr Squash( _F&& f ) : f( forward<_F>(f) ) { }
 
-    template< class Arg1, class ...Args >
-    constexpr auto operator() ( Arg1&& arg1, Args&& ...args )
-        -> decltype( f(declval<Arg1>(),declval<Arg1>(),declval<Args>()...) )
+    template< class X, class ...Y >
+    constexpr auto operator() ( X&& x, Y&& ...y )
+        -> decltype( f(declval<X>(),declval<X>(),declval<Y>()...) )
     {
-        return f( forward<Arg1>(arg1), forward<Arg1>(arg1), 
-                  forward<Args>(args)... );
+        return f( forward<X>(x), forward<X>(x), 
+                  forward<Y>(y)... );
     }
 };
 
 template< class F >
-constexpr Squash<F> squash( F&& f )
+constexpr Squash<F> squash( F f )
 {
-    return Squash<F>( forward<F>(f) );
+    return Squash<F>( move(f) );
 }
 
 /* 
@@ -1493,11 +1478,17 @@ struct Join
     {
     }
 
+    template< class X >
+    using L = decltype( l(declval<X>()) );
+    template< class X >
+    using R = decltype( r(declval<X>()) );
+
     template< class A, class ...AS >
-    constexpr auto operator() ( A&& a, AS&& ...as )
-        -> decltype( f(l(declval<A>()),r(declval<A>()),declval<AS>()...) )
-    {
-        return f( l(forward<A>(a)), r(forward<A>(a)), forward<AS>(as)... );
+    constexpr Result< F, L<A>, R<A>, AS... > 
+    operator() ( A&& a, AS&& ...as ) {
+        return f( l( forward<A>(a) ), 
+                  r( forward<A>(a) ), 
+                  forward<AS>(as)... );
     }
 };
 
@@ -1518,13 +1509,21 @@ constexpr bool ordered( const Container& c )
         ).second == end(c);
 }
 
+constexpr bool binary_not( bool b ) { return not b; }
+
+template< class F >
+constexpr auto fnot( F&& f ) -> decltype( compose(binary_not,declval<F>()) ) 
+{
+    return compose( binary_not, forward<F>(f) );
+}
+
 /* filter f C -> { x for x in C such that f(x) is true. } */
 template< typename Container, typename F >
 Container filter( F&& f, Container cont )
 {
     cont.erase ( 
         remove_if( begin(cont), end(cont), 
-                   compose( [](bool b){return !b;}, forward<F>(f) ) ),
+                   fnot( forward<F>(f) ) ),
         end( cont )
     );
     return cont;
@@ -1532,8 +1531,8 @@ Container filter( F&& f, Container cont )
 
 /* find pred xs -> Maybe x */
 template< class F, class S,
-          class Val = decltype( &( * begin(declval<S>()) ) ) >
-Val find( F&& f, const S& s )
+          class Val = typename cata::sequence_traits<S>::value_type >
+const Val* find( F&& f, const S& s )
 {
     const auto& e = end(s);
     const auto it = find_if( begin(s), e, forward<F>(f) );
