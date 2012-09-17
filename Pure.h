@@ -656,18 +656,19 @@ constexpr R reverse( S&& s ) {
     );
 }
 
-template< class F, class RS, class XS >
-void map_impl( F&& f, RS&& rs, const XS& xs ) {
+template< class F, class RI, class XS >
+void map_impl( F&& f, RI&& ri, const XS& xs ) {
     transform( begin(xs), end(xs), 
-               back_inserter(forward<RS>(rs)), forward<F>(f) );
+               forward<RI>(ri), forward<F>(f) );
 }
 
-template< class F, class RS, class XS, class YS, class ...ZS >
-void map_impl( F&& f, RS&& rs, 
+template< class F, class RI, class XS, class YS, class ...ZS >
+void map_impl( F&& f, RI&& ri, 
                const XS& xs, const YS& ys, const ZS& ...zs ) 
 {
     for( const auto& x : xs )
-        map_impl( closure(forward<F>(f),x), rs, ys, zs... );
+        map_impl( closure(forward<F>(f),x), forward<RI>(ri), 
+                  ys, zs... );
 }
 
 template< class A, class B, class R >
@@ -681,7 +682,7 @@ template< template<class...> class S, class X, class ...XS, class F,
 XSame<FX,X,R> map( F&& f, const S<X,XS...>& xs ) 
 {
     R r;
-    map_impl( forward<F>(f), r, xs );
+    map_impl( forward<F>(f), back_inserter(r), xs );
     return r;
 }
 
@@ -690,7 +691,7 @@ template< template<class...> class S, class X, class ...XS, class F,
           class FX = Result<F,X> > 
 ESame< FX, X, S<X,XS...> > map( F&& f, S<X,XS...> xs ) 
 {
-    std::transform( begin(xs), end(xs), begin(xs), forward<F>(f) );
+    map_impl( forward<F>(f), begin(xs), xs );
     return xs;
 }
 
@@ -698,7 +699,7 @@ template< class F, class X, class V = vector< Result<F,X> > >
 V map( F&& f, const initializer_list<X>& l ) {
     V v; 
     v.reserve( length(l) );
-    map_impl( forward<F>(f), v, l );
+    map_impl( forward<F>(f), begin(v), l );
     return v;
 }
 
@@ -722,15 +723,17 @@ R map( F&& f, const S<X,_S...>& xs, const S<Y,_S...>& ys,
        const S<Z,_S...>& ...zs )
 {
    R r;
-   map_impl( forward<F>(f), r, xs, ys, zs... );
+   map_impl( forward<F>(f), back_inserter(r), 
+             xs, ys, zs... );
    return r;
 }
 
+// TODO: requires further specialization.
 template< class X, size_t N, class F, 
           class R = Result<F,X> >
 array< R, N > map( F&& f, const array< X, N >& xs ) {
     array< R, N > r;
-    transform( begin(xs), end(xs), begin(r), forward<F>(f) );
+    map_impl( forward<F>(f), begin(r), xs );
     return r;
 }
 
