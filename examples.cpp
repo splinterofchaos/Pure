@@ -100,12 +100,14 @@ string show( const char* str ) {
     return show( string(str) );
 }
 
-template< class S > typename ESeq<S,string>::type show( S s ) {
+template< class S > 
+auto show( const S& s ) -> decltype( begin(s), string() )
+{
     string str = "[";
     for( const auto& x : s ) {
         str += show( x ) + ",";
     }
-    if( str.size() > 1 )
+    if( length(str) > 1 )
         str.back() = ']';
     else 
         str.push_back( ']' );

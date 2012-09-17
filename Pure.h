@@ -622,55 +622,38 @@ constexpr SValue<S> last( S&& s ) {
     return *prev( end(forward<S>(s)) );
 }
 
-template< class S > struct Tail {
-    S s;
+template< class I > struct FakeSequence {
+    I b, e;
 
-    template< class _S >
-    constexpr Tail( _S&& s ) : s( forward<_S>(s) ) { }
+    constexpr FakeSequence( I b, I e ) : b(b), e(e) { }
 
-    using iterator = SIter<S>;
-
-    constexpr iterator begin() { return std::next( std::begin(s) ); }
-    constexpr iterator end()   { return std::end( s );              }
+    constexpr I begin() { return b; }
+    constexpr I end()   { return e; }
 };
 
-template< class S, class T = Tail<S> > 
+template< class S, class T = FakeSequence<SIter<S>> > 
 constexpr T tail( S&& s ) {
-    return T( forward<S>(s) );
+    return T( 
+        next( begin(forward<S>(s)) ),
+        end( forward<S>(s) )
+    );
 }
 
-template< class S > struct Init {
-    S s;
-    
-    template< class _S >
-    constexpr Init( _S&& s ) : s( forward<_S>(s) ) { }
-
-    using iterator = SIter<S>;
-
-    constexpr iterator begin() { return std::begin( s );     }
-    constexpr iterator end()   { return prev( std::end(s) ); }
-};
-
-template< class S, class I = Init<S> > 
+template< class S, class I = FakeSequence<SIter<S>> > 
 constexpr I init( S&& s ) {
-    return I( forward<S>(s) );
+    return I (
+        begin( forward<S>(s) ),
+        prev( end(forward<S>(s)) )
+    );
 }
 
-template< class S > struct Reverse {
-    S s;
-    
-    template< class _S >
-    constexpr Reverse( _S&& s ) : s( forward<_S>(s) ) { }
-
-    using iterator = reverse_iterator< SIter<S> >;
-
-    constexpr iterator begin() { return iterator( std::end(s)   ); }
-    constexpr iterator end()   { return iterator( std::begin(s) ); }
-};
-
-template< class S, class R = Reverse<S> >
+template< class S, class I = reverse_iterator< SIter<S> >,
+          class R = FakeSequence<I> >
 constexpr R reverse( S&& s ) {
-    return R( forward<S>(s) );
+    return R ( 
+        I( end(forward<S>(s)) ),
+        I( begin(forward<S>(s)) )
+    );
 }
 
 template< class F, class RS, class XS >
