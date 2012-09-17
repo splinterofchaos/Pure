@@ -837,6 +837,77 @@ S concat( const SS& ss ) {
     return foldl( append<S,S>, S(), ss );
 }
 
+template< typename Container >
+constexpr bool ordered( const Container& c )
+{
+    return length(c) <= 1
+        or mismatch ( 
+            begin(c), end(c)-1, 
+            begin(c)+1, 
+            less_equal<int>() 
+        ).second == end(c);
+}
+
+constexpr bool binary_not( bool b ) { return not b; }
+
+template< class F >
+constexpr auto fnot( F&& f ) -> decltype( compose(binary_not,declval<F>()) ) 
+{
+    return compose( binary_not, forward<F>(f) );
+}
+
+/* filter f C -> { x for x in C such that f(x) is true. } */
+template< typename Container, typename F >
+Container filter( F&& f, Container cont )
+{
+    cont.erase ( 
+        remove_if( begin(cont), end(cont), 
+                   fnot( forward<F>(f) ) ),
+        end( cont )
+    );
+    return cont;
+}
+
+template< class X, class F, class V = vector<X> >
+V filter( F&& f, const initializer_list<X>& cont ) {
+    V v;
+    v.reserve( length(cont) );
+    copy_if( begin(cont), end(cont), back_inserter(v), forward<F>(f) );
+    return v;
+}
+
+/* find pred xs -> Maybe x */
+template< class F, class S,
+          class Val = typename cata::sequence_traits<S>::value_type >
+const Val* find( F&& f, const S& s )
+{
+    const auto& e = end(s);
+    const auto it = find_if( begin(s), e, forward<F>(f) );
+    return it != e ? &(*it) : nullptr; 
+}
+
+/* cfind x C -> C::iterator */
+template< typename S, typename T >
+constexpr auto cfind( T&& value, const S& cont )
+    -> decltype( begin(cont) )
+{
+    return find( begin(cont), end(cont), forward<T>(value) );
+}
+
+template< typename S, typename F >
+constexpr auto cfind_if( F&& f, const S& cont )
+    -> decltype( begin(cont) )
+{
+    return find_if( begin(cont), end(cont), forward<F>(f) );
+}
+
+/* all f C -> true when f(x) is true for all x in C; otherwise false. */
+template< typename Container, typename F >
+constexpr bool all( F&& f, const Container& cont )
+{
+    return all_of( begin(cont), end(cont), forward<F>(f) );
+}
+
 /* 
  * concatMap f s = concat (map f s)
  *      where f is a function: a -> [b]
@@ -1667,77 +1738,6 @@ template< class F, class L, class R >
 constexpr Join<F,L,R> join( F&& f, L&& l, R&& r )
 {
     return Join<F,L,R>( forward<F>(f), forward<L>(l), forward<R>(r) );
-}
-
-template< typename Container >
-constexpr bool ordered( const Container& c )
-{
-    return length(c) <= 1
-        or mismatch ( 
-            begin(c), end(c)-1, 
-            begin(c)+1, 
-            less_equal<int>() 
-        ).second == end(c);
-}
-
-constexpr bool binary_not( bool b ) { return not b; }
-
-template< class F >
-constexpr auto fnot( F&& f ) -> decltype( compose(binary_not,declval<F>()) ) 
-{
-    return compose( binary_not, forward<F>(f) );
-}
-
-/* filter f C -> { x for x in C such that f(x) is true. } */
-template< typename Container, typename F >
-Container filter( F&& f, Container cont )
-{
-    cont.erase ( 
-        remove_if( begin(cont), end(cont), 
-                   fnot( forward<F>(f) ) ),
-        end( cont )
-    );
-    return cont;
-}
-
-template< class X, class F, class V = vector<X> >
-V filter( F&& f, const initializer_list<X>& cont ) {
-    V v;
-    v.reserve( length(cont) );
-    copy_if( begin(cont), end(cont), back_inserter(v), forward<F>(f) );
-    return v;
-}
-
-/* find pred xs -> Maybe x */
-template< class F, class S,
-          class Val = typename cata::sequence_traits<S>::value_type >
-const Val* find( F&& f, const S& s )
-{
-    const auto& e = end(s);
-    const auto it = find_if( begin(s), e, forward<F>(f) );
-    return it != e ? &(*it) : nullptr; 
-}
-
-/* cfind x C -> C::iterator */
-template< typename S, typename T >
-constexpr auto cfind( T&& value, const S& cont )
-    -> decltype( begin(cont) )
-{
-    return find( begin(cont), end(cont), forward<T>(value) );
-}
-
-template< typename S, typename F >
-constexpr auto cfind_if( F&& f, const S& cont )
-    -> decltype( begin(cont) )
-{
-    return find_if( begin(cont), end(cont), forward<F>(f) );
-}
-
-/* all f C -> true when f(x) is true for all x in C; otherwise false. */
-template< typename Container, typename F >
-constexpr bool all( F&& f, const Container& cont )
-{
-    return all_of( begin(cont), end(cont), forward<F>(f) );
 }
 
 /* zip_with f A B -> { f(a,b) for a in A and b in B } */
