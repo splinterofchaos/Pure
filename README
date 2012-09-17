@@ -22,9 +22,9 @@ We can even write that
 
     v = map( g, map(f,v) );
 
-Here, where it may seem like we are moving a container around, we actually just
-pass along the pointer to the buffer. However, we can improve this by using
-function composition.
+Unfortunately, it is less efficient than transform due to having to copy the
+vector in case the return type has changed.. However, we can improve this by
+using function composition.
 
     v = map( compose(g,f), v );
 
@@ -46,6 +46,18 @@ container it's called with.
 
     auto v = map( f, {x,y,z} );
 
+The utility functions from Haskell (head, init, tail, last, and reverse) are
+also supported. init and tail do NOT by default copy the container, but rather
+wraps around it to modify the meanings of begin() and end(). However, it will
+hold the actual container if moved.
+
+    reverse( {1,2,3} ) = {3,2,1}
+    tail( {1,2,3} ) = {2,3};
+    init( {1,2,3} ) = {1,2};
+    head( v ) = *begin(v);
+    auto v = map( f, reverse(v) ); // pass a wrapped v.
+    auto v = map( f, reverse(move(v)) ) // Hold v and reverse it.
+
 The next in terms of relevance in fold. It works like std::accumulate, but we
 specify whether we want to fold left or right.
 
@@ -53,7 +65,7 @@ specify whether we want to fold left or right.
     auto sum2 = foldr( std::plus<int>(), {1,2,3,4} ); // Right fold.
 
 foldr and foldl do essentially the same thing, but foldr accumulates from the
-end of the list and foldr accumulates from the start.
+end of the list and foldl accumulates from the start.
 
 filter(pred,xs) creates a new sequence of every member of xs that fulfils pred.
 
