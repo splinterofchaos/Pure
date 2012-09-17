@@ -586,6 +586,72 @@ template< class Func > struct Arrow<Func> {
     }
 };
 
+template< class S >
+using SValue = typename cata::sequence_traits<S>::value_type;
+template< class S >
+using SIter = typename cata::sequence_traits<S>::iterator;
+
+template< class S >
+constexpr SValue<S> head( S&& s ) {
+    return *begin( forward<S>(s) );
+}
+
+template< class S >
+constexpr SValue<S> last( S&& s ) {
+    return *prev( end(forward<S>(s)) );
+}
+
+template< class S > struct Tail {
+    S s;
+
+    template< class _S >
+    constexpr Tail( _S&& s ) : s( forward<_S>(s) ) { }
+
+    using iterator = SIter<S>;
+
+    constexpr iterator begin() { return std::next( std::begin(s) ); }
+    constexpr iterator end()   { return std::end( s );              }
+};
+
+template< class S, class T = Tail<S> > 
+constexpr T tail( S&& s ) {
+    return T( forward<S>(s) );
+}
+
+template< class S > struct Init {
+    S s;
+    
+    template< class _S >
+    constexpr Init( _S&& s ) : s( forward<_S>(s) ) { }
+
+    using iterator = SIter<S>;
+
+    constexpr iterator begin() { return std::begin( s );     }
+    constexpr iterator end()   { return prev( std::end(s) ); }
+};
+
+template< class S, class I = Init<S> > 
+constexpr I init( S&& s ) {
+    return I( forward<S>(s) );
+}
+
+template< class S > struct Reverse {
+    S s;
+    
+    template< class _S >
+    constexpr Reverse( _S&& s ) : s( forward<_S>(s) ) { }
+
+    using iterator = reverse_iterator< SIter<S> >;
+
+    constexpr iterator begin() { return iterator( std::end(s)   ); }
+    constexpr iterator end()   { return iterator( std::begin(s) ); }
+};
+
+template< class S, class R = Reverse<S> >
+constexpr R reverse( S&& s ) {
+    return R( forward<S>(s) );
+}
+
 template< class F, class RS, class XS >
 void map_impl( F&& f, RS&& rs, const XS& xs ) {
     transform( begin(xs), end(xs), 
@@ -650,58 +716,55 @@ array< R, N > map( F&& f, const array< X, N >& xs ) {
     return r;
 }
 
+template< class F, class X, class S >
+constexpr X fold_impl( F&& f, X&& x, const S& s ) {
+    return std::accumulate( begin(s), end(s), 
+                            forward<X>(x), forward<F>(f) );
+}
+
+
 /* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
 template< class F, class X, class S >
-constexpr X foldl( F&& f, X&& val, const S& cont ) {
-    return accumulate( begin(cont), end(cont), forward<X>(val), 
-                       forward<F>(f) );
+constexpr X foldl( F&& f, X&& x, const S& s ) {
+    return fold_impl( forward<F>(f), forward<X>(x), s );
 }
 
 template< class F, class X, class Y >
-constexpr X foldl( F&& f, X&& x, const initializer_list<Y>& cont ) {
-    return accumulate( begin(cont), end(cont), forward<X>(x), 
-                       forward<F>(f) );
+constexpr X foldl( F&& f, X&& x, const initializer_list<Y>& s ) {
+    return fold_impl( forward<F>(f), forward<X>(x), s );
 }
 
 template< class F, class S, 
           class X = typename cata::sequence_traits<S>::value_type >
-constexpr X foldl( F&& f, const S& cont ) {
-    return accumulate( next(begin(cont)), end(cont), 
-                       *begin(cont), forward<F>(f) );
+constexpr X foldl( F&& f, const S& s ) {
+    return fold_impl( forward<F>(f), head(s), tail(s) );
 }
 
 template< class F, class X >
-constexpr X foldl( F&& f, const initializer_list<X>& cont ) {
-    return accumulate( next(begin(cont)), end(cont), 
-                       *begin(cont), forward<F>(f) );
+constexpr X foldl( F&& f, const initializer_list<X>& s ) {
+    return fold_impl( forward<F>(f), head(s), tail(s) );
 }
 
 /* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
 template< class F, class X, class S >
-constexpr X foldr( F&& f, X&& val, const S& cont ) {
-    return accumulate( cont.rbegin(), cont.rend(), 
-                       forward<X>(val), forward<F>(f) );
+constexpr X foldr( F&& f, X&& x, const S& s ) {
+    return foldl( forward<F>(f), forward<X>(x), reverse(s) );
 }
 
 template< class F, class X, class Y >
-constexpr X foldr( F&& f, X&& val, const initializer_list<Y>& cont ) {
-    return accumulate( cont.rbegin(), cont.rend(), 
-                       forward<X>(val), forward<F>(f) );
+constexpr X foldr( F&& f, X&& x, const initializer_list<Y>& s ) {
+    return foldl( forward<F>(f), forward<X>(x), reverse(s) );
 }
 
 template< class F, class S, 
           class X = typename cata::sequence_traits<S>::value_type >
-constexpr X foldr( F&& f, const S& cont ) {
-    return accumulate( next(cont.rbegin()), cont.rend(), 
-                       cont.back(), forward<F>(f) );
+constexpr X foldr( F&& f, const S& s ) {
+    return foldl( forward<F>(f), reverse(s) );
 }
 
 template< class F, class Y >
-constexpr Y foldr( F&& f, const initializer_list<Y>& cont ) {
-    using I = typename initializer_list<Y>::const_iterator;
-    using RI = reverse_iterator<I>;
-    return accumulate( next(RI(end(cont))), RI(begin(cont)), 
-                       *prev(end(cont)), forward<F>(f) );
+constexpr Y foldr( F&& f, const initializer_list<Y>& s ) {
+    return foldl( forward<F>(f), reverse(s) );
 }
 
 /* 

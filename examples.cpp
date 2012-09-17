@@ -173,7 +173,14 @@ int main()
     rcloset( print_xyz, 2, 3 )( 1 );
 
     vector<int> evens = filter( even, {1,2,3,4,5,6,7,8} );
-    printf( "evens = %s\n", show(evens).c_str() );
+    printf( "es = filter even [1..8] = %s\n", show(evens).c_str() );
+    printf( "\thead es = %s\n\tlast es = %s\n",
+            show( head(evens) ).c_str(), show( last(evens) ).c_str() );
+    printf( "\ttail es = %s\ni\tinit es = %s\n",
+            show( tail(evens) ).c_str(), show( init(evens) ).c_str() );
+    printf( "\treverse es = %s\n", show( reverse(evens) ).c_str() );
+
+    puts("");
 
     printf( "3^2 = %d\n", square(3) );
 
