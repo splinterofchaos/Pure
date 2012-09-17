@@ -587,6 +587,27 @@ template< class Func > struct Arrow<Func> {
 };
 
 template< class S >
+constexpr auto length( S&& s ) -> decltype( declval<S>().size() )
+{
+    return forward<S>(s).size();
+}
+
+template< class S >
+constexpr size_t length( const S& s ) {
+    return distance( begin(s), end(s) );
+} 
+
+template< class X, unsigned N >
+constexpr size_t length( X (&)[N] ) {
+    return N;
+}
+
+template< class S >
+constexpr bool null( const S& s ) {
+    return begin(s) == end(s);
+}
+
+template< class S >
 using SValue = typename cata::sequence_traits<S>::value_type;
 template< class S >
 using SIter = typename cata::sequence_traits<S>::iterator;
@@ -666,20 +687,34 @@ void map_impl( F&& f, RS&& rs,
         map_impl( closure(forward<F>(f),x), rs, ys, zs... );
 }
 
+template< class A, class B, class R >
+using ESame = typename std::enable_if< is_same<A,B>::value, R >::type;
+template< class A, class B, class R >
+using XSame = typename std::enable_if< !is_same<A,B>::value, R >::type;
+
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< template<class...> class S, class X, class ...XS, class F,
           class FX = Result<F,X>, class R = S<FX,XS...> > 
-R map( F&& f, const S<X,XS...>& xs ) 
+XSame<FX,X,R> map( F&& f, const S<X,XS...>& xs ) 
 {
     R r;
     map_impl( forward<F>(f), r, xs );
     return r;
 }
 
+// When mapping from X to X, we can optimize by not returning a new sequence.
+template< template<class...> class S, class X, class ...XS, class F,
+          class FX = Result<F,X> > 
+ESame< FX, X, S<X,XS...> > map( F&& f, S<X,XS...> xs ) 
+{
+    std::transform( begin(xs), end(xs), begin(xs), forward<F>(f) );
+    return xs;
+}
+
 template< class F, class X, class V = vector< Result<F,X> > >
 V map( F&& f, const initializer_list<X>& l ) {
     V v; 
-    v.reserve( l.size() );
+    v.reserve( length(l) );
     map_impl( forward<F>(f), v, l );
     return v;
 }
@@ -1298,7 +1333,7 @@ struct Monad< cata::sequence<Seq> > {
         //      for each element in a, duplicate b.
         //      [] >> k = []
         YS c;
-        auto size = a.size();
+        auto size = length( a );
         while( size-- )
             c = append( move(c), b );
         return c;
@@ -1624,7 +1659,7 @@ constexpr Join<F,L,R> join( F&& f, L&& l, R&& r )
 template< typename Container >
 constexpr bool ordered( const Container& c )
 {
-    return c.size() <= 1
+    return length(c) <= 1
         or mismatch ( 
             begin(c), end(c)-1, 
             begin(c)+1, 
@@ -1655,7 +1690,7 @@ Container filter( F&& f, Container cont )
 template< class X, class F, class V = vector<X> >
 V filter( F&& f, const initializer_list<X>& cont ) {
     V v;
-    v.reserve( cont.size() );
+    v.reserve( length(cont) );
     copy_if( begin(cont), end(cont), back_inserter(v), forward<F>(f) );
     return v;
 }

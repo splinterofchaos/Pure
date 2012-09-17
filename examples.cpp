@@ -72,6 +72,10 @@ constexpr auto square = squash( times );
 
 float to_float( int x ) { return x; }
 
+string show( bool b ) {
+    return b ? "True" : "False";
+}
+
 string show( int x ) {
     char digits[20];
     sprintf( digits, "%d", x );
@@ -174,9 +178,10 @@ int main()
 
     vector<int> evens = filter( even, {1,2,3,4,5,6,7,8} );
     printf( "es = filter even [1..8] = %s\n", show(evens).c_str() );
-    printf( "\thead es = %s\n\tlast es = %s\n",
-            show( head(evens) ).c_str(), show( last(evens) ).c_str() );
-    printf( "\ttail es = %s\ni\tinit es = %s\n",
+    printf( "\tnull es = %s\n", show( null(evens) ).c_str() );
+    printf( "\tlength es = %lu\n", length(evens) );
+    printf( "\thead es = %d\n\tlast es = %d\n", head(evens), last(evens) );
+    printf( "\ttail es = %s\n\tinit es = %s\n",
             show( tail(evens) ).c_str(), show( init(evens) ).c_str() );
     printf( "\treverse es = %s\n", show( reverse(evens) ).c_str() );
 
