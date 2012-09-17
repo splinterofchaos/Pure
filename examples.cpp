@@ -189,6 +189,16 @@ int main()
 
     puts("");
 
+    printf( "intersparse ',' \"abcd\" = %s\n",
+            intersparse( ',', string("abcd") ).c_str() );
+    printf( "intercalcate \"--\" {\"abc\",\"def\"} = %s\n",
+             intercalcate ( 
+                 string("--"),
+                 vector<string>{"ab","cd","ef"}
+             ).c_str() );
+
+    puts("");
+
     printf( "3^2 = %d\n", square(3) );
 
     printf (

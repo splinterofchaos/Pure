@@ -804,10 +804,37 @@ A append( A&& a, const B& b, const C& c, const D& ... d )
     return append( append(forward<A>(a), b), c, d... );
 }
 
+/* 
+ * intersparse x [a,b,c] = [a,x,b,x,c]
+ * Requires sequence to have random access iterators.
+ */
+template< class X, class S >
+S intersparse( X&& x, S s ) {
+    if( length(s) < 2 ) return s;
 
+    auto it = next( begin(s) );
+    while( it < end(s) ) {
+        it = s.insert( it, forward<X>(x) );
+        it += 2;
+    }
+
+    return s;
+}
+
+template< class S, class SS >
+S intercalcate( const S& s, const SS& ss ) {
+    if( null(ss) ) return S();
+
+    S r = head(ss);
+    for( const auto& xs : tail(ss) )
+        r = append( move(r), s, xs );
+    return r;
+}
+
+/* concat {{1},{2,3},{4}} = {1,2,3,4} */
 template< class SS, class S = typename SS::value_type >
 S concat( const SS& ss ) {
-    return foldl( append<S,S>, S(), forward<SS>(ss) );
+    return foldl( append<S,S>, S(), ss );
 }
 
 /* 
@@ -820,7 +847,7 @@ S concat( const SS& ss ) {
  * inlined loop.
  */
 template< class F, class S,
-          class R = decltype( declval<F>()( declval<S>().front() ) ) > 
+          class R = decltype( declval<F>()( head(declval<S>()) ) ) > 
 R concatMap( F&& f, S&& xs ) {
     return foldr ( 
         // \ acc x = append( acc, f(x) )
