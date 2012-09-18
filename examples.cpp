@@ -6,6 +6,7 @@
 #include <vector>
 #include <array>
 #include <list>
+#include <cctype>
 
 #include <iostream>
 
@@ -79,6 +80,12 @@ string show( bool b ) {
 string show( int x ) {
     char digits[20];
     sprintf( digits, "%d", x );
+    return digits;
+}
+
+string show( size_t x ) {
+    char digits[20];
+    sprintf( digits, "%lu", x );
     return digits;
 }
 
@@ -185,8 +192,11 @@ int main()
     printf( "\thead es = %d\n\tlast es = %d\n", head(evens), last(evens) );
     printf( "\ttail es = %s\n\tinit es = %s\n",
             show( tail(evens) ).c_str(), show( init(evens) ).c_str() );
+    printf( "\tinits es = %s\n", show( inits(evens) ).c_str() );
     printf( "\treverse es = %s\n", show( reverse(evens) ).c_str() );
-
+    printf( "\tisPrefixOf [2,4] es = %s\n", show( is_prefix({2,4},evens) ).c_str() );
+    printf( "\telem 2 es = %s\n", show( elem(2,evens) ).c_str() );
+    printf( "\tdelete 4 es = %s\n", show( erase(4,evens) ).c_str() );
     puts("");
 
     printf( "intersparse ',' \"abcd\" = %s\n",
@@ -196,6 +206,30 @@ int main()
                  string("--"),
                  vector<string>{"ab","cd","ef"}
              ).c_str() );
+
+    printf( "sbreak even [1..8] = %s\n",
+            show( sbreak(even,vector<int>{1,2,3,4,5,6,7,8}) ).c_str() );
+    printf( "goup \"footoonopor\" = %s\n",
+            show( group(string("footoonopor")) ).c_str() );
+    printf( "elemIndecies 'o' \"footoonopor\" = %s\n",
+            show( elem_indecies('o',string("footoonopor")) ).c_str() );
+    printf( "nub \"footoonopor\" = %s\n",
+            show( nub(string("footoonopor")) ).c_str() );
+    printf( "\"footo\" `union` \"onopor\" = %s\n",
+            show( sunion(string("footo"),string("onopor")) ).c_str() );
+    printf( "\"footo\" // \"onopor\" = %s\n",
+            show( difference(string("footo"),string("onopor")) ).c_str() );
+    printf( "\"footo\" `intersect` \"onopor\" = %s\n",
+            show( intersect(string("footo"),string("onopor")) ).c_str() );
+    printf( "intersectBy (<) \"footo\" \"onopor\" = %s\n",
+            show( intersect_if(std::greater<char>(),string("footo"),string("onopor")) ).c_str() );
+
+    // isspace is a macro, so we need to wrap it to pass it.
+    auto is_space = [](char c){ return isspace(c); };
+    printf( "dropWhile isspace \" \\tfoo\" = \"%s\"\n",
+            drop_while( is_space, string(" \tfoo") ).c_str() );
+    printf( "dropWhileEnd isspace \"foo\\n\" = %s\n",
+            show( drop_while_end(is_space, string("foo\n")) ).c_str() );
 
     puts("");
 

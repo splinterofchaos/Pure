@@ -670,6 +670,11 @@ constexpr R range( S&& s ) {
     return R( begin(forward<S>(s)), end(forward<S>(s)) );
 }
 
+template< class S, class I, class R = Range<S,I> >
+constexpr R range( I a, I b ) {
+    return R( a, b );
+}
+
 template< class S, class R = Range<S,SIter<S>> >
 constexpr R tail_wrap( S&& s ) {
     return length(forward<S>(s)) ? R( next( begin(forward<S>(s)) ), 
@@ -678,10 +683,26 @@ constexpr R tail_wrap( S&& s ) {
 }
 
 template< class S, class R = Range<S,SIter<S>> >
+constexpr R tail_wrap( size_t n, S&& s ) {
+    return R (
+        prev( end(forward<S>(s)), n ),
+        begin( forward<S>(s) )
+    );
+}
+
+template< class S, class R = Range<S,SIter<S>> >
 constexpr R init_wrap( S&& s ) {
     return length(forward<S>(s)) ? R( begin(forward<S>(s)), 
                                       prev( end(forward<S>(s)) ) )
         : range( forward<S>(s) );
+}
+
+template< class S, class R = Range<S,SIter<S>> >
+constexpr R init_wrap( size_t n, S&& s ) {
+    return R ( 
+        begin( forward<S>(s) ),
+        next( begin(forward<S>(s)), n )
+    );
 }
 
 template< class S, class I = SIter<S>, 
@@ -890,9 +911,9 @@ XS cons( XS xs, X&& x ) {
 }
 
 template< class XS, class X, class Y, class ...Z >
-XS cons( XS xs, X&& x, Y&& y, Z&& ...z ) {
+XS cons( XS&& xs, X&& x, Y&& y, Z&& ...z ) {
     return cons (
-        cons( move(xs), forward<X>(x) ),
+        cons( forward<XS>(xs), forward<X>(x) ),
         forward<Y>(y), forward<Z>(z)...
     );
 }
@@ -904,9 +925,9 @@ XS rcons( XS xs, X&& x ) {
 }
 
 template< class XS, class X, class Y, class ...Z >
-XS rcons( XS xs, X&& x, Y&& y, Z&& ...z ) {
+XS rcons( XS&& xs, X&& x, Y&& y, Z&& ...z ) {
     return rcons (
-        rcons( move(xs), forward<X>(x) ),
+        rcons( forward<XS>(xs), forward<X>(x) ),
         forward<Y>(y), forward<Z>(z)...
     );
 }
@@ -916,7 +937,7 @@ struct Cons {
     using Result = decltype( cons(declval<S>(),declval<X>()...) );
 
     template< class S, class ...X >
-    Result<S,X...> operator() ( S&& s, X&& ...x ) {
+    constexpr Result<S,X...> operator() ( S&& s, X&& ...x ) {
         return cons( forward<S>(s), forward<X>(x)... );
     }
 };
@@ -926,10 +947,19 @@ struct RCons {
     using Result = decltype( rcons(declval<S>(),declval<X>()...) );
 
     template< class S, class ...X >
-    Result<S,X...> operator() ( S&& s, X&& ...x ) {
+    constexpr Result<S,X...> operator() ( S&& s, X&& ...x ) {
         return rcons( forward<S>(s), forward<X>(x)... );
     }
 };
+
+/* cons_fold f r xs = fold ((:) . f) r xs */
+template< class R, class F, class XS >
+R cons_fold( F&& f ,R r, XS&& xs ) {
+    for( const auto& x : forward<XS>(xs) ) {
+        r = cons( move(r), forward<F>(f)( x ) );
+    }
+    return r;
+}
 
 /* every_other x [a,b,c...] = [x,a,x,b,x,c...] */
 template< class X, class S, class R >
@@ -1010,26 +1040,343 @@ V filter( F&& f, const initializer_list<X>& cont ) {
 /* find pred xs -> Maybe x */
 template< class F, class S,
           class Val = typename cata::sequence_traits<S>::value_type >
-const Val* find( F&& f, const S& s )
-{
+const Val* find( F&& f, const S& s ) {
     const auto& e = end(s);
     const auto it = find_if( begin(s), e, forward<F>(f) );
     return it != e ? &(*it) : nullptr; 
 }
 
+using MaybeIndex = unique_ptr<size_t>;
+
+MaybeIndex JustIndex( size_t x ) { return MaybeIndex( new size_t(x) ); }
+MaybeIndex NothingIndex() { return nullptr; }
+
+template< class I, class S >
+MaybeIndex PossibleIndex( const I& i, const S& s ) {
+    return i != end(s) ? JustIndex( distance(begin(s),i) ) : NothingIndex();
+}
+
+template< class X, class S >
+const X* find_first( const X& x, const S& s ) {
+    auto it = std::find( begin(s), end(s), x );
+    return it != end(s) ? &(*it) : nullptr;
+}
+
 /* cfind x C -> C::iterator */
 template< typename S, typename T >
-constexpr auto cfind( T&& value, const S& cont )
-    -> decltype( begin(cont) )
+constexpr auto cfind( T&& x, S&& s )
+    -> decltype( begin(declval<S>()) )
 {
-    return find( begin(cont), end(cont), forward<T>(value) );
+    return find( begin(forward<S>(s)), end(forward<S>(s)),
+                 forward<T>(x) );
 }
 
 template< typename S, typename F >
-constexpr auto cfind_if( F&& f, const S& cont )
-    -> decltype( begin(cont) )
+constexpr auto cfind_if( F&& f, S&& s )
+    -> decltype( begin(declval<S>()) )
 {
-    return find_if( begin(cont), end(cont), forward<F>(f) );
+    return find_if( begin(forward<S>(s)), end(forward<S>(s)),
+                    forward<F>(f) );
+}
+
+template< typename S, typename T >
+constexpr auto cfind_not( const T& x, S&& s )
+    -> decltype( begin(declval<S>()) )
+{
+    return cfind_if (
+        fnot( closure(std::equal_to<T>(),x) ),
+        forward<S>(s)
+    );
+}
+
+template< class F, class S >
+MaybeIndex find_index( F&& f, const S& s ) {
+    return PossibleIndex( cfind_if(forward<F>(f),s), s );
+}
+
+template< class F, class S, class V = vector<size_t> >
+V find_indecies( F&& f, const S& s ) {
+    return PossibleIndex( cfind_if(forward<F>(f),s), s );
+}
+
+template< class S >
+Dup<S> take( size_t n, S&& s ) {
+    return dup( init_wrap(n, forward<S>(s)) );
+}
+
+template< class P, class S, class _S = typename decay<S>::type >
+_S take_while( P&& p, S&& s ) {
+    return _S (
+        begin( forward<S>(s) ),
+        cfind_if( fnot(forward<P>(p)), forward<S>(s) )
+    );
+}
+
+template< class S >
+Dup<S> drop( size_t n, S&& s ) {
+    return dup( tail_wrap(n, forward<S>(s)) );
+}
+
+template< class P, class S, class _S = typename decay<S>::type >
+_S drop_while( P&& p, S&& s ) {
+    return _S ( 
+        cfind_if( fnot(forward<P>(p)), forward<S>(s) ),
+        end( forward<S>(s) )
+    );
+}
+
+template< class Pred, class S >
+S drop_while_end( Pred p, S s ) {
+    s.erase( cfind_if(p,s), end(s) );
+    return s;
+}
+
+template< class X, class R > 
+using XInt = typename enable_if< !is_integral<X>::value, R >::type;
+
+template< class I, class S, class _S = typename decay<S>::type, 
+          class P = pair<_S,_S> >
+constexpr XInt<I,P> split_at( I it, S&& s ) 
+{
+    return { 
+        _S( begin(forward<S>(s)), it ),
+        _S( it, end(forward<S>(s)) ) 
+    };
+}
+
+template< class S, class _S = typename decay<S>::type, 
+          class P = pair<_S,_S> >
+constexpr P split_at( size_t n, S&& s ) {
+    return split_at (
+        next( begin(forward<S>(s)), 
+              min(length(s), n) ), // Don't split passed the end!
+        forward<S>(s)
+    );
+}
+
+template< class P,
+          class S, class _S = typename decay<S>::type, 
+          class R = pair<_S,_S> >
+R span( P&& p, S&& s ) {
+    R r;
+    for( auto& x : s )
+        (forward<P>(p)( x ) ? r.second:r.first).push_back( x );
+    return r;
+}
+
+template< class P,
+          class S, class _S = typename decay<S>::type, 
+          class R = pair<_S,_S> >
+R sbreak( P&& p, S&& s ) {
+    return split_at( cfind_if(forward<P>(p),forward<S>(s)), forward<S>(s) );
+}
+
+template< class XS, class YS >
+bool equal( const XS& xs, const YS& ys ) {
+    return length(xs) == length(ys) and
+        std::equal( begin(xs), end(xs), begin(ys) );
+}
+
+template< class XS, class YS >
+bool is_prefix( const XS& xs, const YS& ys ) {
+    return std::equal( begin(xs), end(xs), begin(ys) );
+}
+
+template< class X, class S >
+bool is_prefix( const initializer_list<X>& l, const S& s ) {
+    return std::equal( begin(l), end(l), begin(s) );
+}
+
+template< class XS, class YS >
+bool is_suffix( const XS& xs, const YS& ys ) {
+    return is_prefix( reverse_wrap(xs), reverse_wrap(ys) );
+}
+
+template< class X, class S >
+bool is_suffix( const initializer_list<X>& l, const S& s ) {
+    return is_prefix( reverse_wrap(l), reverse_wrap(s) );
+}
+
+template< class XS, class YS >
+bool is_infix( const XS& xs, const YS& ys ) {
+    return std::search( begin(ys), end(ys), begin(xs), end(xs) )
+        != end(ys);
+}
+
+template< class X, class S >
+bool is_infix( const initializer_list<X>& l, const S& s ) {
+    return std::search( begin(s), end(s), begin(l), end(l) )
+        != end(s);
+}
+
+template< class X, class S >
+bool elem( const X& x, const S& s ) {
+    return find_first( x, s );
+}
+
+template< class X, class S >
+bool not_elem( const X& x, const S& s ) {
+    return not elem( x, s );
+}
+
+template< class X, class S >
+MaybeIndex elem_index( const X& x, const S& s ) {
+    return PossibleIndex( cfind(x,s), s );
+}
+
+template< class X, class S, class V = vector<size_t> >
+V elem_indecies( const X& x, const S& s ) {
+    V v;
+    auto it = begin(s);
+    while(true) {
+        it = cfind( x, range<S>(it,end(s)) );
+        if( it != end(s) )
+            v.push_back( distance(begin(s),it++) );
+        else 
+            break;
+    }
+    return v;
+}
+
+template< class S >
+S nub( const S& s ) {
+    S r;
+    for( auto it = begin(s); it != end(s); it++ ) 
+        if( not_elem(*it, r) )
+            r.push_back( *it );
+    return r;
+}
+
+template< class X, class S >
+S erase( const X& x, S s ) {
+    auto it = cfind( x, s );
+    if( it != end(s) )
+        s.erase( it );
+    return s;
+}
+
+template< class F, class S >
+S erase_if( F&& f, S s ) {
+    auto it = cfind_if( f, s );
+    if( it != end(s) )
+        s.erase( it );
+    return s;
+}
+
+template< class S, class X >
+S cons_set( S s, X&& x ) {
+    return not_elem(x,s) ?  cons( move(s), forward<X>(x) ) : s;
+}
+
+template< class DS, class S, class X >
+S cons_difference( const DS& ds, S s, X&& x ) {
+    return not_elem(x,ds) ?  cons( move(s), forward<X>(x) ) : s;
+}
+
+template< class DS, class S, class X >
+S cons_intersection( const DS& ds, S s, X&& x ) {
+    return elem(x,ds) ?  cons( move(s), forward<X>(x) ) : s;
+}
+
+template< class XS, class YS, class R = typename decay<XS>::type >
+R difference( const XS& xs, const YS& ys ) {
+    R r;
+    for( const auto& x : xs )
+        r = cons_difference( ys, move(r), x );
+    return r;
+}
+
+template< class XS, class YS >
+XS sunion( XS xs, YS&& ys ) {
+    for( auto& y : forward<YS>(ys) )
+        xs = cons_set( move(xs), y );
+    return xs;
+}
+
+template< class XS, class YS >
+XS intersect( const XS& xs, const YS& ys ) {
+    XS r;
+    for( auto& x : xs )
+        r = cons_intersection( ys, move(r), x );
+    return r;
+}
+
+template< class F, class S >
+bool any( F&& f, const S& s ) {
+    return any_of( begin(s), end(s), forward<F>(f) );
+}
+
+template< class F, class XS, class YS >
+XS intersect_if( F&& f, const XS& xs, const YS& ys ) {
+    XS r;
+    for( auto& x : xs )
+        if( any( closure(forward<F>(f),x), ys ) )
+            r.push_back( x );
+    return r;
+}
+
+template< class XS, class YS, class U = unique_ptr<YS> >
+U strip_prefix( const XS& xs, const YS& ys ) {
+    return is_prefix( xs, ys ) ?
+        U( new YS( next(begin(ys),length(xs)), end(ys) ) )
+        : nullptr;
+}
+template< class M > struct Return;
+
+template< class XS, class YS >
+constexpr XS maybe_cons_range( XS&& xs, YS&& ys ) {
+    return not null(ys) ? cons( forward<XS>(xs), forward<YS>(ys) )
+        : forward<XS>(xs);
+}
+
+template< class S, class _S = typename decay<S>::type,
+          class V = vector<_S> >
+V group( S&& s ) {
+    V v;
+
+    auto it = begin( forward<S>(s) ), next = it;
+    const auto e = end( forward<S>(s) );
+
+    for( ; it != e; it = next) {
+        auto adj = adjacent_find( it, e );
+        v = maybe_cons_range ( 
+            // First, cons all the non-adjacent members.
+            cons_fold (
+                Return<_S>(), move(v), 
+                range<S>( it, adj ) 
+            ),
+            // Then cons the adjacent members.
+            _S( adj, next = cfind_not(*adj,range<S>(adj,e)) ) 
+        );
+    }
+
+    return v;
+}
+
+template< class S, class V = vector<S> >
+V _inits( const S& s ) {
+    V v;
+    for( auto it = begin(s); it != end(s); it++ )
+        v.push_back( S(begin(s),it) );
+    return v;
+}
+
+template< class S, class V = vector<S> >
+V inits( const S& s ) {
+    return not null(s) ? _inits(s) : V();
+}
+
+template< class S, class V = vector<S> >
+V _tails( const S& s ) {
+    V v{ S() };
+    for( auto it = end(s); it != begin(s); )
+        v.push_back( S(--it,end(s)) );
+    return v;
+}
+
+template< class S, class V = vector<S> >
+V tails( const S& s ) {
+    return not null(s) ? _tails(s) : V();
 }
 
 /* all f C -> true when f(x) is true for all x in C; otherwise false. */
@@ -1510,9 +1857,17 @@ template< class M, class X > M mreturn( X&& x ) {
 
 /* mreturn () = (\x -> return x) */
 template< class M, class Mo = Monad<typename cata::Cat<M>::type> > 
-decltype( Mo::mreturn() ) mreturn() { 
+constexpr decltype( Mo::mreturn() ) mreturn() { 
     return Mo::mreturn();
 }
+
+template< class M > struct Return {
+    template< class X >
+    constexpr decltype( mreturn<M>(declval<X>()) )
+    operator() ( X&& x ) {
+        return mreturn<M>( forward<X>(x) );
+    }
+};
 
 template< class M >
 M mfail( const char* const why ) {
