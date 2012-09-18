@@ -201,14 +201,14 @@ int main()
 
     printf( "intersparse ',' \"abcd\" = %s\n",
             intersparse( ',', string("abcd") ).c_str() );
-    printf( "intercalcate \"--\" {\"abc\",\"def\"} = %s\n",
+    printf( "intercalcate \"--\" {\"ab\",\"cd\",\"ef\"} = %s\n",
              intercalcate ( 
                  string("--"),
                  vector<string>{"ab","cd","ef"}
              ).c_str() );
 
-    printf( "sbreak even [1..8] = %s\n",
-            show( sbreak(even,vector<int>{1,2,3,4,5,6,7,8}) ).c_str() );
+    printf( "partition even [1..8] = %s\n",
+            show( partition(even,vector<int>{1,2,3,4,5,6,7,8}) ).c_str() );
     printf( "goup \"footoonopor\" = %s\n",
             show( group(string("footoonopor")) ).c_str() );
     printf( "elemIndecies 'o' \"footoonopor\" = %s\n",
