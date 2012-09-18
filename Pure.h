@@ -1054,6 +1054,21 @@ S concat( const SS& ss ) {
     return foldl( append<S,S>, S(), ss );
 }
 
+template< class S >
+constexpr S sort( S s ) {
+    std::sort( begin(s), end(s) );
+    return s;
+}
+
+template< class X, class S >
+S insert( X&& x, S s ) {
+    s.insert( 
+        upper_bound( begin(s), end(s), forward<X>(x) ),
+        forward<X>(x)
+    );
+    return s;
+}
+
 template< typename Container >
 constexpr bool ordered( const Container& c )
 {
@@ -1263,14 +1278,12 @@ bool is_suffix( const initializer_list<X>& l, const S& s ) {
 
 template< class XS, class YS >
 bool is_infix( const XS& xs, const YS& ys ) {
-    return std::search( begin(ys), end(ys), begin(xs), end(xs) )
-        != end(ys);
+    return std::includes( begin(ys), end(ys), begin(xs), end(xs) );
 }
 
 template< class X, class S >
 bool is_infix( const initializer_list<X>& l, const S& s ) {
-    return std::search( begin(s), end(s), begin(l), end(l) )
-        != end(s);
+    return std::includes( begin(s), end(s), begin(l), end(l) );
 }
 
 template< class X, class S >
@@ -1464,7 +1477,9 @@ constexpr bool all( F&& f, const Container& cont )
 template< class F, class S,
           class R = decltype( declval<F>()( head(declval<S>()) ) ) > 
 R concatMap( F&& f, S&& xs ) {
-    return foldl ( 
+    return foldl (
+        // flip append . f = \x xs -> append xs (f x)
+        // \xs x -> append xs (f x)
         flip( compose( flip(Append()), forward<F>(f) ) ), 
         R(), forward<S>(xs)
     );

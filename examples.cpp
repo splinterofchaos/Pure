@@ -197,6 +197,7 @@ int main()
     printf( "\tisPrefixOf [2,4] es = %s\n", show( is_prefix({2,4},evens) ).c_str() );
     printf( "\telem 2 es = %s\n", show( elem(2,evens) ).c_str() );
     printf( "\tdelete 4 es = %s\n", show( erase(4,evens) ).c_str() );
+    printf( "\tinsert 5 es = %s\n", show( insert(5,evens) ).c_str() );
     puts("");
 
     printf( "intersparse ',' \"abcd\" = %s\n",
