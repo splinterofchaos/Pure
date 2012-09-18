@@ -608,66 +608,139 @@ constexpr bool null( const S& s ) {
 }
 
 template< class S >
-using SValue = typename cata::sequence_traits<S>::value_type;
+using SeqRef = typename cata::sequence_traits<S>::reference;
+template< class S >
+using SeqVal = typename cata::sequence_traits<S>::value_type;
 template< class S >
 using SIter = typename cata::sequence_traits<S>::iterator;
 
 template< class S >
-constexpr SValue<S> head( S&& s ) {
+constexpr SeqVal<S> head( S&& s ) {
     return *begin( forward<S>(s) );
 }
 
+template< class X > 
+constexpr X head( const initializer_list<X>& l ) {
+    return *begin(l);
+}
+
 template< class S >
-constexpr SValue<S> last( S&& s ) {
+constexpr SeqVal<S> last( S&& s ) {
     return *prev( end(forward<S>(s)) );
 }
 
-template< class I > struct FakeSequence {
+template< class X >
+constexpr X last( const initializer_list<X>& l ) {
+    return *prev( end(l) );
+}
+
+template< class ... > struct NonInitListT {};
+
+template< class XS > struct NonInitListT<XS> {
+    using type = XS;
+};
+
+template< class X > struct NonInitListT<initializer_list<X>> {
+    using type = vector<X>;
+};
+
+template< class XS >
+using NonInitList = typename NonInitListT <
+    typename decay<XS>::type
+>::type;
+
+template< class S, class I > struct Range {
     I b, e;
 
-    constexpr FakeSequence( I b, I e ) : b(b), e(e) { }
+    using type = NonInitList<S>;
+    
+    using iterator = I; 
+    using reference = decltype( *declval<I>() );
+    using value_type = typename decay<reference>::type;
+
+    template< class _I >
+    constexpr Range( _I b, _I e ) : b(b), e(e) { }
 
     constexpr I begin() { return b; }
     constexpr I end()   { return e; }
 };
 
-template< class S, class T = FakeSequence<SIter<S>> > 
-constexpr T tail( S&& s ) {
-    return T( 
-        next( begin(forward<S>(s)) ),
-        end( forward<S>(s) )
-    );
+template< class S, class R = Range<S,SIter<S>> >
+constexpr R range( S&& s ) {
+    return R( begin(forward<S>(s)), end(forward<S>(s)) );
 }
 
-template< class S, class I = FakeSequence<SIter<S>> > 
-constexpr I init( S&& s ) {
-    return I (
-        begin( forward<S>(s) ),
-        prev( end(forward<S>(s)) )
-    );
+template< class S, class R = Range<S,SIter<S>> >
+constexpr R tail_wrap( S&& s ) {
+    return length(forward<S>(s)) ? R( next( begin(forward<S>(s)) ), 
+                                            end( forward<S>(s) ) )
+        : range( forward<S>(s) );
 }
 
-template< class S, class I = reverse_iterator< SIter<S> >,
-          class R = FakeSequence<I> >
-constexpr R reverse( S&& s ) {
-    return R ( 
-        I( end(forward<S>(s)) ),
-        I( begin(forward<S>(s)) )
-    );
+template< class S, class R = Range<S,SIter<S>> >
+constexpr R init_wrap( S&& s ) {
+    return length(forward<S>(s)) ? R( begin(forward<S>(s)), 
+                                      prev( end(forward<S>(s)) ) )
+        : range( forward<S>(s) );
+}
+
+template< class S, class I = SIter<S>, 
+          class R = Range<S,reverse_iterator<I>> >
+constexpr R reverse_wrap( S&& s ) {
+    return R( end(forward<S>(s)), begin(forward<S>(s)) );
+}
+
+template< class R, class S >
+R _dup( const S& s ) {
+    R r;
+    copy( begin(s), end(s), back_inserter(r) );
+    return r;
+}
+
+template< class S >
+S dup( const S& s ) {
+    return _dup<S>( s );
+}
+
+template< class S, class I, class _S = typename Range<S,I>::type >
+_S dup( const Range<S,I>& r ) {
+    return _dup<_S>( r );
+}
+
+template< class X, class V = vector<X> >
+V dup( const initializer_list<X>& l ) {
+    return _dup<V>( l );
+}
+
+template< class S > using Dup = decltype( dup(declval<S>()) );
+
+template< class S > 
+Dup<S> tail( const S& s ) {
+    return dup( tail_wrap(s) );
+}
+
+template< class S > 
+Dup<S> init( const S& s ) {
+    return dup( init_wrap(s) );
+}
+
+template< class S >
+Dup<S> reverse( const S& s ) {
+    return dup( reverse_wrap(s) );
 }
 
 template< class F, class RI, class XS >
-void map_impl( F&& f, RI&& ri, const XS& xs ) {
+void _map( F&& f, RI&& ri, const XS& xs ) {
     transform( begin(xs), end(xs), 
                forward<RI>(ri), forward<F>(f) );
 }
 
 template< class F, class RI, class XS, class YS, class ...ZS >
-void map_impl( F&& f, RI&& ri, 
+void _map( F&& f, RI&& ri, 
                const XS& xs, const YS& ys, const ZS& ...zs ) 
 {
     for( const auto& x : xs )
-        map_impl( closure(forward<F>(f),x), forward<RI>(ri), 
+        _map( closure(forward<F>(f),x), forward<RI>(ri), 
                   ys, zs... );
 }
 
@@ -682,7 +755,7 @@ template< template<class...> class S, class X, class ...XS, class F,
 XSame<FX,X,R> map( F&& f, const S<X,XS...>& xs ) 
 {
     R r;
-    map_impl( forward<F>(f), back_inserter(r), xs );
+    _map( forward<F>(f), back_inserter(r), xs );
     return r;
 }
 
@@ -691,7 +764,7 @@ template< template<class...> class S, class X, class ...XS, class F,
           class FX = Result<F,X> > 
 ESame< FX, X, S<X,XS...> > map( F&& f, S<X,XS...> xs ) 
 {
-    map_impl( forward<F>(f), begin(xs), xs );
+    _map( forward<F>(f), begin(xs), xs );
     return xs;
 }
 
@@ -699,7 +772,7 @@ template< class F, class X, class V = vector< Result<F,X> > >
 V map( F&& f, const initializer_list<X>& l ) {
     V v; 
     v.reserve( length(l) );
-    map_impl( forward<F>(f), begin(v), l );
+    _map( forward<F>(f), begin(v), l );
     return v;
 }
 
@@ -723,7 +796,7 @@ R map( F&& f, const S<X,_S...>& xs, const S<Y,_S...>& ys,
        const S<Z,_S...>& ...zs )
 {
    R r;
-   map_impl( forward<F>(f), back_inserter(r), 
+   _map( forward<F>(f), back_inserter(r), 
              xs, ys, zs... );
    return r;
 }
@@ -733,12 +806,17 @@ template< class X, size_t N, class F,
           class R = Result<F,X> >
 array< R, N > map( F&& f, const array< X, N >& xs ) {
     array< R, N > r;
-    map_impl( forward<F>(f), begin(r), xs );
+    _map( forward<F>(f), begin(r), xs );
     return r;
 }
 
+template< class F, class S >
+void vmap( F&& f, S&& s ) {
+    std::for_each( begin(forward<S>(s)), end(forward<S>(s)), forward<F>(f) );
+}
+
 template< class F, class X, class S >
-constexpr X fold_impl( F&& f, X&& x, const S& s ) {
+constexpr X _foldl( F&& f, X&& x, const S& s ) {
     return std::accumulate( begin(s), end(s), 
                             forward<X>(x), forward<F>(f) );
 }
@@ -747,45 +825,45 @@ constexpr X fold_impl( F&& f, X&& x, const S& s ) {
 /* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
 template< class F, class X, class S >
 constexpr X foldl( F&& f, X&& x, const S& s ) {
-    return fold_impl( forward<F>(f), forward<X>(x), s );
+    return _foldl( forward<F>(f), forward<X>(x), s );
 }
 
 template< class F, class X, class Y >
 constexpr X foldl( F&& f, X&& x, const initializer_list<Y>& s ) {
-    return fold_impl( forward<F>(f), forward<X>(x), s );
+    return _foldl( forward<F>(f), forward<X>(x), s );
 }
 
 template< class F, class S, 
           class X = typename cata::sequence_traits<S>::value_type >
 constexpr X foldl( F&& f, const S& s ) {
-    return fold_impl( forward<F>(f), head(s), tail(s) );
+    return _foldl( forward<F>(f), head(s), tail_wrap(s) );
 }
 
 template< class F, class X >
 constexpr X foldl( F&& f, const initializer_list<X>& s ) {
-    return fold_impl( forward<F>(f), head(s), tail(s) );
+    return _foldl( forward<F>(f), head(s), tail_wrap(s) );
 }
 
 /* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
 template< class F, class X, class S >
 constexpr X foldr( F&& f, X&& x, const S& s ) {
-    return foldl( forward<F>(f), forward<X>(x), reverse(s) );
+    return foldl( forward<F>(f), forward<X>(x), reverse_wrap(s) );
 }
 
 template< class F, class X, class Y >
 constexpr X foldr( F&& f, X&& x, const initializer_list<Y>& s ) {
-    return foldl( forward<F>(f), forward<X>(x), reverse(s) );
+    return foldl( forward<F>(f), forward<X>(x), reverse_wrap(s) );
 }
 
 template< class F, class S, 
           class X = typename cata::sequence_traits<S>::value_type >
 constexpr X foldr( F&& f, const S& s ) {
-    return foldl( forward<F>(f), reverse(s) );
+    return foldl( forward<F>(f), reverse_wrap(s) );
 }
 
 template< class F, class Y >
 constexpr Y foldr( F&& f, const initializer_list<Y>& s ) {
-    return foldl( forward<F>(f), reverse(s) );
+    return foldl( forward<F>(f), reverse_wrap(s) );
 }
 
 /* 
@@ -804,29 +882,82 @@ A append( A&& a, const B& b, const C& c, const D& ... d )
     return append( append(forward<A>(a), b), c, d... );
 }
 
-/* 
- * intersparse x [a,b,c] = [a,x,b,x,c]
- * Requires sequence to have random access iterators.
- */
-template< class X, class S >
-S intersparse( X&& x, S s ) {
-    if( length(s) < 2 ) return s;
 
-    auto it = next( begin(s) );
-    while( it < end(s) ) {
-        it = s.insert( it, forward<X>(x) );
-        it += 2;
-    }
-
-    return s;
+template< class XS, class X >
+XS cons( XS xs, X&& x ) {
+    xs.push_back( forward<X>(x) );
+    return xs;
 }
 
+template< class XS, class X, class Y, class ...Z >
+XS cons( XS xs, X&& x, Y&& y, Z&& ...z ) {
+    return cons (
+        cons( move(xs), forward<X>(x) ),
+        forward<Y>(y), forward<Z>(z)...
+    );
+}
+
+template< class XS, class X >
+XS rcons( XS xs, X&& x ) {
+    xs.push_front( forward<X>(x) );
+    return xs;
+}
+
+template< class XS, class X, class Y, class ...Z >
+XS rcons( XS xs, X&& x, Y&& y, Z&& ...z ) {
+    return rcons (
+        rcons( move(xs), forward<X>(x) ),
+        forward<Y>(y), forward<Z>(z)...
+    );
+}
+
+struct Cons {
+    template< class S, class ...X >
+    using Result = decltype( cons(declval<S>(),declval<X>()...) );
+
+    template< class S, class ...X >
+    Result<S,X...> operator() ( S&& s, X&& ...x ) {
+        return cons( forward<S>(s), forward<X>(x)... );
+    }
+};
+
+struct RCons {
+    template< class S, class ...X >
+    using Result = decltype( rcons(declval<S>(),declval<X>()...) );
+
+    template< class S, class ...X >
+    Result<S,X...> operator() ( S&& s, X&& ...x ) {
+        return rcons( forward<S>(s), forward<X>(x)... );
+    }
+};
+
+/* every_other x [a,b,c...] = [x,a,x,b,x,c...] */
+template< class X, class S, class R >
+R _every_other( const X& x, const S& s, R r ) {
+    for( const auto& y : s ) 
+        r = cons( move(r), x, y );
+    return r;
+}
+
+template< class X, class S >
+S every_other( const X& x, const S& s ) {
+    return _every_other( x, s, S() );
+}
+
+/* intersparse x [a,b,c] = [a,x,b,x,c] */
+template< class X, class S >
+S intersparse( const X& x, const S& s ) {
+    return length(s) > 1 ?
+        _every_other( x, tail_wrap(s), S{head(s)} ) : s;
+}
+
+/* intercalcate "--" {"ab","cd","ef"} */
 template< class S, class SS >
 S intercalcate( const S& s, const SS& ss ) {
     if( null(ss) ) return S();
 
     S r = head(ss);
-    for( const auto& xs : tail(ss) )
+    for( const auto& xs : tail_wrap(ss) )
         r = append( move(r), s, xs );
     return r;
 }
