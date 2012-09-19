@@ -632,6 +632,11 @@ constexpr bool null( const S& s ) {
 }
 
 template< class S >
+constexpr bool not_null( const S& s ) {
+    return begin(s) != end(s);
+}
+
+template< class S >
 using SeqRef = typename cata::sequence_traits<S>::reference;
 template< class S >
 using SeqVal = typename cata::sequence_traits<S>::value_type;
@@ -714,6 +719,21 @@ constexpr R tail_wrap( size_t n, S&& s ) {
     );
 }
 
+/* 
+ * Prevent infinitely recursive types! 
+ * tail_wrap( tail_wrap(r) ) will not imply a Range<Range<S,I>,I>.
+ */
+template< class S, class I >
+Range<S,I> tail_wrap( size_t n, Range<S,I> r ) {
+    r.b = next(r.b, n);
+    return r;
+}
+
+template< class S, class I >
+Range<S,I> tail_wrap( Range<S,I> r ) {
+    return tail_wrap( 1, r );
+}
+
 template< class S, class R = Range<S,SIter<S>> >
 constexpr R init_wrap( S&& s ) {
     return length(forward<S>(s)) ? R( begin(forward<S>(s)), 
@@ -727,6 +747,17 @@ constexpr R init_wrap( size_t n, S&& s ) {
         begin( forward<S>(s) ),
         next( begin(forward<S>(s)), n )
     );
+}
+
+template< class S, class I >
+Range<S,I> init_wrap( size_t n, Range<S,I> r ) {
+    r.e = prev(r.e, n);
+    return r;
+}
+
+template< class S, class I >
+Range<S,I> init_wrap( Range<S,I> r ) {
+    return init_wrap( 1, r );
 }
 
 template< class S, class I = SIter<S>, 
@@ -806,6 +837,18 @@ using ESame = typename std::enable_if< is_same<A,B>::value, R >::type;
 template< class A, class B, class R >
 using XSame = typename std::enable_if< !is_same<A,B>::value, R >::type;
 
+template< class ... >
+struct _Remap;
+
+template< template<class,class...> class S, class X, class ...XS >
+struct _Remap< S<X,XS...> > {
+    template< class Y >
+    using To = S<Y,XS...>;
+};
+
+template< class S, class X >
+using Remap = typename _Remap<S>::template To<X>;
+
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< template<class...> class S, class X, class ...XS, class F,
           class FX = Result<F,X>, class R = S<FX,XS...> > 
@@ -866,6 +909,9 @@ array< R, N > map( F&& f, const array< X, N >& xs ) {
     _map( forward<F>(f), begin(r), xs );
     return r;
 }
+
+template< class F, class ...S >
+using ResultMap = decltype( map(declval<F>(), declval<S>()...) );
 
 template< class F, class S >
 void vmap( F&& f, S&& s ) {
@@ -2517,6 +2563,41 @@ Container zip_with( F&& f, const Container& a, Container b )
                begin(b), forward<F>(f) );
     return b;
 }
+
+/* each f a b c... = all f [a,b,c...] */
+template< class F, class X >
+bool each( F&& f, X&& x ) {
+    return forward<F>(f)( forward<X>(x) );
+}
+
+template< class F, class X, class Y, class ...Z >
+bool each( F&& f, X&& x, Y&& y, Z&& ...z ) {
+    return each( forward<F>(f), forward<X>(x) ) and 
+        each( forward<F>(f), forward<Y>(y), forward<Z>(z)... );
+}
+
+struct NotNull {
+    template< class X >
+        bool operator() ( X&& x ) {
+            return not_null( forward<X>(x) );
+        }
+};
+
+template< class F, class R, class ...S >
+R _zip_with( F&& f, R r, S&& ...s ) {
+    return each(NotNull(), s... ) ?
+        _zip_with( forward<F>(f),
+                   cons( move(r), forward<F>(f)( head(forward<S>(s))... ) ),
+                   tail_wrap( forward<S>(s) )... )
+        : r;
+}
+
+template< class F, class XS, class ...YS, class R = Dup<XS> >
+R zip_with( F&& f, XS&& xs, YS&& ...ys ) {
+    return _zip_with( forward<F>(f), R(), 
+                      forward<XS>(xs), forward<YS>(ys)... );
+}
+
 
 /*
  * cleave x f g h -> { f(x), g(x), h(x) }

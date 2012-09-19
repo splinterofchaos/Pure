@@ -26,13 +26,10 @@ typedef array<float,2> Vec;
 constexpr int get_x( const Vec& v ) { return v[0]; } 
 constexpr int get_y( const Vec& v ) { return v[1]; }
 
-Vec operator + ( const Vec& a, Vec&& b )
+Vec operator + ( const Vec& a, const Vec& b )
 { 
-    return zip_with( plus<float>(), a, move(b) ); 
+    return zip_with( plus<float>(), a, b ); 
 }
-
-Vec operator + ( Vec&& a, const Vec& b )      { return b + move(a); } 
-Vec operator + ( const Vec& a, const Vec& b ) { return a + Vec(b); }
 
 
 Vec operator * ( Vec&& a, float x )
@@ -321,16 +318,21 @@ int main()
             show( plus_two ^ Right<string>(5) ).c_str() );
 
     puts("");
-    puts("add3 a b c = (\\x y z -> x + y + z) <$> a <*> b <*> c");
-    auto add3 = fmap( [](int x, int y, int z){return x+y+z;} );
-    printf( "add3 (Just 1) (Just 2) (Just 3) = %s\n",
-            show( add3( Just(1), Just(2), Just(3) ) ).c_str() );
-    printf( "add3 [1,2] [3,4] [5,6] = %s\n",
-            show( add3(vector<int>{1,2}, vector<int>{3,4}, 
+    puts("add3 x y z = x + y + z");
+    puts("add3M a b c = add3 <$> a <*> b <*> c");
+    auto add3 = [](int x, int y, int z){ return x+y+z; };
+    auto add3M = fmap( add3 );
+    printf( "add3M (Just 1) (Just 2) (Just 3) = %s\n",
+            show( add3M( Just(1), Just(2), Just(3) ) ).c_str() );
+    printf( "add3M [1,2] [3,4] [5,6] = %s\n",
+            show( add3M(vector<int>{1,2}, vector<int>{3,4}, 
                        vector<int>{5,6}) ).c_str() );
     printf( "(+) <$> Pair 1 2 <*> Pair 3 4 = %s\n", 
             show( fmap(std::plus<int>(), std::make_pair(1,2),
                                          std::make_pair(3,4)) ).c_str() );
+    using V = vector<int>;
+    printf( "zip_with add3 [1,2] [3,4] [5,6] = %s\n",
+            show( zip_with(add3,V{1,2},V{3,4},V{5,6}) ).c_str() );
     puts("");
 
     vector<int> N = {1,2,3,4,5,6,7,8};
