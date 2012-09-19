@@ -197,7 +197,7 @@ int main()
     printf( "\tdelete 4 es = %s\n", show( erase( 4,evens) ).c_str() );
     printf( "\tinsert 5 es = %s\n", show( insert(5,evens) ).c_str() );
     printf( "\tdeleteFirstBy (==) es [2,6] = %s\n", 
-            show( erase_first( equal_to<int>(),evens,{1,2,6} ) ).c_str() );
+            show( erase_first( equal_to<int>(),evens,vector<int>{1,2,6} ) ).c_str() );
     printf( "\tpermutations (take 3 es) = %s\n", 
             show( permutations( take(3,evens) ) ).c_str() );
     printf( "\tscanl (+) %s = %s\n", 
@@ -316,23 +316,25 @@ int main()
             show( plus_two ^ Left<int>("yawn") ).c_str() );
     printf( "(+2) <$> (Right 5)     = %s\n",
             show( plus_two ^ Right<string>(5) ).c_str() );
+    printf( "\t(+) <$> Pair 1 2 <*> Pair 3 4 = %s\n", 
+            show( fmap(std::plus<int>(), std::make_pair(1,2),
+                                         std::make_pair(3,4)) ).c_str() );
 
     puts("");
     puts("add3 x y z = x + y + z");
     puts("add3M a b c = add3 <$> a <*> b <*> c");
     auto add3 = [](int x, int y, int z){ return x+y+z; };
     auto add3M = fmap( add3 );
-    printf( "add3M (Just 1) (Just 2) (Just 3) = %s\n",
+    printf( "\tadd3M (Just 1) (Just 2) (Just 3) = %s\n",
             show( add3M( Just(1), Just(2), Just(3) ) ).c_str() );
-    printf( "add3M [1,2] [3,4] [5,6] = %s\n",
+    printf( "\tadd3M [1,2] [3,4] [5,6] = %s\n",
             show( add3M(vector<int>{1,2}, vector<int>{3,4}, 
                        vector<int>{5,6}) ).c_str() );
-    printf( "(+) <$> Pair 1 2 <*> Pair 3 4 = %s\n", 
-            show( fmap(std::plus<int>(), std::make_pair(1,2),
-                                         std::make_pair(3,4)) ).c_str() );
     using V = vector<int>;
-    printf( "zip_with add3 [1,2] [3,4] [5,6] = %s\n",
+    printf( "\tzip_with add3 [1,2] [3,4] [5,6] = %s\n",
             show( zip_with(add3,V{1,2},V{3,4},V{5,6}) ).c_str() );
+    printf( "\tfold add3 10 [1,2] [3,4] = %s\n",
+            show( foldl(add3,10,V{1,2},V{3,4}) ).c_str() );
     puts("");
 
     vector<int> N = {1,2,3,4,5,6,7,8};

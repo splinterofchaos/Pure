@@ -644,7 +644,7 @@ template< class S >
 using SIter = typename cata::sequence_traits<S>::iterator;
 
 template< class S >
-constexpr SeqVal<S> head( S&& s, size_t n = 0 ) {
+constexpr SeqRef<S> head( S&& s, size_t n = 0 ) {
     return *next( begin(forward<S>(s)), n );
 }
 
@@ -654,7 +654,7 @@ constexpr X head( const initializer_list<X>& l, size_t n = 0 ) {
 }
 
 template< class S >
-constexpr SeqVal<S> last( S&& s, size_t n = 0 ) {
+constexpr SeqRef<S> last( S&& s, size_t n = 0 ) {
     return *prev( end(forward<S>(s)), n+1 );
 }
 
@@ -918,54 +918,71 @@ void vmap( F&& f, S&& s ) {
     std::for_each( begin(forward<S>(s)), end(forward<S>(s)), forward<F>(f) );
 }
 
-template< class F, class X, class I >
-constexpr X accuml( F&& f, X&& x, I b, I e ) {
-    return b != e ?
+template< class X >
+using Decay = typename decay<X>::type;
+
+/* each f a b c... = all f [a,b,c...] */
+template< class F, class X >
+bool each( F&& f, X&& x ) {
+    return forward<F>(f)( forward<X>(x) );
+}
+
+template< class F, class X, class Y, class ...Z >
+bool each( F&& f, X&& x, Y&& y, Z&& ...z ) {
+    return each( forward<F>(f), forward<X>(x) ) and 
+        each( forward<F>(f), forward<Y>(y), forward<Z>(z)... );
+}
+
+struct NotNull {
+    template< class X >
+        bool operator() ( X&& x ) {
+            return not_null( forward<X>(x) );
+        }
+};
+
+
+template< class F, class X, class ...S >
+constexpr Decay<X> accuml( F&& f, X&& x, S&& ...s ) {
+    return each(NotNull(), s... ) ?
         accuml( forward<F>(f), 
-                forward<F>(f)( forward<X>(x), *b ), next(b), e )
+                forward<F>(f)( forward<X>(x), head(forward<S>(s))... ),
+                tail_wrap(forward<S>(s))... )
         : forward<X>(x);
 }
 
-template< class F, class X, class S >
-constexpr X _foldl( F&& f, X&& x, S&& s ) {
-    return accuml( forward<F>(f), forward<X>(x), 
-                   begin(forward<S>(s)), end(forward<S>(s)) );
-}
-
-
 /* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
-template< class F, class X, class S >
-constexpr X foldl( F&& f, X&& x, S&& s ) {
-    return _foldl( forward<F>(f), forward<X>(x), forward<S>(s) );
+template< class F, class X, class ...S >
+constexpr Decay<X> foldl( F&& f, X&& x, S&& ...s ) {
+    return accuml( forward<F>(f), forward<X>(x), forward<S>(s)... );
 }
 
 template< class F, class X, class Y >
-constexpr X foldl( F&& f, X&& x, const initializer_list<Y>& s ) {
-    return _foldl( forward<F>(f), forward<X>(x), s );
+constexpr Decay<X> foldl( F&& f, X&& x, initializer_list<Y> s ) {
+    return accuml( forward<F>(f), forward<X>(x), move(s) );
 }
 
 template< class F, class S, 
           class X = typename cata::sequence_traits<S>::value_type >
 constexpr X foldl( F&& f, S&& s ) {
-    return _foldl( forward<F>(f), 
-                   head(forward<S>(s)), tail_wrap(forward<S>(s)) );
+    return foldl( forward<F>(f), 
+                  head(forward<S>(s)), tail_wrap(forward<S>(s)) );
 }
 
 template< class F, class X >
-constexpr X foldl( F&& f, const initializer_list<X>& s ) {
-    return _foldl( forward<F>(f), head(s), tail_wrap(s) );
+constexpr X foldl( F&& f, initializer_list<X> s ) {
+    return foldl( forward<F>(f), head(s), tail_wrap(move(s)) );
 }
 
 /* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
-template< class F, class X, class S >
-constexpr X foldr( F&& f, X&& x, S&& s ) {
+template< class F, class X, class ...S >
+constexpr Decay<X> foldr( F&& f, X&& x, S&& ...s ) {
     return foldl( flip(forward<F>(f)), forward<X>(x), 
-                  reverse_wrap(forward<S>(s)) );
+                  reverse_wrap(forward<S>(s))... );
 }
 
 template< class F, class X, class Y >
-constexpr X foldr( F&& f, X&& x, const initializer_list<Y>& s ) {
-    return foldl( flip(forward<F>(f)), forward<X>(x), reverse_wrap(s) );
+constexpr Decay<X> foldr( F&& f, X&& x, initializer_list<Y> s ) {
+    return foldl( flip(forward<F>(f)), forward<X>(x), reverse_wrap(move(s)) );
 }
 
 template< class F, class S, 
@@ -976,8 +993,8 @@ constexpr X foldr( F&& f, S&& s ) {
 }
 
 template< class F, class Y >
-constexpr Y foldr( F&& f, const initializer_list<Y>& s ) {
-    return foldl( flip(forward<F>(f)), reverse_wrap(s) );
+constexpr Y foldr( F&& f, initializer_list<Y> s ) {
+    return foldr( forward<F>(f), head(s), tail_wrap(move(s)) );
 }
 
 /* 
@@ -1253,7 +1270,7 @@ S concat( const SS& ss ) {
 }
 
 template< class S >
-constexpr S sort( S s ) {
+S sort( S s ) {
     std::sort( begin(s), end(s) );
     return s;
 }
@@ -1537,28 +1554,28 @@ S erase( const X& x, S s ) {
 }
 
 template< class F, class X, class S >
-S erase( F&& f, X&& x, S s ) {
-    auto it = cfind_if( closure(forward<F>(f),forward<X>(x)), s );
+S erase( F&& f, const X& x, S s ) {
+    auto it = cfind_if( closure(forward<F>(f),x), s );
     if( it != end(s) )
         s.erase( it );
     return s;
 }
 
 template< class P, class XS, class YS >
-XS erase_first( P&& p, XS&& xs, YS&& ys ) {
+XS erase_first( P&& p, XS xs, YS&& ys ) {
     using F = XS(*)( const P&, SeqRef<YS>, XS );
     return foldl (
-        // \x s -> erase p x s
+        // \s x -> erase p x s
         flip( closure( (F)erase, forward<P>(p) ) ), 
-        forward<XS>(xs), forward<YS>(ys) 
+        move(xs), forward<YS>(ys) 
     ); 
 }
 
 template< class P, class XS, class Y >
-XS erase_first( P&& p, XS&& xs, const initializer_list<Y>& l ) {
+XS erase_first( P&& p, XS xs, initializer_list<Y> l ) {
     using F = XS(*)( const P&, const Y&, XS );
     return foldl( flip(closure((F)erase,forward<P>(p))), 
-                  forward<XS>(xs), l ); 
+                  xs, move(l) ); 
 }
 
 template< class S, class X >
@@ -2563,25 +2580,6 @@ Container zip_with( F&& f, const Container& a, Container b )
                begin(b), forward<F>(f) );
     return b;
 }
-
-/* each f a b c... = all f [a,b,c...] */
-template< class F, class X >
-bool each( F&& f, X&& x ) {
-    return forward<F>(f)( forward<X>(x) );
-}
-
-template< class F, class X, class Y, class ...Z >
-bool each( F&& f, X&& x, Y&& y, Z&& ...z ) {
-    return each( forward<F>(f), forward<X>(x) ) and 
-        each( forward<F>(f), forward<Y>(y), forward<Z>(z)... );
-}
-
-struct NotNull {
-    template< class X >
-        bool operator() ( X&& x ) {
-            return not_null( forward<X>(x) );
-        }
-};
 
 template< class F, class R, class ...S >
 R _zip_with( F&& f, R r, S&& ...s ) {
