@@ -639,23 +639,23 @@ template< class S >
 using SIter = typename cata::sequence_traits<S>::iterator;
 
 template< class S >
-constexpr SeqVal<S> head( S&& s ) {
-    return *begin( forward<S>(s) );
+constexpr SeqVal<S> head( S&& s, size_t n = 0 ) {
+    return *next( begin(forward<S>(s)), n );
 }
 
 template< class X > 
-constexpr X head( const initializer_list<X>& l ) {
-    return *begin(l);
+constexpr X head( const initializer_list<X>& l, size_t n = 0 ) {
+    return *next( begin(l), n );
 }
 
 template< class S >
-constexpr SeqVal<S> last( S&& s ) {
-    return *prev( end(forward<S>(s)) );
+constexpr SeqVal<S> last( S&& s, size_t n = 0 ) {
+    return *prev( end(forward<S>(s)), n+1 );
 }
 
 template< class X >
-constexpr X last( const initializer_list<X>& l ) {
-    return *prev( end(l) );
+constexpr X last( const initializer_list<X>& l, size_t n = 0 ) {
+    return *prev( end(l), n+1 );
 }
 
 template< class ... > struct NonInitListT {};
@@ -742,14 +742,23 @@ R _dup( const S& s ) {
     return r;
 }
 
+template< class R, class S >
+R _dup( const S& s, size_t n ) {
+    R r;
+    copy_n( begin(s), n, back_inserter(r) );
+    return r;
+}
+
 template< class S >
 S dup( const S& s ) {
     return _dup<S>( s );
 }
 
-template< class S, class I, class _S = typename Range<S,I>::type >
-_S dup( const Range<S,I>& r ) {
-    return _dup<_S>( r );
+template< class S > using Dup = decltype( dup(declval<S>()) );
+
+template< class S, class I >
+Dup<S> dup( const Range<S,I>& r ) {
+    return _dup<Dup<S>>( r );
 }
 
 template< class X, class V = vector<X> >
@@ -757,7 +766,10 @@ V dup( const initializer_list<X>& l ) {
     return _dup<V>( l );
 }
 
-template< class S > using Dup = decltype( dup(declval<S>()) );
+template< class S, class D = Dup<S> >
+D dup( S&& s, size_t n ) {
+    return _dup<D>( forward<S>(s), n );
+}
 
 template< class S > 
 Dup<S> tail( const S& s ) {
@@ -863,20 +875,22 @@ void vmap( F&& f, S&& s ) {
 template< class F, class X, class I >
 constexpr X accuml( F&& f, X&& x, I b, I e ) {
     return b != e ?
-        accuml( forward<F>(f), forward<F>(f)(forward<X>(x),*b), next(b), e )
+        accuml( forward<F>(f), 
+                forward<F>(f)( forward<X>(x), *b ), next(b), e )
         : forward<X>(x);
 }
 
 template< class F, class X, class S >
-constexpr X _foldl( F&& f, X&& x, const S& s ) {
-    return accuml( forward<F>(f), forward<X>(x), begin(s), end(s) );
+constexpr X _foldl( F&& f, X&& x, S&& s ) {
+    return accuml( forward<F>(f), forward<X>(x), 
+                   begin(forward<S>(s)), end(forward<S>(s)) );
 }
 
 
 /* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
 template< class F, class X, class S >
-constexpr X foldl( F&& f, X&& x, const S& s ) {
-    return _foldl( forward<F>(f), forward<X>(x), s );
+constexpr X foldl( F&& f, X&& x, S&& s ) {
+    return _foldl( forward<F>(f), forward<X>(x), forward<S>(s) );
 }
 
 template< class F, class X, class Y >
@@ -886,8 +900,9 @@ constexpr X foldl( F&& f, X&& x, const initializer_list<Y>& s ) {
 
 template< class F, class S, 
           class X = typename cata::sequence_traits<S>::value_type >
-constexpr X foldl( F&& f, const S& s ) {
-    return _foldl( forward<F>(f), head(s), tail_wrap(s) );
+constexpr X foldl( F&& f, S&& s ) {
+    return _foldl( forward<F>(f), 
+                   head(forward<S>(s)), tail_wrap(forward<S>(s)) );
 }
 
 template< class F, class X >
@@ -897,8 +912,9 @@ constexpr X foldl( F&& f, const initializer_list<X>& s ) {
 
 /* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
 template< class F, class X, class S >
-constexpr X foldr( F&& f, X&& x, const S& s ) {
-    return foldl( flip(forward<F>(f)), forward<X>(x), reverse_wrap(s) );
+constexpr X foldr( F&& f, X&& x, S&& s ) {
+    return foldl( flip(forward<F>(f)), forward<X>(x), 
+                  reverse_wrap(forward<S>(s)) );
 }
 
 template< class F, class X, class Y >
@@ -908,8 +924,9 @@ constexpr X foldr( F&& f, X&& x, const initializer_list<Y>& s ) {
 
 template< class F, class S, 
           class X = typename cata::sequence_traits<S>::value_type >
-constexpr X foldr( F&& f, const S& s ) {
-    return foldr( forward<F>(f), last(s), init_wrap(s) );
+constexpr X foldr( F&& f, S&& s ) {
+    return foldr( forward<F>(f), 
+                  last(forward<S>(s)), init_wrap(forward<S>(s)) );
 }
 
 template< class F, class Y >
@@ -1025,6 +1042,103 @@ template< class F, class S >
 Scanr<F,S> scanr( F&& f, S&& s ) {
     return scanr( forward<F>(f), 
                   last(forward<S>(s)), init_wrap(forward<S>(s)) );
+}
+
+template< class F, class X > struct IteratorC {
+    using _X = typename decay<X>::type;
+    using container = vector<_X>;
+    using reference = typename container::reference;
+    using value_type = typename container::value_type;
+    using citerator = typename container::iterator;
+
+    F f;
+    mutable container c;
+
+    struct iterator : std::iterator<forward_iterator_tag,value_type> {
+        const IteratorC& c;
+        citerator it;
+
+        iterator( const IteratorC<F,X>& _c )
+            : c(_c), it(std::begin(c.c))
+        {
+        }
+        iterator( const IteratorC<F,X>& _c, citerator i )
+            : c(_c), it(i)
+        {
+        }
+
+        void grow() {
+            if( it == std::end(c.c) ) {
+                c.c.emplace_back (
+                    c.f( last(c.c) )
+                );
+                it = prev(std::end(c.c));
+            }
+        }
+
+
+        iterator& operator++ () { 
+            grow();
+            it++;
+            return *this;
+        }
+
+        iterator& operator++ (int) { 
+            iterator copy = *this;
+            ++(*this);
+            return copy;
+        }
+
+        reference operator* () {
+            grow();
+            return *it;
+        }
+
+        constexpr bool operator== ( const iterator& ) {
+            return false;
+        }
+        constexpr bool operator!= ( const iterator& ) {
+            return not true;
+        }
+    };
+
+    
+    template< class _F, class _X >
+    constexpr IteratorC( _F&& _f, _X&& x ) 
+        : f(forward<_F>(_f)), 
+          c{forward<_X>(x), f(forward<X>(x))}
+    {
+    }
+    
+    constexpr iterator begin() { return iterator(*this); }
+    constexpr iterator end() { return iterator(*this,std::end(c)); }
+
+    operator container () { return c; }
+};
+
+template< class F, class X, class I = IteratorC<F,X> >
+vector<X> dup( const IteratorC<F,X>& c ) {
+    return c;
+}
+
+template< class F, class X, class I = IteratorC<F,X> >
+vector<X> dup( IteratorC<F,X>& c, size_t n ) {
+    return dup( c, n );
+}
+
+template< class F, class X >
+constexpr IteratorC<F,X> iterate( F f, X&& x ) {
+    return IteratorC<F,X>( move(f), forward<X>(x) );
+}
+
+template< class X, class F = Id >
+constexpr IteratorC<F,X> repeat( X&& x, F&& f = F() ) {
+    return iterate( forward<F>(f), forward<X>(x) );
+}
+
+template< class X, class _X = typename decay<X>::type >
+vector<_X> replicate( size_t n, X&& x ) {
+    return take( n, repeat(forward<X>(x)) );
 }
 
 template< class F, class Y > struct PartMiddle {
@@ -1206,9 +1320,13 @@ V find_indecies( F&& f, const S& s ) {
     return PossibleIndex( cfind_if(forward<F>(f),s), s );
 }
 
-template< class S >
-Dup<S> take( size_t n, S&& s ) {
-    return dup( init_wrap(n, forward<S>(s)) );
+template< class S, class D = Dup<S> >
+D take( size_t n, S&& s ) {
+    return dup( forward<S>(s), n );
+    D r;
+    std::copy_n( begin(forward<S>(s)), n, back_inserter(r) );
+    return r;
+    //return dup( init_wrap(n, forward<S>(s)) );
 }
 
 template< class P, class S, class _S = typename decay<S>::type >
