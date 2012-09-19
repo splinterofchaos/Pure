@@ -17,7 +17,7 @@ template< typename Container >
 void print( const char* const msg, const Container& v )
 {
     cout << msg << "\n";
-    copy( v.begin(), v.end(), ostream_iterator<float>(cout, " ") );
+    copy( begin(v), end(v), ostream_iterator<float>(cout, " ") );
     cout << endl;
 }
 
@@ -203,6 +203,10 @@ int main()
             show( erase_first( equal_to<int>(),evens,{1,2,6} ) ).c_str() );
     printf( "\tpermutations (take 3 es) = %s\n", 
             show( permutations( take(3,evens) ) ).c_str() );
+    printf( "\tscanl (+) %s = %s\n", 
+            show( evens ).c_str(), show( scanl( plus<int>(), evens ) ).c_str() );
+    printf( "\tscanr (+) %s = %s\n", 
+            show( evens ).c_str(), show( scanr( plus<int>(), evens ) ).c_str() );
     puts("");
 
     printf( "intersparse ',' \"abcd\" = %s\n",

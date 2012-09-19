@@ -673,7 +673,7 @@ using NonInitList = typename NonInitListT <
     typename decay<XS>::type
 >::type;
 
-template< class S, class I > struct Range {
+template< class S, class I = typename S::iterator > struct Range {
     I b, e;
 
     using type = NonInitList<S>;
@@ -988,6 +988,44 @@ struct RCons {
         return rcons( forward<S>(s), forward<X>(x)... );
     }
 };
+
+template< class F, class X, class S,
+          class R = decltype (
+              declval<F>()( declval<X>(),declval<SeqRef<S>>() )
+          ), class V = vector<R> >
+V scanl( F&& f, X x, const S& s ) {
+    V v{ x };
+    for( const auto& y : s ) {
+        x = forward<F>(f)( x, y );
+        v.push_back( x );
+    }
+    return v;
+}
+
+template< class F, class S >
+using Scanl = decltype( scanl( declval<F>(), declval<SeqRef<S>>(), 
+                               declval<S>() ) );
+
+template< class F, class S >
+Scanl<F,S> scanl( F&& f, S&& s ) {
+    return scanl( forward<F>(f), 
+                  head(forward<S>(s)), tail_wrap(forward<S>(s)) );
+}
+
+template< class F, class X, class S >
+Scanl<F,S> scanr( F&& f, X&& x, const S& s ) {
+    return reverse(scanl( forward<F>(f), forward<X>(x), reverse_wrap(s) ));
+}
+
+template< class F, class S >
+using Scanr = decltype( scanr( declval<F>(), declval<SeqRef<S>>(), 
+                               declval<S>() ) );
+
+template< class F, class S >
+Scanr<F,S> scanr( F&& f, S&& s ) {
+    return scanr( forward<F>(f), 
+                  last(forward<S>(s)), init_wrap(forward<S>(s)) );
+}
 
 template< class F, class Y > struct PartMiddle {
     F f;
@@ -1510,6 +1548,7 @@ V sorted_permutations( S&& original ) {
         r.emplace_back( move(next) );
     return r;
 }
+
 template< class S, class V = SeqSeq<S> >
 V _permutations( S&& original ) {
     V r{ forward<S>(original) };
