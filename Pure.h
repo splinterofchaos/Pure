@@ -1060,15 +1060,6 @@ constexpr S sort( S s ) {
     return s;
 }
 
-template< class X, class S >
-S insert( X&& x, S s ) {
-    s.insert( 
-        upper_bound( begin(s), end(s), forward<X>(x) ),
-        forward<X>(x)
-    );
-    return s;
-}
-
 template< typename Container >
 constexpr bool ordered( const Container& c )
 {
@@ -1157,12 +1148,12 @@ constexpr auto cfind_if( F&& f, S&& s )
                     forward<F>(f) );
 }
 
-template< typename S, typename T >
-constexpr auto cfind_not( const T& x, S&& s )
+template< class S, class T, class F = equal_to<T> >
+constexpr auto cfind_not( const T& x, S&& s, F&& f = F() )
     -> decltype( begin(declval<S>()) )
 {
     return cfind_if (
-        fnot( closure(std::equal_to<T>(),x) ),
+        fnot( closure(forward<F>(f),x) ),
         forward<S>(s)
     );
 }
@@ -1315,6 +1306,26 @@ V elem_indecies( const X& x, const S& s ) {
     return v;
 }
 
+/* insert 3 [1,2,4] = [1,2,3,4] */
+template< class X, class S >
+S insert( X&& x, S s ) {
+    s.insert( 
+        upper_bound( begin(s), end(s), forward<X>(x) ),
+        forward<X>(x)
+    );
+    return s;
+}
+
+/* insert p y xs -- inserts into the first place where (p x) == True. */
+template< class P, class X, class S >
+S insert( P&& p, X&& x, S s ) {
+    s.insert( 
+        upper_bound( begin(s), end(s), forward<X>(x), forward<P>(p) ),
+        forward<X>(x)
+    );
+    return s;
+}
+
 template< class X, class S >
 S erase( const X& x, S s ) {
     auto it = cfind( x, s );
@@ -1323,12 +1334,29 @@ S erase( const X& x, S s ) {
     return s;
 }
 
-template< class F, class S >
-S erase_if( F&& f, S s ) {
-    auto it = cfind_if( f, s );
+template< class F, class X, class S >
+S erase( F&& f, X&& x, S s ) {
+    auto it = cfind_if( closure(forward<F>(f),forward<X>(x)), s );
     if( it != end(s) )
         s.erase( it );
     return s;
+}
+
+template< class P, class XS, class YS >
+XS erase_first( P&& p, XS&& xs, YS&& ys ) {
+    using F = XS(*)( const P&, SeqRef<YS>, XS );
+    return foldl (
+        // \x s -> erase p x s
+        flip( closure( (F)erase, forward<P>(p) ) ), 
+        forward<XS>(xs), forward<YS>(ys) 
+    ); 
+}
+
+template< class P, class XS, class Y >
+XS erase_first( P&& p, XS&& xs, const initializer_list<Y>& l ) {
+    using F = XS(*)( const P&, const Y&, XS );
+    return foldl( flip(closure((F)erase,forward<P>(p))), 
+                  forward<XS>(xs), l ); 
 }
 
 template< class S, class X >
@@ -1407,16 +1435,16 @@ constexpr XS maybe_cons_range( XS&& xs, YS&& ys ) {
         : forward<XS>(xs);
 }
 
-template< class S, class _S = typename decay<S>::type,
-          class V = vector<_S> >
-V group( S&& s ) {
+template< class S, class P = std::equal_to<SeqRef<S>>,
+          class _S = typename decay<S>::type, class V = vector<_S> >
+V group( S&& s, P&& p = P() ) {
     V v;
 
     auto it = begin( forward<S>(s) ), next = it;
     const auto e = end( forward<S>(s) );
 
     for( ; it != e; it = next) {
-        auto adj = adjacent_find( it, e );
+        auto adj = adjacent_find( it, e, forward<P>(p) );
         v = maybe_cons_range ( 
             // First, cons all the non-adjacent members.
             foldl (
@@ -1425,7 +1453,9 @@ V group( S&& s ) {
                 move(v), range<S>( it, adj ) 
             ),
             // Then cons the adjacent members.
-            _S( adj, next = cfind_not(*adj,range<S>(adj,e)) ) 
+            _S( adj, 
+                next = cfind_not( *adj, range<S>(adj,e),
+                                  forward<P>(p) ) ) 
         );
     }
 
@@ -1456,6 +1486,46 @@ V _tails( const S& s ) {
 template< class S, class V = vector<S> >
 V tails( const S& s ) {
     return not null(s) ? _tails(s) : V();
+}
+
+template< class S >
+bool _next_p_ref( S& s ) {
+    return std::next_permutation( begin(s), end(s) );
+}
+
+template< class S >
+S _next_p( S s ) {
+    _next_p_ref( s );
+    return s;
+}
+
+template< class S >
+using SeqSeq = vector<typename decay<S>::type>;
+
+template< class S, class V = SeqSeq<S> >
+V sorted_permutations( S&& original ) {
+    V r{ forward<S>(original) };
+    Dup<S> next;
+    while( next = last(r), _next_p_ref(next) )
+        r.emplace_back( move(next) );
+    return r;
+}
+template< class S, class V = SeqSeq<S> >
+V _permutations( S&& original ) {
+    V r{ forward<S>(original) };
+    while( true ) {
+        auto next = _next_p( last(r) );
+        if( next != head(r) )
+            r.emplace_back( move(next) );
+        else
+            return r;
+    }
+}
+
+template< class S, class V = SeqSeq<S> >
+V permutations( S&& original ) {
+    return ordered(original) ? sorted_permutations( forward<S>(original) )
+        : _permutations( forward<S>(original) );
 }
 
 /* all f C -> true when f(x) is true for all x in C; otherwise false. */

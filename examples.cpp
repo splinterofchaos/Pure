@@ -152,7 +152,8 @@ string show( const Either<L,R>& e ) {
 
 // This is a hard type to deduce, so explicitly define show for it. (Used for
 // mconcat example.)
-string show( const vector<unique_ptr<vector<int>>>& vmv ) {
+template< class X >
+string show( const vector<X>& vmv ) {
     string str = "{";
     for( const auto& mv : vmv )
         str = str + show( mv ) + " ";
@@ -185,8 +186,8 @@ int main()
 {
     rcloset( print_xyz, 2, 3 )( 1 );
 
-    vector<int> evens = filter( even, {1,2,3,4,5,6,7,8} );
-    printf( "es = filter even [1..8] = %s\n", show(evens).c_str() );
+    vector<int> evens = filter( even, {1,2,3,4,5,6,7,8,9,10,11,12} );
+    printf( "es = filter even [1..12] = %s\n", show(evens).c_str() );
     printf( "\tnull es = %s\n", show( null(evens) ).c_str() );
     printf( "\tlength es = %lu\n", length(evens) );
     printf( "\thead es = %d\n\tlast es = %d\n", head(evens), last(evens) );
@@ -195,9 +196,13 @@ int main()
     printf( "\tinits es = %s\n", show( inits(evens) ).c_str() );
     printf( "\treverse es = %s\n", show( reverse(evens) ).c_str() );
     printf( "\tisPrefixOf [2,4] es = %s\n", show( is_prefix({2,4},evens) ).c_str() );
-    printf( "\telem 2 es = %s\n", show( elem(2,evens) ).c_str() );
-    printf( "\tdelete 4 es = %s\n", show( erase(4,evens) ).c_str() );
+    printf( "\telem 2 es = %s\n",   show( elem(  2,evens) ).c_str() );
+    printf( "\tdelete 4 es = %s\n", show( erase( 4,evens) ).c_str() );
     printf( "\tinsert 5 es = %s\n", show( insert(5,evens) ).c_str() );
+    printf( "\tdeleteFirstBy (==) es [2,6] = %s\n", 
+            show( erase_first( equal_to<int>(),evens,{1,2,6} ) ).c_str() );
+    printf( "\tpermutations (take 3 es) = %s\n", 
+            show( permutations( take(3,evens) ) ).c_str() );
     puts("");
 
     printf( "intersparse ',' \"abcd\" = %s\n",
