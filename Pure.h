@@ -908,16 +908,16 @@ bool each( F&& f, X&& x, Y&& y, Z&& ...z ) {
 
 struct NotNull {
     template< class X >
-        bool operator() ( X&& x ) {
-            return not_null( forward<X>(x) );
-        }
+    bool operator() ( X&& x ) {
+        return not_null( forward<X>(x) );
+    }
 };
 
 /* accuml -- foldl implementaton */
 template< class F, class X, class ...XS >
 constexpr Decay<X> accuml( F&& f, X&& x, 
                            const XS& ...xs ) {
-    return each(NotNull(), xs... ) ?
+    return each( NotNull(), xs... ) ?
         accuml( forward<F>(f), 
                 forward<F>(f)( forward<X>(x), 
                                head(xs)... ),
@@ -1055,7 +1055,7 @@ struct RCons {
 };
 
 template< class F, class X, class S,
-          class V = vector<typename decay<X>::type> >
+          class V = vector<Decay<X>> >
 V scanl( F&& f, X&& x, const S& s ) {
     V v{ forward<X>(x) };
     for( const auto& y : s )
@@ -1091,8 +1091,7 @@ Scanr<F,S> scanr( F&& f, S&& s ) {
 }
 
 template< class F, class X > struct IteratorC {
-    using _X = typename decay<X>::type;
-    using container = vector<_X>;
+    using container = vector<Decay<X>>;
     using reference = typename container::reference;
     using value_type = typename container::value_type;
     using citerator = typename container::iterator;
@@ -1177,8 +1176,8 @@ constexpr IteratorC<F,X> repeat( X&& x, F&& f = F() ) {
     return iterate( forward<F>(f), forward<X>(x) );
 }
 
-template< class X, class _X = typename decay<X>::type >
-vector<_X> replicate( size_t n, X&& x ) {
+template< class X >
+vector<Decay<X>> replicate( size_t n, X&& x ) {
     return take( n, repeat(forward<X>(x)) );
 }
 
@@ -1370,7 +1369,7 @@ D take( size_t n, S&& s ) {
     //return dup( init_wrap(n, forward<S>(s)) );
 }
 
-template< class P, class S, class _S = typename decay<S>::type >
+template< class P, class S, class _S = Decay<S> >
 _S take_while( P&& p, S&& s ) {
     return _S (
         begin( forward<S>(s) ),
@@ -1384,7 +1383,7 @@ Dup<S> drop( size_t n, S&& s ) {
                            forward<S>(s) ) );
 }
 
-template< class P, class S, class _S = typename decay<S>::type >
+template< class P, class S, class _S = Decay<S> >
 _S drop_while( P&& p, S&& s ) {
     return _S ( 
         cfind_if( fnot(forward<P>(p)), forward<S>(s) ),
@@ -1401,15 +1400,15 @@ S drop_while_end( Pred p, S s ) {
 template< class X, class R > 
 using XInt = typename enable_if< !is_integral<X>::value, R >::type;
 
-template< class I, class S, class _S = typename decay<S>::type, 
+template< class I, class S, class _S = Decay<S>, 
           class P = pair<_S,_S> >
 constexpr XInt<I,P> split_at( I it, S&& s ) 
 {
-    return { _S( begin(forward<S>(s)), it ),
-             _S(  it,  end(forward<S>(s)) ) };
+    return { { begin(forward<S>(s)), it },
+             {  it,  end(forward<S>(s)) } };
 }
 
-template< class S, class _S = typename decay<S>::type, 
+template< class S, class _S = Decay<S>, 
           class P = pair<_S,_S> >
 constexpr P split_at( size_t n, S&& s ) {
     return split_at (
@@ -1420,7 +1419,7 @@ constexpr P split_at( size_t n, S&& s ) {
 }
 
 template< class P,
-          class S, class _S = typename decay<S>::type, 
+          class S, class _S = Decay<S>, 
           class R = pair<_S,_S> >
 R span( P&& p, S&& s ) {
     R r;
@@ -1429,10 +1428,8 @@ R span( P&& p, S&& s ) {
     return r;
 }
 
-template< class P,
-          class S, class _S = typename decay<S>::type, 
-          class R = pair<_S,_S> >
-R sbreak( P&& p, S&& s ) {
+template< class P, class S, class _S = Decay<S> >
+pair<_S,_S> sbreak( P&& p, S&& s ) {
     return split_at( cfind_if(forward<P>(p),forward<S>(s)), forward<S>(s) );
 }
 
@@ -1579,7 +1576,7 @@ S nub( const S& s ) {
     return foldl( (F)cons_set, S(), s );
 }
 
-template< class XS, class YS, class R = typename decay<XS>::type >
+template< class XS, class YS, class R = Decay<XS> >
 R difference( XS&& xs, const YS& ys ) {
     using F = R(*)( const YS&, XS, SeqRef<XS> );
     return foldl ( 
@@ -1593,7 +1590,7 @@ XS sunion( XS xs, YS&& ys ) {
     return foldl( (F)cons_set, move(xs), forward<YS>(ys) );
 }
 
-template< class XS, class YS, class R = typename decay<XS>::type >
+template< class XS, class YS, class R = Decay<XS> >
 R intersect( XS&& xs, const YS& ys ) {
     using F = R(*)( const YS&, XS, SeqRef<XS> );
     return foldl (
@@ -1631,7 +1628,7 @@ constexpr XS maybe_cons_range( XS xs, YS&& ys ) {
 }
 
 template< class S, class P = std::equal_to<SeqRef<S>>,
-          class _S = typename decay<S>::type, class V = vector<_S> >
+          class _S = Decay<S>, class V = vector<_S> >
 V group( S&& s, P&& p = P() ) {
     V v;
 
@@ -1695,7 +1692,7 @@ S _next_p( S s ) {
 }
 
 template< class S >
-using SeqSeq = vector<typename decay<S>::type>;
+using SeqSeq = vector<Decay<S>>;
 
 template< class S, class V = SeqSeq<S> >
 V sorted_permutations( S&& original ) {
