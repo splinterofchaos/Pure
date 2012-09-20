@@ -87,7 +87,7 @@ template< class M >
 auto cat( const M& m ) -> decltype( *m, (bool)m, maybe() );
 
 template< class T > struct Cat {
-    using type = decltype( cat<T>(declval<T>()) );
+    using type = decltype( cat<Decay<T>>(declval<T>()) );
 };
 
 // Prevent function pointers from being deduced as maybe types.
@@ -2050,7 +2050,7 @@ constexpr auto operator^ ( F&& f, M&& m )
  *
  *      mconcat = foldr mappend mempty
  */
-template< class ...M > struct Monoid;
+template< class > struct Monoid;
 
 template< class M, class Mo = Monoid<Cat<M>> >
 decltype( Mo::mempty() ) mempty() { return Mo::mempty(); }
@@ -2068,12 +2068,6 @@ auto mappend( M1&& a, M2&& b )
  * The above && version will always be preferred, except in the case of a
  * const&. In other words, this version will NEVER be preferred otherwise.
  */
-template< class M1, class M2, 
-          class Mo = Monoid<Cat<M1>> >
-decltype( Mo::mappend(declval<M1>(),declval<M2>()) )
-mappend( const M1& a, M2&& b ) {
-    return Mo::mappend( a, forward<M2>(b) );
-}
 
 template< class S, class V = SeqVal<S>, class M = Monoid<Cat<V>> >
 auto mconcat( S&& s ) -> decltype( M::mconcat(declval<S>()) ) {
@@ -2098,14 +2092,13 @@ template<> struct Monoid< cata::sequence > {
     static S mempty() { return S{}; }
 
     template< class XS, class YS >
-    static decltype( append(declval<XS>(),declval<YS>()) )
-    mappend( XS&& xs, YS&& ys ) {
-        return append( forward<XS>(xs), forward<YS>(ys) );
+    static XS mappend( XS xs, YS&& ys ) {
+        return append( move(xs), forward<YS>(ys) );
     }
 
     template< class SS >
-    static decltype( concat(declval<SS>()) )
-    mconcat( SS&& ss ) {
+    static auto mconcat( SS&& ss ) -> decltype( concat(declval<SS>()) )
+    {
         return concat( forward<SS>(ss) ); 
     }
 };
@@ -2120,10 +2113,13 @@ template<> struct Monoid< cata::maybe > {
         return maybe( mempty<M>(), ReturnJust(), m );
     }
 
+    template< class X >
+    using IsRVal = is_rvalue_reference<X>;
+    template< class X >
+    using ERVal = typename enable_if< IsRVal<X>::value, Decay<X> >::type;
+
     template< class M >
-    constexpr static auto dup( M&& m ) 
-        -> typename enable_if< is_rvalue_reference<M>::value, Decay<M> >::type
-    {
+    constexpr static ERVal<M> dup( M&& m ) {
         return m;
     }
 
@@ -2152,8 +2148,8 @@ template< class X, class Y > struct Monoid< pair<X,Y> > {
     static P mempty() { return P( fwd_mempty<X>(), fwd_mempty<Y>() ); }
 
     static P mappend( const P& a, const P& b ) {
-        return P( fwd_mappend(a.first,b.first), 
-                  fwd_mappend(a.second,b.second) );
+        return P( ::mappend(a.first,b.first), 
+                  ::mappend(a.second,b.second) );
     }
 
     template< class S > static P mconcat( const S& s ) {
