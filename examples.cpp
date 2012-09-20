@@ -6,6 +6,7 @@
 #include <vector>
 #include <array>
 #include <list>
+#include <cctype>
 
 #include <iostream>
 
@@ -16,7 +17,7 @@ template< typename Container >
 void print( const char* const msg, const Container& v )
 {
     cout << msg << "\n";
-    copy( v.begin(), v.end(), ostream_iterator<float>(cout, " ") );
+    copy( begin(v), end(v), ostream_iterator<float>(cout, " ") );
     cout << endl;
 }
 
@@ -25,13 +26,10 @@ typedef array<float,2> Vec;
 constexpr int get_x( const Vec& v ) { return v[0]; } 
 constexpr int get_y( const Vec& v ) { return v[1]; }
 
-Vec operator + ( const Vec& a, Vec&& b )
+Vec operator + ( const Vec& a, const Vec& b )
 { 
-    return zip_with( plus<float>(), a, move(b) ); 
+    return zip_with( plus<float>(), a, b ); 
 }
-
-Vec operator + ( Vec&& a, const Vec& b )      { return b + move(a); } 
-Vec operator + ( const Vec& a, const Vec& b ) { return a + Vec(b); }
 
 
 Vec operator * ( Vec&& a, float x )
@@ -82,6 +80,12 @@ string show( int x ) {
     return digits;
 }
 
+string show( size_t x ) {
+    char digits[20];
+    sprintf( digits, "%lu", x );
+    return digits;
+}
+
 string show( char c ) { 
     return "'" + string( 1, c ) + "'"; 
 }
@@ -100,12 +104,14 @@ string show( const char* str ) {
     return show( string(str) );
 }
 
-template< class S > typename ESeq<S,string>::type show( S s ) {
+template< class S > 
+auto show( const S& s ) -> decltype( begin(s), string() )
+{
     string str = "[";
     for( const auto& x : s ) {
         str += show( x ) + ",";
     }
-    if( str.size() > 1 )
+    if( length(str) > 1 )
         str.back() = ']';
     else 
         str.push_back( ']' );
@@ -143,7 +149,8 @@ string show( const Either<L,R>& e ) {
 
 // This is a hard type to deduce, so explicitly define show for it. (Used for
 // mconcat example.)
-string show( const vector<unique_ptr<vector<int>>>& vmv ) {
+template< class X >
+string show( const vector<X>& vmv ) {
     string str = "{";
     for( const auto& mv : vmv )
         str = str + show( mv ) + " ";
@@ -176,14 +183,67 @@ int main()
 {
     rcloset( print_xyz, 2, 3 )( 1 );
 
-    vector<int> evens = filter( even, {1,2,3,4,5,6,7,8} );
-    printf( "es = filter even [1..8] = %s\n", show(evens).c_str() );
+    vector<int> evens = filter( even, {1,2,3,4,5,6,7,8,9,10,11,12} );
+    printf( "es = filter even [1..12] = %s\n", show(evens).c_str() );
     printf( "\tnull es = %s\n", show( null(evens) ).c_str() );
     printf( "\tlength es = %lu\n", length(evens) );
     printf( "\thead es = %d\n\tlast es = %d\n", head(evens), last(evens) );
     printf( "\ttail es = %s\n\tinit es = %s\n",
             show( tail(evens) ).c_str(), show( init(evens) ).c_str() );
+    printf( "\tinits es = %s\n", show( inits(evens) ).c_str() );
     printf( "\treverse es = %s\n", show( reverse(evens) ).c_str() );
+    printf( "\tisPrefixOf [2,4] es = %s\n", show( is_prefix({2,4},evens) ).c_str() );
+    printf( "\telem 2 es = %s\n",   show( elem(  2,evens) ).c_str() );
+    printf( "\tdelete 4 es = %s\n", show( erase( 4,evens) ).c_str() );
+    printf( "\tinsert 5 es = %s\n", show( insert(5,evens) ).c_str() );
+    printf( "\tdeleteFirstBy (==) es [2,6] = %s\n", 
+            show( erase_first( equal_to<int>(),evens,vector<int>{1,2,6} ) ).c_str() );
+    printf( "\tpermutations (take 3 es) = %s\n", 
+            show( permutations( take(3,evens) ) ).c_str() );
+    printf( "\tscanl (+) %s = %s\n", 
+            show( evens ).c_str(), show( scanl( plus<int>(), evens ) ).c_str() );
+    printf( "\tscanr (+) %s = %s\n", 
+            show( evens ).c_str(), show( scanr( plus<int>(), evens ) ).c_str() );
+    puts("");
+
+    printf( "intersparse ',' \"abcd\" = %s\n",
+            intersparse( ',', string("abcd") ).c_str() );
+    printf( "intercalcate \"--\" {\"ab\",\"cd\",\"ef\"} = %s\n",
+             intercalcate ( 
+                 string("--"),
+                 vector<string>{"ab","cd","ef"}
+             ).c_str() );
+
+    puts("");
+    printf( "take 10 $ iterate (+2) 1 = %s\n",
+            show( take( 10, iterate(plus_two,1) ) ).c_str() );
+    printf( "replicate 10 1 = %s\n",
+            show( replicate(10, 1) ).c_str() );
+    puts("");
+
+    printf( "break even [1..8] = %s\n",
+            show( sbreak(even,vector<int>{1,2,3,4,5,6,7,8}) ).c_str() );
+    printf( "goup \"footoonopor\" = %s\n",
+            show( group(string("footoonopor")) ).c_str() );
+    printf( "elemIndecies 'o' \"footoonopor\" = %s\n",
+            show( elem_indecies('o',string("footoonopor")) ).c_str() );
+    printf( "nub \"footoonopor\" = %s\n",
+            show( nub(string("footoonopor")) ).c_str() );
+    printf( "\"footo\" `union` \"onopor\" = %s\n",
+            show( sunion(string("footo"),string("onopor")) ).c_str() );
+    printf( "\"footo\" // \"onopor\" = %s\n",
+            show( difference(string("footo"),string("onopor")) ).c_str() );
+    printf( "\"footo\" `intersect` \"onopor\" = %s\n",
+            show( intersect(string("footo"),string("onopor")) ).c_str() );
+    printf( "intersectBy (<) \"footo\" \"onopor\" = %s\n",
+            show( intersect_if(std::greater<char>(),string("footo"),string("onopor")) ).c_str() );
+
+    // isspace is a macro, so we need to wrap it to pass it.
+    auto is_space = [](char c){ return isspace(c); };
+    printf( "dropWhile isspace \" \\tfoo\" = \"%s\"\n",
+            drop_while( is_space, string(" \tfoo") ).c_str() );
+    printf( "dropWhileEnd isspace \"foo\\n\" = %s\n",
+            show( drop_while_end(is_space, string("foo\n")) ).c_str() );
 
     puts("");
 
@@ -256,18 +316,25 @@ int main()
             show( plus_two ^ Left<int>("yawn") ).c_str() );
     printf( "(+2) <$> (Right 5)     = %s\n",
             show( plus_two ^ Right<string>(5) ).c_str() );
-
-    puts("");
-    puts("add3 a b c = (\\x y z -> x + y + z) <$> a <*> b <*> c");
-    auto add3 = fmap( [](int x, int y, int z){return x+y+z;} );
-    printf( "add3 (Just 1) (Just 2) (Just 3) = %s\n",
-            show( add3( Just(1), Just(2), Just(3) ) ).c_str() );
-    printf( "add3 [1,2] [3,4] [5,6] = %s\n",
-            show( add3(vector<int>{1,2}, vector<int>{3,4}, 
-                       vector<int>{5,6}) ).c_str() );
-    printf( "(+) <$> Pair 1 2 <*> Pair 3 4 = %s\n", 
+    printf( "\t(+) <$> Pair 1 2 <*> Pair 3 4 = %s\n", 
             show( fmap(std::plus<int>(), std::make_pair(1,2),
                                          std::make_pair(3,4)) ).c_str() );
+
+    puts("");
+    puts("add3 x y z = x + y + z");
+    puts("add3M a b c = add3 <$> a <*> b <*> c");
+    auto add3 = [](int x, int y, int z){ return x+y+z; };
+    auto add3M = fmap( add3 );
+    printf( "\tadd3M (Just 1) (Just 2) (Just 3) = %s\n",
+            show( add3M( Just(1), Just(2), Just(3) ) ).c_str() );
+    printf( "\tadd3M [1,2] [3,4] [5,6] = %s\n",
+            show( add3M(vector<int>{1,2}, vector<int>{3,4}, 
+                       vector<int>{5,6}) ).c_str() );
+    using V = vector<int>;
+    printf( "\tzip_with add3 [1,2] [3,4] [5,6] = %s\n",
+            show( zip_with(add3,V{1,2},V{3,4},V{5,6}) ).c_str() );
+    printf( "\tfold add3 10 [1,2] [3,4] = %s\n",
+            show( foldl(add3,10,V{1,2},V{3,4}) ).c_str() );
     puts("");
 
     vector<int> N = {1,2,3,4,5,6,7,8};
