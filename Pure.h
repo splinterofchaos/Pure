@@ -641,7 +641,7 @@ using SeqRef = typename cata::sequence_traits<S>::reference;
 template< class S >
 using SeqVal = typename cata::sequence_traits<S>::value_type;
 template< class S >
-using SIter = typename cata::sequence_traits<S>::iterator;
+using SeqIter = typename cata::sequence_traits<S>::iterator;
 
 template< class S >
 constexpr SeqRef<S> head( S&& s, size_t n = 0 ) {
@@ -663,25 +663,8 @@ constexpr X last( const initializer_list<X>& l, size_t n = 0 ) {
     return *prev( end(l), n+1 );
 }
 
-template< class ... > struct NonInitListT {};
-
-template< class XS > struct NonInitListT<XS> {
-    using type = XS;
-};
-
-template< class X > struct NonInitListT<initializer_list<X>> {
-    using type = vector<X>;
-};
-
-template< class XS >
-using NonInitList = typename NonInitListT <
-    typename decay<XS>::type
->::type;
-
 template< class S, class I = typename S::iterator > struct Range {
     I b, e;
-
-    using type = NonInitList<S>;
     
     using iterator = I; 
     using reference = decltype( *declval<I>() );
@@ -694,7 +677,7 @@ template< class S, class I = typename S::iterator > struct Range {
     constexpr I end()   { return e; }
 };
 
-template< class S, class R = Range<S,SIter<S>> >
+template< class S, class R = Range<S,SeqIter<S>> >
 constexpr R range( S&& s ) {
     return R( begin(forward<S>(s)), end(forward<S>(s)) );
 }
@@ -704,19 +687,17 @@ constexpr R range( I a, I b ) {
     return R( a, b );
 }
 
-template< class S, class R = Range<S,SIter<S>> >
+template< class S, class R = Range<S,SeqIter<S>> >
 constexpr R tail_wrap( S&& s ) {
     return length(forward<S>(s)) ? R( next( begin(forward<S>(s)) ), 
                                       end( forward<S>(s) ) )
         : range( forward<S>(s) );
 }
 
-template< class S, class R = Range<S,SIter<S>> >
+template< class S, class R = Range<S,SeqIter<S>> >
 constexpr R tail_wrap( size_t n, S&& s ) {
-    return R (
-        prev( end(forward<S>(s)), n ),
-        begin( forward<S>(s) )
-    );
+    return R( prev( end(forward<S>(s)), n ),
+              begin( forward<S>(s) ) );
 }
 
 /* 
@@ -734,14 +715,14 @@ Range<S,I> tail_wrap( Range<S,I> r ) {
     return tail_wrap( 1, r );
 }
 
-template< class S, class R = Range<S,SIter<S>> >
+template< class S, class R = Range<S,SeqIter<S>> >
 constexpr R init_wrap( S&& s ) {
     return length(forward<S>(s)) ? R( begin(forward<S>(s)), 
                                       prev( end(forward<S>(s)) ) )
         : range( forward<S>(s) );
 }
 
-template< class S, class R = Range<S,SIter<S>> >
+template< class S, class R = Range<S,SeqIter<S>> >
 constexpr R init_wrap( size_t n, S&& s ) {
     return R ( 
         begin( forward<S>(s) ),
@@ -760,7 +741,7 @@ Range<S,I> init_wrap( Range<S,I> r ) {
     return init_wrap( 1, r );
 }
 
-template< class S, class I = SIter<S>, 
+template< class S, class I = SeqIter<S>, 
           class R = Range<S,reverse_iterator<I>> >
 constexpr R reverse_wrap( S&& s ) {
     return R( end(forward<S>(s)), begin(forward<S>(s)) );
@@ -837,22 +818,10 @@ using ESame = typename std::enable_if< is_same<A,B>::value, R >::type;
 template< class A, class B, class R >
 using XSame = typename std::enable_if< !is_same<A,B>::value, R >::type;
 
-template< class ... >
-struct _Remap;
-
-template< template<class,class...> class S, class X, class ...XS >
-struct _Remap< S<X,XS...> > {
-    template< class Y >
-    using To = S<Y,XS...>;
-};
-
-template< class S, class X >
-using Remap = typename _Remap<S>::template To<X>;
-
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< template<class...> class S, class X, class ...XS, class F,
           class FX = Result<F,X>, class R = S<FX,XS...> > 
-XSame<FX,X,R> map( F&& f, const S<X,XS...>& xs ) 
+auto map( F&& f, const S<X,XS...>& xs ) -> XSame< FX, X, R >
 {
     R r;
     _map( forward<F>(f), back_inserter(r), xs );
@@ -860,9 +829,8 @@ XSame<FX,X,R> map( F&& f, const S<X,XS...>& xs )
 }
 
 // When mapping from X to X, we can optimize by not returning a new sequence.
-template< template<class...> class S, class X, class ...XS, class F,
-          class FX = Result<F,X> > 
-ESame< FX, X, S<X,XS...> > map( F&& f, S<X,XS...> xs ) 
+template< template<class...> class S, class X, class ...XS, class F >
+auto map( F&& f, S<X,XS...> xs ) -> ESame< Result<F,X>, X, S<X,XS...> >
 {
     _map( forward<F>(f), begin(xs), xs );
     return xs;
@@ -892,20 +860,18 @@ template< template<class...> class S, class ..._S,
           class X, class Y, class ...Z,
           class F, class FXYZ = Result<F,X,Y,Z...>,
           class R = S<FXYZ,_S...> >
-R map( F&& f, const S<X,_S...>& xs, const S<Y,_S...>& ys,
-       const S<Z,_S...>& ...zs )
+R map( F&& f, const S<X,_S...>& xs, 
+       const S<Y,_S...>& ys, const S<Z,_S...>& ...zs )
 {
    R r;
-   _map( forward<F>(f), back_inserter(r), 
-             xs, ys, zs... );
+   _map( forward<F>(f), back_inserter(r), xs, ys, zs... );
    return r;
 }
 
 // TODO: requires further specialization.
-template< class X, size_t N, class F, 
-          class R = Result<F,X> >
-array< R, N > map( F&& f, const array< X, N >& xs ) {
-    array< R, N > r;
+template< class X, size_t N, class F, class A = array<Result<F,X>,N> >
+A map( F&& f, const array< X, N >& xs ) {
+    A r;
     _map( forward<F>(f), begin(r), xs );
     return r;
 }
@@ -1028,17 +994,14 @@ A append( A a, const B& b ) {
 }
 
 template< typename A, typename B, typename C, typename ...D >
-A append( A a, const B& b, const C& c, const D& ... d )
-{
+A append( A a, const B& b, const C& c, const D& ... d ) {
     return append( append(move(a), b), c, d... );
 }
 
 struct Append {
-    template< class ...S >
-    constexpr auto operator() ( S&& ...s ) 
-        -> decltype( append(declval<S>()...) )
-    {
-        return append( forward<S>(s)... );
+    template< class R, class ...S >
+    constexpr R operator() ( R r, S&& ...s ) {
+        return append( move(r), forward<S>(s)... );
     }
 };
 
@@ -1072,33 +1035,26 @@ XS rcons( XS xs, X&& x, Y&& y, Z&& ...z ) {
 
 struct Cons {
     template< class S, class ...X >
-    constexpr auto operator() ( S&& s, X&& ...x ) 
-        -> decltype( cons(declval<S>(),declval<X>()...) )
-    {
-        return cons( forward<S>(s), forward<X>(x)... );
+    S operator() ( S s, X&& ...x ) const {
+        return cons( move(s), forward<X>(x)... );
     }
 };
 
 struct RCons {
     template< class S, class ...X >
-    using Result = decltype( rcons(declval<S>(),declval<X>()...) );
-
-    template< class S, class ...X >
-    constexpr Result<S,X...> operator() ( S&& s, X&& ...x ) {
-        return rcons( forward<S>(s), forward<X>(x)... );
+    S operator() ( S s, X&& ...x ) const {
+        return rcons( move(s), forward<X>(x)... );
     }
 };
 
 template< class F, class X, class S,
-          class R = decltype (
-              declval<F>()( declval<X>(),declval<SeqRef<S>>() )
-          ), class V = vector<R> >
-V scanl( F&& f, X x, const S& s ) {
-    V v{ x };
-    for( const auto& y : s ) {
-        x = forward<F>(f)( x, y );
-        v.push_back( x );
-    }
+          class V = vector<typename decay<X>::type> >
+V scanl( F&& f, X&& x, const S& s ) {
+    V v{ forward<X>(x) };
+    for( const auto& y : s )
+        v.emplace_back( 
+            forward<F>(f)( last(v), y )
+        );
     return v;
 }
 
@@ -1155,7 +1111,7 @@ template< class F, class X > struct IteratorC {
                 c.c.emplace_back (
                     c.f( last(c.c) )
                 );
-                it = prev(std::end(c.c));
+                it = prev( std::end(c.c) );
             }
         }
 
@@ -1167,9 +1123,8 @@ template< class F, class X > struct IteratorC {
         }
 
         iterator& operator++ (int) { 
-            iterator copy = *this;
             ++(*this);
-            return copy;
+            return iterator( c, prev(it) );
         }
 
         reference operator* () {
@@ -1177,12 +1132,8 @@ template< class F, class X > struct IteratorC {
             return *it;
         }
 
-        constexpr bool operator== ( const iterator& ) {
-            return false;
-        }
-        constexpr bool operator!= ( const iterator& ) {
-            return not true;
-        }
+        constexpr bool operator== ( const iterator& ) { return false; }
+        constexpr bool operator!= ( const iterator& ) { return true;  }
     };
 
     
@@ -1193,7 +1144,7 @@ template< class F, class X > struct IteratorC {
     {
     }
     
-    constexpr iterator begin() { return iterator(*this); }
+    constexpr iterator begin() { return *this; }
     constexpr iterator end() { return iterator(*this,std::end(c)); }
 
     operator container () { return c; }
@@ -1267,7 +1218,8 @@ constexpr S intersparse( const X& x, const S& s ) {
 
 template< class S, class SS, class R >
 constexpr R _every_other_append( const S& s, const SS& ss, R r ) {
-    return foldl( middle_closure(Append(),s), move(r), ss );
+    using F = R (*)( R, const S&, SeqRef<SS> );
+    return foldl( middle_closure((F)append,s), move(r), ss );
 }
 
 template< class S, class SS >
@@ -1296,7 +1248,7 @@ S sort( S s ) {
 }
 
 template< typename Container >
-constexpr bool ordered( const Container& c )
+bool ordered( const Container& c )
 {
     return length(c) <= 1
         or mismatch ( 
@@ -1306,7 +1258,6 @@ constexpr bool ordered( const Container& c )
         ).second == end(c);
 }
 
-constexpr bool binary_not( bool b ) { return not b; }
 struct BinaryNot {
     template< class B >
     constexpr bool operator() ( B&& b ) {
@@ -1447,10 +1398,8 @@ template< class I, class S, class _S = typename decay<S>::type,
           class P = pair<_S,_S> >
 constexpr XInt<I,P> split_at( I it, S&& s ) 
 {
-    return { 
-        _S( begin(forward<S>(s)), it ),
-        _S( it, end(forward<S>(s)) ) 
-    };
+    return { _S( begin(forward<S>(s)), it ),
+             _S(  it,  end(forward<S>(s)) ) };
 }
 
 template< class S, class _S = typename decay<S>::type, 
@@ -1476,14 +1425,8 @@ R span( P&& p, S&& s ) {
 template< class P,
           class S, class _S = typename decay<S>::type, 
           class R = pair<_S,_S> >
-R partition( P&& p, S&& s ) {
+R sbreak( P&& p, S&& s ) {
     return split_at( cfind_if(forward<P>(p),forward<S>(s)), forward<S>(s) );
-}
-
-template< class XS, class YS >
-bool equal( const XS& xs, const YS& ys ) {
-    return length(xs) == length(ys) and
-        std::equal( begin(xs), end(xs), begin(ys) );
 }
 
 template< class XS, class YS >
@@ -1514,6 +1457,11 @@ bool is_infix( const XS& xs, const YS& ys ) {
 template< class X, class S >
 bool is_infix( const initializer_list<X>& l, const S& s ) {
     return std::includes( begin(s), end(s), begin(l), end(l) );
+}
+
+template< class XS, class YS >
+bool equal( const XS& xs, const YS& ys ) {
+    return length(xs) == length(ys) and is_prefix( xs, ys );
 }
 
 template< class X, class S >
@@ -1666,12 +1614,13 @@ U strip_prefix( const XS& xs, const YS& ys ) {
     return not is_prefix( xs, ys ) ? nullptr :
         U( new YS( next(begin(ys),length(xs)), end(ys) ) );
 }
+
 template< class M > struct Return;
 
 template< class XS, class YS >
-constexpr XS maybe_cons_range( XS&& xs, YS&& ys ) {
-    return not null(ys) ? cons( forward<XS>(xs), forward<YS>(ys) )
-        : forward<XS>(xs);
+constexpr XS maybe_cons_range( XS xs, YS&& ys ) {
+    return not null(ys) ? cons( move(xs), forward<YS>(ys) )
+        : xs;
 }
 
 template< class S, class P = std::equal_to<SeqRef<S>>,
@@ -1705,7 +1654,7 @@ template< class S, class V = vector<S> >
 V _inits( const S& s ) {
     V v;
     for( auto it = begin(s); it != end(s); it++ )
-        v.push_back( S(begin(s),it) );
+        v.emplace_back( S(begin(s),it) );
     return v;
 }
 
@@ -1718,7 +1667,7 @@ template< class S, class V = vector<S> >
 V _tails( const S& s ) {
     V v{ S() };
     for( auto it = end(s); it != begin(s); )
-        v.push_back( S(--it,end(s)) );
+        v.emplace_back( S(--it,end(s)) );
     return v;
 }
 
@@ -1770,7 +1719,7 @@ V permutations( S&& original ) {
 
 /* all f C -> true when f(x) is true for all x in C; otherwise false. */
 template< typename Container, typename F >
-constexpr bool all( F&& f, const Container& cont )
+bool all( F&& f, const Container& cont )
 {
     return all_of( begin(cont), end(cont), forward<F>(f) );
 }

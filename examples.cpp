@@ -221,8 +221,8 @@ int main()
             show( replicate(10, 1) ).c_str() );
     puts("");
 
-    printf( "partition even [1..8] = %s\n",
-            show( partition(even,vector<int>{1,2,3,4,5,6,7,8}) ).c_str() );
+    printf( "break even [1..8] = %s\n",
+            show( sbreak(even,vector<int>{1,2,3,4,5,6,7,8}) ).c_str() );
     printf( "goup \"footoonopor\" = %s\n",
             show( group(string("footoonopor")) ).c_str() );
     printf( "elemIndecies 'o' \"footoonopor\" = %s\n",
