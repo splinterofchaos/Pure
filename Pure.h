@@ -707,7 +707,7 @@ constexpr R range( I a, I b ) {
 template< class S, class R = Range<S,SIter<S>> >
 constexpr R tail_wrap( S&& s ) {
     return length(forward<S>(s)) ? R( next( begin(forward<S>(s)) ), 
-                                            end( forward<S>(s) ) )
+                                      end( forward<S>(s) ) )
         : range( forward<S>(s) );
 }
 
@@ -1001,7 +1001,7 @@ constexpr Y foldr( F&& f, initializer_list<Y> s ) {
  * append({1},{2,3},{4}) -> {1,2,3,4} 
  * Similar to [1]++[2,3]++[4]
  */
-template< typename A, typename B >
+template< typename A, typename B = A >
 A append( A a, const B& b ) {
     copy( begin(b), end(b), back_inserter(a) );
     return a;
@@ -1764,14 +1764,13 @@ constexpr bool all( F&& f, const Container& cont )
  * concatenated. This is an optimization that should be equivalent to the
  * inlined loop.
  */
-template< class F, class S,
-          class R = decltype( declval<F>()( head(declval<S>()) ) ) > 
-R concatMap( F&& f, S&& xs ) {
+template< class F, class ...S,
+          class R = Result<F,SeqRef<S>...> >
+R concatMap( F&& f, S&& ...xs ) {
     return foldl (
-        // flip append . f = \x xs -> append xs (f x)
         // \xs x -> append xs (f x)
         flip( compose( flip(Append()), forward<F>(f) ) ), 
-        R(), forward<S>(xs)
+        R(), forward<S>(xs)...
     );
 }
 
