@@ -940,14 +940,34 @@ struct NotNull {
         }
 };
 
-
-template< class F, class X, class ...S >
-constexpr Decay<X> accuml( F&& f, X&& x, S&& ...s ) {
-    return each(NotNull(), s... ) ?
+/* accuml -- foldl implementaton */
+template< class F, class X, class ...XS >
+constexpr Decay<X> accuml( F&& f, X&& x, 
+                           const XS& ...xs ) {
+    return each(NotNull(), xs... ) ?
         accuml( forward<F>(f), 
-                forward<F>(f)( forward<X>(x), head(forward<S>(s))... ),
-                tail_wrap(forward<S>(s))... )
+                forward<F>(f)( forward<X>(x), 
+                               head(xs)... ),
+                tail_wrap(xs)... )
         : forward<X>(x);
+}
+
+// GCC does not apply proper tail recursion here,
+// so optimize for the one-list and two-list cases.
+template< class F, class X, class S >
+constexpr Decay<X> accuml( F&& f, X&& x, S&& s ) {
+    return std::accumulate( begin(s), end(s), 
+                            forward<X>(x), forward<F>(f) );
+}
+
+template< class F, class X, class XS, class YS >
+X accuml( F&& f, X x, XS&& xs, YS&& ys ) {
+    auto xi = begin( forward<XS>(xs) );
+    auto yi = begin( forward<YS>(ys) );
+
+    for( ; xi != end(xs) and yi != end(ys); xi++, yi++ )
+        x = forward<F>(f)( x, *xi, *yi );
+    return x;
 }
 
 /* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
@@ -1008,9 +1028,9 @@ A append( A a, const B& b ) {
 }
 
 template< typename A, typename B, typename C, typename ...D >
-A append( A&& a, const B& b, const C& c, const D& ... d )
+A append( A a, const B& b, const C& c, const D& ... d )
 {
-    return append( append(forward<A>(a), b), c, d... );
+    return append( append(move(a), b), c, d... );
 }
 
 struct Append {
@@ -1029,9 +1049,9 @@ XS cons( XS xs, X&& x ) {
 }
 
 template< class XS, class X, class Y, class ...Z >
-XS cons( XS&& xs, X&& x, Y&& y, Z&& ...z ) {
+XS cons( XS xs, X&& x, Y&& y, Z&& ...z ) {
     return cons (
-        cons( forward<XS>(xs), forward<X>(x) ),
+        cons( move(xs), forward<X>(x) ),
         forward<Y>(y), forward<Z>(z)...
     );
 }
@@ -1043,9 +1063,9 @@ XS rcons( XS xs, X&& x ) {
 }
 
 template< class XS, class X, class Y, class ...Z >
-XS rcons( XS&& xs, X&& x, Y&& y, Z&& ...z ) {
+XS rcons( XS xs, X&& x, Y&& y, Z&& ...z ) {
     return rcons (
-        rcons( forward<XS>(xs), forward<X>(x) ),
+        rcons( move(xs), forward<X>(x) ),
         forward<Y>(y), forward<Z>(z)...
     );
 }
@@ -2581,18 +2601,17 @@ Container zip_with( F&& f, const Container& a, Container b )
 }
 
 template< class F, class R, class ...S >
-R _zip_with( F&& f, R r, S&& ...s ) {
-    return each(NotNull(), s... ) ?
+R _zip_with( F&& f, R r, const S& ...s ) {
+    return each( NotNull(), s... ) ?
         _zip_with( forward<F>(f),
-                   cons( move(r), forward<F>(f)( head(forward<S>(s))... ) ),
-                   tail_wrap( forward<S>(s) )... )
+                   cons( move(r), forward<F>(f)( head(s)... ) ),
+                   tail_wrap( s )... )
         : r;
 }
 
 template< class F, class XS, class ...YS, class R = Dup<XS> >
-R zip_with( F&& f, XS&& xs, YS&& ...ys ) {
-    return _zip_with( forward<F>(f), R(), 
-                      forward<XS>(xs), forward<YS>(ys)... );
+R zip_with( F&& f, const XS& xs, const YS& ...ys ) {
+    return _zip_with( forward<F>(f), R(), xs, ys... );
 }
 
 
