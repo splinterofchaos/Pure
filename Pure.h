@@ -46,7 +46,7 @@ struct sequence {};
 
 template< class Seq > struct sequence_traits {
     using sequence   = Seq;
-    using iterator   = decltype( begin(declval<Seq>()) );
+    using iterator   = Decay<decltype( begin(declval<Seq>()) )>;
     using reference  = decltype( *declval<iterator>() );
     using value_type = typename remove_reference<reference>::type;
 };
@@ -755,16 +755,17 @@ constexpr R reverse_wrap( S&& s ) {
 }
 
 template< class R, class S >
-R _dup( const S& s ) {
+R _dup( S&& s ) {
     R r;
-    copy( begin(s), end(s), back_inserter(r) );
+    copy( begin(forward<S>(s)), end(forward<S>(s)),
+          back_inserter(r) );
     return r;
 }
 
 template< class R, class S >
-R _dup( const S& s, size_t n ) {
+R _dup( S&& s, size_t n ) {
     R r;
-    copy_n( begin(s), n, back_inserter(r) );
+    copy_n( begin(forward<S>(s)), n, back_inserter(r) );
     return r;
 }
 
@@ -927,6 +928,7 @@ constexpr Decay<X> accuml( F&& f, X&& x,
 
 // GCC does not apply proper tail recursion here,
 // so optimize for the one-list and two-list cases.
+// We use && only to let GCC know to prefer this version.
 template< class F, class X, class S >
 constexpr Decay<X> accuml( F&& f, X&& x, S&& s ) {
     return std::accumulate( begin(s), end(s), 
@@ -1096,10 +1098,12 @@ template< class F, class X > struct IteratorC {
     using value_type = typename container::value_type;
     using citerator = typename container::iterator;
 
-    F f;
+    mutable F f;
     mutable container c;
 
-    struct iterator : std::iterator<forward_iterator_tag,value_type> {
+    struct iterator 
+        : std::iterator<bidirectional_iterator_tag,value_type> 
+    {
         const IteratorC& c;
         citerator it;
 
@@ -1112,13 +1116,20 @@ template< class F, class X > struct IteratorC {
         {
         }
 
+        iterator& operator= ( const iterator& other ) {
+            it = other.it;
+            return *this;
+        };
+
+        void _grow() {
+            size_t dist = it - std::begin(c.c);
+            c.c.emplace_back( c.f(last(c.c)) );
+            it = std::begin(c.c) + dist;
+        }
+
         void grow() {
-            if( it == std::end(c.c) ) {
-                c.c.emplace_back (
-                    c.f( last(c.c) )
-                );
-                it = prev( std::end(c.c) );
-            }
+            if( it == std::end(c.c) ) 
+                _grow();
         }
 
 
@@ -1128,9 +1139,20 @@ template< class F, class X > struct IteratorC {
             return *this;
         }
 
-        iterator& operator++ (int) { 
+        iterator& operator-- () { 
+            it--;
+            return *this;
+        }
+
+        iterator operator++ (int) { 
             ++(*this);
             return iterator( c, prev(it) );
+        }
+
+        iterator operator-- (int) { 
+            iterator copy = *this;
+            --(*this);
+            return copy;
         }
 
         reference operator* () {
@@ -1138,15 +1160,21 @@ template< class F, class X > struct IteratorC {
             return *it;
         }
 
+        ptrdiff_t operator- ( const iterator& i ) {
+            return it - i.it;
+        }
+
         constexpr bool operator== ( const iterator& ) { return false; }
         constexpr bool operator!= ( const iterator& ) { return true;  }
+
+        constexpr operator citerator () { return it; }
     };
 
     
-    template< class _F, class _X >
-    constexpr IteratorC( _F&& _f, _X&& x ) 
-        : f(forward<_F>(_f)), 
-          c{forward<_X>(x), f(forward<X>(x))}
+    template< class _X >
+    constexpr IteratorC( F f, _X&& x ) 
+        : f(move(f)), 
+          c{forward<_X>(x)}
     {
     }
     
@@ -1156,19 +1184,30 @@ template< class F, class X > struct IteratorC {
     operator container () { return c; }
 };
 
+template< class S, class I, class D = Dup<S> >
+D dup_range( I b, I e ) {
+    return D( b, e );
+}
+
 template< class F, class X, class I = IteratorC<F,X> >
 vector<X> dup( const IteratorC<F,X>& c ) {
     return c;
 }
 
 template< class F, class X, class I = IteratorC<F,X> >
-vector<X> dup( IteratorC<F,X>& c, size_t n ) {
-    return dup( c, n );
+vector<X> dup( IteratorC<F,X> c, size_t n ) {
+    return _dup<vector<X>>( move(c), n );
 }
 
-template< class F, class X >
-constexpr IteratorC<F,X> iterate( F f, X&& x ) {
-    return IteratorC<F,X>( move(f), forward<X>(x) );
+template< class F, class X, class IC = IteratorC<F,X>,
+          class I = typename IC::iterator >
+Dup<IC> dup_range( I b, I e ) {
+    return dup_range( b.it, e.it );
+}
+
+template< class F, class X, class I = IteratorC<F,Decay<X>> >
+constexpr I iterate( F f, X&& x ) {
+    return I( move(f), forward<X>(x) );
 }
 
 template< class X, class F = Id >
@@ -1272,9 +1311,9 @@ struct BinaryNot {
 };
 
 template< class F >
-constexpr auto fnot( F&& f ) -> decltype( compose(BinaryNot(),declval<F>()) ) 
+constexpr auto fnot( F f ) -> decltype( compose(BinaryNot(),declval<F>()) ) 
 {
-    return compose( BinaryNot(), forward<F>(f) );
+    return compose( BinaryNot(), move(f) );
 }
 
 /* filter f C -> { x for x in C such that f(x) is true. } */
@@ -1336,8 +1375,8 @@ template< typename S, typename F >
 constexpr auto cfind_if( F&& f, S&& s )
     -> decltype( begin(declval<S>()) )
 {
-    return find_if( begin(forward<S>(s)), end(forward<S>(s)),
-                    forward<F>(f) );
+    return std::find_if( begin(forward<S>(s)), end(forward<S>(s)),
+                         forward<F>(f) );
 }
 
 template< class S, class T, class F = equal_to<T> >
@@ -1363,17 +1402,20 @@ V find_indecies( F&& f, const S& s ) {
 template< class S, class D = Dup<S> >
 D take( size_t n, S&& s ) {
     return dup( forward<S>(s), n );
-    D r;
-    std::copy_n( begin(forward<S>(s)), n, back_inserter(r) );
-    return r;
-    //return dup( init_wrap(n, forward<S>(s)) );
 }
 
-template< class P, class S, class _S = Decay<S> >
+template< class P, class S, class _S = Dup<S> >
 _S take_while( P&& p, S&& s ) {
-    return _S (
-        begin( forward<S>(s) ),
-        cfind_if( fnot(forward<P>(p)), forward<S>(s) )
+    auto it = begin(forward<S>(s)); 
+    while( it != end(s) and forward<P>(p)(*it) )
+         it++ ;
+
+    // TODO: This is a hack and won't work on non-random iterators, but
+    // required to work with IteratorC. I should implement Dup as a class that
+    // can be specialized similarly to Functor and Monad.
+    return take (
+        it - begin(s),
+        forward<S>(s)
     );
 }
 
@@ -1726,6 +1768,11 @@ template< typename Container, typename F >
 bool all( F&& f, const Container& cont )
 {
     return all_of( begin(cont), end(cont), forward<F>(f) );
+}
+
+template< class S >
+SeqVal<S> sum( const S& s ) {
+    return std::accumulate( begin(s), end(s), 0 );
 }
 
 /* 
@@ -2148,8 +2195,8 @@ template< class X, class Y > struct Monoid< pair<X,Y> > {
     static P mempty() { return P( fwd_mempty<X>(), fwd_mempty<Y>() ); }
 
     static P mappend( const P& a, const P& b ) {
-        return P( ::mappend(a.first,b.first), 
-                  ::mappend(a.second,b.second) );
+        return P( fwd_mappend(a.first,b.first), 
+                  fwd_mappend(a.second,b.second) );
     }
 
     template< class S > static P mconcat( const S& s ) {
