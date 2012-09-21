@@ -772,7 +772,7 @@ template< class S, class I = typename S::iterator > struct Range {
     constexpr I begin() { return b; }
     constexpr I end()   { return e; }
 
-    operator sequence_type () { return sequence_type( b, e ); }
+    operator sequence_type () const { return sequence_type( b, e ); }
 };
 
 template< class S, class I1, class I2 >
@@ -907,8 +907,8 @@ Dup<S> init( const S& s ) {
 }
 
 template< class S >
-Dup<S> reverse( const S& s ) {
-    return dup( reverse_wrap(s) );
+Dup<S> reverse( S&& s ) {
+    return dup( reverse_wrap(forward<S>(s)) );
 }
 
 template< class F, class RI, class XS >
@@ -934,11 +934,11 @@ using XSame = typename std::enable_if< !is_same<A,B>::value, R >::type;
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< template<class...> class S, class X, class ..._X, 
           class XS = S<X,_X...>,
-          class F, class FX = Result<F,X>, class R = S<FX,_X...> > 
-auto map( F&& f, XS&& xs ) -> XSame< FX, X, R >
+          class F, class FX = Result<F,X>, class R = Decay<S<FX,_X...>> > 
+auto map( F&& f, S<X,_X...> xs ) -> XSame< FX, X, R >
 {
     R r;
-    _map( forward<F>(f), back_inserter(r), forward<XS>(xs) );
+    _map( forward<F>(f), back_inserter(r), xs );
     return r;
 }
 
@@ -957,6 +957,14 @@ V map( F&& f, const initializer_list<X>& l ) {
     v.reserve( length(l) );
     _map( forward<F>(f), begin(v), l );
     return v;
+}
+
+/* map_to<R> v = R( map(f,v) ) */
+template< class R, class F, class S >
+R map_to( F&& f, S&& s ) {
+    R r;
+    _map( forward<F>(f), back_inserter(r), forward<S>(s) );
+    return r;
 }
 
 /*
