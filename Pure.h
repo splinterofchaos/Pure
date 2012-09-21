@@ -19,6 +19,9 @@ using namespace std;
 
 template< class X > using Decay = typename decay<X>::type;
 
+template< class ...X > 
+using CommonType = typename std::common_type<Decay<X>...>::type;
+
 namespace cata {
 
 /* 
@@ -617,6 +620,91 @@ template< class Func > struct Arrow<Func> {
     }
 };
 
+template< class X > constexpr X inc( X x ) { return ++x; }
+template< class X > constexpr X dec( X x ) { return --x; }
+
+struct Add {
+    template< class X, class Y >
+    constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) + forward<Y>(y);
+    }
+};
+
+struct Mult {
+    template< class X, class Y >
+    constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) * forward<Y>(y);
+    }
+};
+
+template< class X >
+constexpr Closet<Mult,X> times( X x ) {
+    return closet( Mult(), move(x) );
+}
+
+template< class X > 
+constexpr auto plus( X x ) -> Closet<Add,X> {
+    return closet( Add(), move(x) );
+}
+
+struct Less {
+    template< class X, class Y >
+    constexpr bool operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) < forward<Y>(y);
+    }
+};
+
+struct LessEq {
+    template< class X, class Y >
+    constexpr bool operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) <= forward<Y>(y);
+    }
+};
+
+template< class X >
+constexpr RCloset<Less,X> less_than( X x ) {
+    return rcloset(Less(), move(x));
+}
+
+template< class X >
+constexpr Closet<LessEq,X> less_equal_to( X x ) {
+    return closet(LessEq(), move(x));
+}
+
+struct BinaryNot {
+    template< class B >
+    constexpr bool operator() ( B&& b ) {
+        return not (bool)forward<B>(b);
+    }
+};
+
+template< class F >
+constexpr auto fnot( F f ) -> decltype( compose(BinaryNot(),declval<F>()) ) {
+    return compose( BinaryNot(), move(f) );
+}
+
+struct Mod {
+    template< class X, class Y >
+    constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) % forward<Y>(y);
+    }
+};
+
+template< class X >
+constexpr auto divisible_by( X x ) -> Composition<BinaryNot,RCloset<Mod,X>> {
+    return fnot(rcloset( Mod(), move(x) ));
+}
+
+template< class X >
+constexpr auto multiple_of( X x ) -> decltype( divisible_by(move(x)) ) {
+    return divisible_by( move(x) );
+}
+
+template< class X >
+constexpr auto divisor_of( X x ) -> Composition<BinaryNot,Closet<Mod,X>> {
+    return fnot( closet(Mod(), move(x)) );
+}
+
 template< class S >
 constexpr auto length( S&& s ) -> decltype( declval<S>().size() )
 {
@@ -673,6 +761,7 @@ constexpr X last( const initializer_list<X>& l, size_t n = 0 ) {
 template< class S, class I = typename S::iterator > struct Range {
     I b, e;
     
+    using sequence_type = Decay<S>;
     using iterator = I; 
     using reference = decltype( *declval<I>() );
     using value_type = Decay<reference>;
@@ -682,6 +771,21 @@ template< class S, class I = typename S::iterator > struct Range {
 
     constexpr I begin() { return b; }
     constexpr I end()   { return e; }
+
+    operator sequence_type () { return sequence_type( b, e ); }
+};
+
+template< class S, class I1, class I2 >
+struct Range< Range<S,I1>, I2 > : public Range<S,I2> {
+    using parent = Range<S,I2>;
+
+    template< class _I >
+    constexpr Range( _I b, _I e ) : parent( b, e ) { }
+
+    using sequence_type = typename parent::sequence_type;
+    using iterator      = typename parent::iterator; 
+    using reference     = typename parent::reference;
+    using value_type    = typename parent::value_type;
 };
 
 template< class S, class R = Range<S,SeqIter<S>> >
@@ -776,9 +880,10 @@ S dup( const S& s ) {
 
 template< class S > using Dup = decltype( dup(declval<S>()) );
 
-template< class S, class I >
-Dup<S> dup( const Range<S,I>& r ) {
-    return _dup<Dup<S>>( r );
+template< class S, class I, class R = Range<S,I>, 
+          class RS = typename R::sequence_type >
+Dup<RS> dup( const Range<S,I>& r ) {
+    return _dup<Dup<RS>>( r );
 }
 
 template< class X, class V = vector<X> >
@@ -837,8 +942,9 @@ auto map( F&& f, const S<X,XS...>& xs ) -> XSame< FX, X, R >
 }
 
 // When mapping from X to X, we can optimize by not returning a new sequence.
-template< template<class...> class S, class X, class ...XS, class F >
-auto map( F&& f, S<X,XS...> xs ) -> ESame< Result<F,X>, X, S<X,XS...> >
+template< template<class...> class S, class X, class ...XS, class F,
+          class R = S<X,XS...> >
+auto map( F&& f, S<X,XS...> xs ) -> ESame< Result<F,X>, X, R >
 {
     _map( forward<F>(f), begin(xs), xs );
     return xs;
@@ -892,8 +998,33 @@ void vmap( F&& f, S&& s ) {
     std::for_each( begin(forward<S>(s)), end(forward<S>(s)), forward<F>(f) );
 }
 
-template< class X >
-using Decay = typename decay<X>::type;
+template< template<class...> class S, class X, class ...XS, class F,
+          class R = S<X,XS> >
+auto map_it( F&& f, S<X,XS...> xs ) -> ESame< Result<F,X>, X, R >
+{
+    for( auto it = begin(xs); it != end(xs); it++ )
+        *it = forward<F>(f)( it );
+    return xs;
+}
+
+template< template<class...> class S, class X, class ...XS, class F,
+          class FX = Result<F,X>, class R = S<FX,XS...> > 
+auto map_it( F&& f, const S<X,XS...>& xs ) -> XSame< FX, X, R >
+{
+    R r;
+    for( auto it = begin(xs); it != end(xs); it++ )
+        r.push_back( forward<F>(f)( it ) );
+    return r;
+}
+
+template< class F, class X, class V = vector< Result<F,X> > >
+V map_iter( F&& f, const initializer_list<X>& l ) {
+    V v; 
+    v.reserve( length(l) );
+    _map( forward<F>(f), begin(v), l );
+    return v;
+}
+
 
 /* each f a b c... = all f [a,b,c...] */
 template< class F, class X >
@@ -1303,19 +1434,6 @@ bool ordered( const Container& c )
         ).second == end(c);
 }
 
-struct BinaryNot {
-    template< class B >
-    constexpr bool operator() ( B&& b ) {
-        return not (bool)forward<B>(b);
-    }
-};
-
-template< class F >
-constexpr auto fnot( F f ) -> decltype( compose(BinaryNot(),declval<F>()) ) 
-{
-    return compose( BinaryNot(), move(f) );
-}
-
 /* filter f C -> { x for x in C such that f(x) is true. } */
 template< typename Container, typename F >
 Container filter( F&& f, Container cont )
@@ -1641,9 +1759,34 @@ R intersect( XS&& xs, const YS& ys ) {
     );
 }
 
+template< class S >
+SeqVal<S> sum( const S& s ) {
+    return std::accumulate( begin(s), end(s), 0 );
+}
+
+template< class S >
+SeqVal<S> product( const S& s ) {
+    return std::accumulate( begin(s), end(s), 1, Mult() );
+}
+
+template< class S >
+SeqRef<S> maximum( S&& s ) {
+    return *std::max_element( begin(forward<S>(s)), end(forward<S>(s)) );
+}
+
+template< class F, class S >
+bool all( F&& f, const S& s ) {
+    return std::all_of( begin(s), end(s), forward<F>(f) );
+}
+
 template< class F, class S >
 bool any( F&& f, const S& s ) {
     return any_of( begin(s), end(s), forward<F>(f) );
+}
+
+template< class F, class S >
+bool none( F&& f, const S& s ) {
+    return std::none_of( begin(s), end(s), forward<F>(f) );
 }
 
 template< class F, class XS, class YS >
@@ -1761,18 +1904,6 @@ template< class S, class V = SeqSeq<S> >
 V permutations( S&& original ) {
     return ordered(original) ? sorted_permutations( forward<S>(original) )
         : _permutations( forward<S>(original) );
-}
-
-/* all f C -> true when f(x) is true for all x in C; otherwise false. */
-template< typename Container, typename F >
-bool all( F&& f, const Container& cont )
-{
-    return all_of( begin(cont), end(cont), forward<F>(f) );
-}
-
-template< class S >
-SeqVal<S> sum( const S& s ) {
-    return std::accumulate( begin(s), end(s), 0 );
 }
 
 /* 

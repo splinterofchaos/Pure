@@ -28,13 +28,13 @@ constexpr int get_y( const Vec& v ) { return v[1]; }
 
 Vec operator + ( const Vec& a, const Vec& b )
 { 
-    return zip_with( plus<float>(), a, b ); 
+    return zip_with( Add(), a, b ); 
 }
 
 
 Vec operator * ( Vec&& a, float x )
 {
-    return map( closure(multiplies<float>(),x), move(a) ); 
+    return map( closure(Mult(),x), move(a) ); 
 }
 Vec operator * ( float x, Vec&& a )      { return move(a) * x; }
 Vec operator * ( const Vec& a, float x ) { return Vec(a) * x; }
@@ -60,13 +60,12 @@ unique_ptr<Vec> quadratic_root( float a, float b, float c )
 }
 
 int five() { return 5; }
-constexpr int times(int x,int y) { return x*y; }
-auto times_two = closet( times, 2 );
+constexpr auto times_two = times(2);
 constexpr int plus_two(int x) { return x + 2; }
 
 // squash(f) returns a functor that duplicates its first argument.
-constexpr auto square = squash( times );
-// square(x) = times(x,x)
+constexpr auto square = squash( Mult() );
+// square(x) = x * x
 
 float to_float( int x ) { return x; }
 
@@ -201,9 +200,9 @@ int main()
     printf( "\tpermutations (take 3 es) = %s\n", 
             show( permutations( take(3,evens) ) ).c_str() );
     printf( "\tscanl (+) %s = %s\n", 
-            show( evens ).c_str(), show( scanl( plus<int>(), evens ) ).c_str() );
+            show( evens ).c_str(), show( scanl( Add(), evens ) ).c_str() );
     printf( "\tscanr (+) %s = %s\n", 
-            show( evens ).c_str(), show( scanr( plus<int>(), evens ) ).c_str() );
+            show( evens ).c_str(), show( scanr( Add(), evens ) ).c_str() );
     puts("");
 
     printf( "intersparse ',' \"abcd\" = %s\n",
@@ -261,7 +260,7 @@ int main()
     Vec fiveTwo = {{5,2}}, twoFive = {{2,5}};
 
     // Join lets us adapt an N-ary function to an (N-1) one.
-    printf( "\t5 * 2 = %d\n", bcompose(times, get_x, get_y)(fiveTwo) );
+    printf( "\t5 * 2 = %d\n", bcompose(Mult(), get_x, get_y)(fiveTwo) );
     //         is the same as times(get_x(fiveTwo), get_y(fiveTwo)).
 
     auto sevens = fiveTwo + twoFive;
@@ -286,8 +285,8 @@ int main()
     printf( "addM2 2 4 = %s\n\n",
             show( addM2(Just(2), Just(4)) ).c_str() );
 
-    printf( "5 * 2 = %d\n", closet(times,5)(2) );
-    printf( "5 * 2 = %d\n", closet(times,5,2)() );
+    printf( "5 * 2 = %d\n", closet(Mult(),5)(2) );
+    printf( "5 * 2 = %d\n", closet(Mult(),5,2)() );
 
     puts("");
     puts("p2M = fmap (+2)");
