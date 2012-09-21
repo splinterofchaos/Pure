@@ -20,7 +20,7 @@ using namespace std;
 template< class X > using Decay = typename decay<X>::type;
 
 template< class ...X > 
-using CommonType = typename std::common_type<Decay<X>...>::type;
+using CommonType = Decay<typename std::common_type<X...>::type>;
 
 namespace cata {
 
@@ -107,7 +107,7 @@ template< class ... > struct Category;
 
 /* The result of a function applied against X. */
 template< class F, class ...X >
-using Result = decltype( declval<F>()( declval<X>()... ) );
+using Result = Decay<decltype( declval<F>()( declval<X>()... ) )>;
 
 template< class X, class C = Category<X> >
 auto cid( X&& x ) -> decltype( C::id( declval<X>() ) ) {
@@ -932,19 +932,20 @@ template< class A, class B, class R >
 using XSame = typename std::enable_if< !is_same<A,B>::value, R >::type;
 
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
-template< template<class...> class S, class X, class ...XS, class F,
-          class FX = Result<F,X>, class R = S<FX,XS...> > 
-auto map( F&& f, const S<X,XS...>& xs ) -> XSame< FX, X, R >
+template< template<class...> class S, class X, class ..._X, 
+          class XS = S<X,_X...>,
+          class F, class FX = Result<F,X>, class R = S<FX,_X...> > 
+auto map( F&& f, XS&& xs ) -> XSame< FX, X, R >
 {
     R r;
-    _map( forward<F>(f), back_inserter(r), xs );
+    _map( forward<F>(f), back_inserter(r), forward<XS>(xs) );
     return r;
 }
 
 // When mapping from X to X, we can optimize by not returning a new sequence.
 template< template<class...> class S, class X, class ...XS, class F,
           class R = S<X,XS...> >
-auto map( F&& f, S<X,XS...> xs ) -> ESame< Result<F,X>, X, R >
+auto map( F&& f, S<X,XS...> xs ) -> ESame< X, Result<F,X>, R >
 {
     _map( forward<F>(f), begin(xs), xs );
     return xs;
@@ -999,7 +1000,7 @@ void vmap( F&& f, S&& s ) {
 }
 
 template< template<class...> class S, class X, class ...XS, class F,
-          class R = S<X,XS> >
+          class R = S<X,XS...> >
 auto map_it( F&& f, S<X,XS...> xs ) -> ESame< Result<F,X>, X, R >
 {
     for( auto it = begin(xs); it != end(xs); it++ )
@@ -1342,8 +1343,28 @@ constexpr I iterate( F f, X&& x ) {
 }
 
 template< class X, class F = Id >
-constexpr IteratorC<F,X> repeat( X&& x, F&& f = F() ) {
-    return iterate( forward<F>(f), forward<X>(x) );
+constexpr IteratorC<F,X> repeat( X&& x, F f = F() ) {
+    return iterate( move(f), forward<X>(x) );
+}
+
+/* enumerate 1 5 = [1,2,3,4,5] */
+template< class X, class Y, class F = decltype(inc<X>)* >
+constexpr vector<Decay<X>> enumerate( X&& from, Y&& to, F f = inc<X> ) {
+    return take_while (
+        less_than(forward<Y>(to)),
+        iterate( move(f), forward<X>(from) )
+    );
+}
+
+/* enumerate 1 = [1..] */
+template< class X, class F = decltype(inc<X>)* >
+constexpr auto enumerate( X&& x, F f = inc<X> ) 
+    // Calling enumerate(1,2) creates an ambiguity on whether you want this or
+    // the above version. Just disable this version when the second argument
+    // isn't callable.
+    -> Decay<decltype( f(declval<X>()), declval<IteratorC<F,X>>() )>
+{
+    return iterate( move(f), forward<X>(x) );
 }
 
 template< class X >

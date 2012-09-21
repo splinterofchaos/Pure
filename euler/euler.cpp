@@ -9,15 +9,16 @@ using std::cout;
 using std::endl;
 using std::flush;
 
-std::ostream& operator<< ( std::ostream& os, const std::vector<int>& v ) {
-    std::copy( begin(v), end(v), std::ostream_iterator<int>(os," ") );
+template< class X >
+std::ostream& operator<< ( std::ostream& os, const std::vector<X>& v ) {
+    std::copy( begin(v), end(v), std::ostream_iterator<X>(os," ") );
     return os;
 }
 
 vector<int> multiples_less_than_1000( int x ) {
     return take (
         999 / x, // x goes into 1000 (999/x) times.
-        iterate( closet(Add(),x), x )
+        iterate( pure::plus(x), x )
     );
 }
 
@@ -123,24 +124,43 @@ bool palindrome( int x ) {
     return palindrome( digits(x) );
 }
     
-auto three_digits = take_while( less_than(1000), iterate(inc<int>,100) );
-
+const auto three_digits = enumerate( 100, 1000 );
 using ThreeDS = decltype(three_digits);
 
 void problem4() {
-    vector<int> maxes;
-    for( auto r = reverse_wrap( three_digits ); 
-         not_null(r); r = tail_wrap(r) )
-    {
-        using ItoB = bool(*)(int);
-        auto t = tail(r); // TODO: If this line is not separate, gcc fails to
-                          //       compile. Why?
-        maxes = append( move(maxes), 
-                        filter( (ItoB)palindrome, 
-                                map(times(head(r)), t) ) );
-    }
     cout << "The largest product of three digit numbers "
-            "making a palindrome : " << maximum(maxes) << endl;
+            "making a palindrome : " << 
+            maximum ( 
+                concatMap ( 
+                    []( const ThreeDS& r ) -> vector<int> {
+                        if( null(r) )
+                            return vector<int>();
+
+                        using ItoB = bool(*)(int);
+                        return filter( (ItoB)palindrome,
+                                       map( times(last(r)), init(r) ) );
+                    },
+                    inits( three_digits )
+                )
+            ) << endl;
+}
+
+int gcm( int x, int y ) {
+    while(true) {
+        if( not x ) return y;
+        y %= x;
+        if( not y ) return x;
+        x %= y;
+    }
+}
+
+int lcm( int x, int y ) {
+    return x * y / gcm(x,y);
+}
+
+void problem5() {
+    cout << foldl(lcm,enumerate(1,20)) 
+         << " is divisible by all numbers 1 thought 20.\n";
 }
 
 int main() {
@@ -148,4 +168,5 @@ int main() {
     problem2();
     problem3();
     problem4();
+    problem5();
 }
