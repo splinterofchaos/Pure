@@ -10,6 +10,7 @@
 #include <utility>
 #include <tuple>
 #include <memory>
+#include <limits>
 
 #include <iostream>
 
@@ -794,8 +795,18 @@ constexpr R range( S&& s ) {
 }
 
 template< class S, class I, class R = Range<S,I> >
-constexpr R range( I a, I b ) {
+constexpr auto range( I a, I b ) -> R {
     return R( a, b );
+}
+
+template< class S, class R = Range<S,SeqIter<S>> >
+constexpr R range( S&& s,  size_t b, size_t e ) {
+    return R( next(begin(forward<S>(s)),b), next(begin(forward<S>(s)),e) );
+}
+
+template< class S, class R = Range<S,SeqIter<S>> >
+constexpr R range( S&& s,  size_t e ) {
+    return range( forward<S>(s), 0, e );
 }
 
 template< class S, class R = Range<S,SeqIter<S>> >
@@ -867,9 +878,11 @@ R _dup( S&& s ) {
 }
 
 template< class R, class S >
-R _dup( S&& s, size_t n ) {
+R _dup( S&& s, size_t n, size_t off = 0 ) {
     R r;
-    copy_n( begin(forward<S>(s)), n, back_inserter(r) );
+    copy_n( next( begin(s), off ), 
+            std::min( n+1, length(s) ) - 1,
+            back_inserter(r) );
     return r;
 }
 
@@ -894,6 +907,11 @@ V dup( const initializer_list<X>& l ) {
 template< class S, class D = Dup<S> >
 D dup( S&& s, size_t n ) {
     return _dup<D>( forward<S>(s), n );
+}
+
+template< class S, class D = Dup<S> >
+D dup( S&& s, size_t start, size_t end ) {
+    return _dup<D>( forward<S>(s), end-start, end );
 }
 
 template< class S > 
@@ -1233,10 +1251,10 @@ Scanr<F,S> scanr( F&& f, S&& s ) {
 }
 
 template< class F, class X > struct IteratorC {
-    using container = vector<Decay<X>>;
-    using reference = typename container::reference;
+    using container  = vector<Decay<X>>;
+    using reference  = typename container::reference;
     using value_type = typename container::value_type;
-    using citerator = typename container::iterator;
+    using citerator  = typename container::iterator;
 
     mutable F f;
     mutable container c;
@@ -1321,8 +1339,13 @@ template< class F, class X > struct IteratorC {
     constexpr iterator begin() { return *this; }
     constexpr iterator end() { return iterator(*this,std::end(c)); }
 
-    operator container () { return c; }
+    operator container () const { return c; }
 };
+
+template< class F, class X >
+constexpr size_t length( const IteratorC<F,X>& ) {
+    return std::numeric_limits<size_t>::max();
+}
 
 template< class S, class I, class D = Dup<S> >
 D dup_range( I b, I e ) {
@@ -1365,8 +1388,8 @@ constexpr vector<Decay<X>> enumerate( X&& from, Y&& to, F f = inc<X> ) {
 }
 
 /* enumerate 1 = [1..] */
-template< class X, class F = decltype(inc<X>)* >
-constexpr auto enumerate( X&& x, F f = inc<X> ) 
+template< class X = unsigned int, class F = decltype(inc<X>)* >
+constexpr auto enumerate( X&& x = 1, F f = inc<X> ) 
     // Calling enumerate(1,2) creates an ambiguity on whether you want this or
     // the above version. Just disable this version when the second argument
     // isn't callable.
@@ -1483,6 +1506,20 @@ V filter( F&& f, const initializer_list<X>& cont ) {
     return v;
 }
 
+// TODO: Perhaps this could be implemented with a filterFold...
+/* filtrate f pred xs = filter pred (map f xs) */
+template< class F, class P, class S, 
+          class R = decltype( map(declval<F>(),declval<S>()) ) >
+R filtrate( F&& f, P&& p, S&& s ) {
+    R r;
+    for( auto& x : forward<S>(s) ) {
+        auto y = forward<F>(f)( x );
+        if( forward<P>(p)(y) )
+            r.push_back( move(y) );
+    }
+    return r;
+}
+
 /* find pred xs -> Maybe x */
 template< class F, class S,
           class Val = typename cata::sequence_traits<S>::value_type >
@@ -1568,7 +1605,7 @@ _S take_while( P&& p, S&& s ) {
 
 template< class S >
 Dup<S> drop( size_t n, S&& s ) {
-    return dup( tail_wrap( max( length(s)-n, 0 ),
+    return dup( tail_wrap( max( (size_t)length(forward<S>(s))-n, (size_t)0 ),
                            forward<S>(s) ) );
 }
 

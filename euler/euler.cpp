@@ -118,32 +118,32 @@ vector<int> digits( int x ) {
     return ds;
 }
 
-bool palindrome( const vector<int>& v ) {
+bool _palindrome( const vector<int>& v ) {
     return equal( v, reverse_wrap(v) );
 }
 
 bool palindrome( int x ) {
-    return palindrome( digits(x) );
+    return _palindrome( digits(x) );
 }
 
-void problem4() {
-    const vector<int> three_digits = enumerate( 100, 1000 );
-    
-    cout << "The largest product of three digit numbers "
-            "making a palindrome : " << flush <<
-            maximum ( 
-                concatMap ( 
-                    []( const vector<int>& r ) -> vector<int> {
-                        if( null(r) )
-                            return vector<int>();
+auto N = enumerate(0);
 
-                        using P = bool(*)(int);
-                        return filter( P(palindrome),
-                                       map( times(last(r)), init(r) ) );
-                    },
-                    inits( three_digits )
-                )
-            ) << endl;
+void problem4() {
+    cout << "The largest palindrome product of three digit numbers :"
+         << flush;
+    cout << maximum ( 
+        concatMap ( 
+            []( vector<int> r ) -> vector<int> {
+                return filtrate( times(last(r)), palindrome, init(r) );
+            },
+            range (
+                // Our input range.
+                inits( dup(N,100,1000) ), 
+                // We remove the first three values: {} {100}, and {100,101}.
+                2, 1000 - 100 - 2
+            )
+        )
+    ) << endl;
 }
 
 int gcm( int x, int y ) {
@@ -160,18 +160,18 @@ int lcm( int x, int y ) {
 }
 
 void problem5() {
-    cout << foldl(lcm,enumerate(1,20)) 
-         << " is divisible by all numbers 1 thought 20.\n";
+    cout << foldl( lcm, enumerate(1,20) ) 
+         << " is divisible by all numbers 1 thought 20." << endl;
 }
 
 void problem6() {
     cout << "The difference between the sum squared and squared sum "
             "of each number between 1 and 100: " << flush;
 
-    const auto N = enumerate( 1.0f, 101.0f );
+    vector<int> N = dup( N, 1, 101 );
 
     using P = float(*)(float,float);
-    cout << int( pow( sum(N), 2) - sum( map(rclosure(P(pow),2), N) ) ) 
+    cout << int( pow( sum(N), 2) - sum( map_to<vector<int>>(rclosure(P(pow),2), N) ) ) 
          << endl;
 }
 
@@ -193,12 +193,21 @@ void problem8() {
 
     cout << maximum (
         map ( 
-            []( const vector<int>& v ) { 
-                return length(v) >= 5 ? product(take(5,v)) : 0; 
-            },
+            []( const vector<int>& v ) { return product( take(5,v) ); },
             tails( map_to<vector<int>>(from_sym,nsStr) )
         ) 
     ) << endl;
+}
+
+constexpr bool triplet( int a, int b, int c ) {
+    return a < b and b < c and a*a + b*b == c*c;
+}
+
+void problem9() {
+    auto N = enumerate();
+    // Taking the tail of an infinite list (N) will cause an infinite loop when
+    // tail() calls dup. But there's no problem with tail_wrap.
+    cout << head(tail_wrap(N)) << endl;
 }
 
 int main() {
@@ -210,4 +219,5 @@ int main() {
     problem6();
     problem7();
     problem8();
+    problem9();
 }
