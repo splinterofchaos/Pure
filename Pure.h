@@ -23,6 +23,12 @@ template< class X > using Decay = typename decay<X>::type;
 template< class ...X > 
 using CommonType = Decay<typename std::common_type<X...>::type>;
 
+template< class X >
+using IsRval = typename std::is_rvalue_reference<X>;
+
+template< class X, class R >
+using ERVal = typename std::enable_if<IsRval<X>::value,R>::type;
+
 namespace cata {
 
 /* 
@@ -1381,12 +1387,17 @@ Dup<IC> dup_range( I b, I e ) {
     return dup_range( b.it, e.it );
 }
 
+template< class F, class X, class ...Y, class R = Remember<F,X> >
+constexpr R memorize( F f, X x, Y ...y ) {
+    return R( move(f), move(x), move(y)... );
+}
+
 template< class F, class X >
 using Iterate = Remember< Composition<F,Last>, X >;
 
 template< class F, class X, class I = Iterate<F,X> >
 constexpr I iterate( F f, X x ) {
-    return I ( 
+    return memorize ( 
         compose( move(f), Last() ), 
         move(x) 
     );
@@ -1397,7 +1408,7 @@ constexpr I repeat( X x ) {
     return iterate( Id(), move(x) );
 }
 
-template< class F, class X, 
+template< class F, class X,
           class I = Remember< BComposition<F,Last,Last>, X > >
 constexpr I bi_iterate( F f, X a, X b ) {
     return I (
@@ -1632,9 +1643,8 @@ _S take_while( P&& p, S&& s ) {
 }
 
 template< class S >
-Dup<S> drop( size_t n, S&& s ) {
-    return dup( tail_wrap( max( (size_t)length(forward<S>(s))-n, (size_t)0 ),
-                           forward<S>(s) ) );
+Dup<S> drop( size_t n, const S& s ) {
+    return S( next(begin(s),n), end(s) );
 }
 
 template< class P, class S, class _S = Decay<S> >

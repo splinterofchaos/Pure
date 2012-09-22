@@ -91,18 +91,29 @@ long int last_prime() {
     return last( primes.primes );
 }
 
+int next_prime( const vector<int>& past ) {
+    int x = last( past );
+
+    do x += 2;
+    while( any( divisor_of(x), tail_wrap(past) ) );
+    return x;
+}
+
 bool prime( int x ) { return primes.prime(x); }
 
 void problem3() {
     const long int START = 600851475143;
-    long int x = 600851475143;
+    long int x = START;
 
     cout << "The largest prime divisor of " << START << flush;
-    while( last_prime() < std::sqrt(x) ) {
-        primes.add_next_prime();
-        if( x % last_prime() == 0 )
-            x /= last_prime();
-    }
+
+    auto primes = memorize( next_prime, 2, 3 );
+    auto p = begin( primes );
+
+    while( *p < std::sqrt(x) )
+        if( x % *p++ == 0 )
+            x /= *prev(p);
+
     cout << " is " << x << endl;
 }
 
@@ -132,13 +143,12 @@ void problem4() {
     cout << maximum ( 
         concatMap ( 
             []( vector<int> r ) -> vector<int> {
-                return filtrate( times(last(r)), palindrome, init(r) );
+                return filtrate( times(last(r)), palindrome, init(move(r)) );
             },
-            range (
-                // Our input range.
-                inits( dup(N,100,1000) ), 
+            drop (
                 // We remove the first three values: {} {100}, and {100,101}.
-                2, 1000 - 100 - 2
+                3,
+                inits( enumerate(100,1000) )
             )
         )
     ) << endl;
@@ -166,7 +176,7 @@ void problem6() {
     cout << "The difference between the sum squared and squared sum "
             "of each number between 1 and 100: " << flush;
 
-    vector<int> N = dup( N, 1, 101 );
+    vector<int> N = enumerate( 1, 101 );
 
     using P = float(*)(float,float);
     cout << int( pow( sum(N), 2) - sum( map_to<vector<int>>(rclosure(P(pow),2), N) ) ) 
@@ -175,11 +185,10 @@ void problem6() {
 
 void problem7() {
     cout << "The 1001'st prime number: " << flush;
-    
-    while( length(primes.so_far()) <= 10001 )
-        primes.add_next_prime();
-
-    cout << primes.so_far()[ 10001 ] << endl;
+    cout << *next ( 
+        begin( memorize(next_prime,1,2,3) ), 
+        10001 - 3 
+    ) << endl;
 }
 
 int from_sym( char sym ) { return sym - '0'; }
@@ -197,16 +206,6 @@ void problem8() {
     ) << endl;
 }
 
-constexpr bool triplet( int a, int b, int c ) {
-    return a < b and b < c and a*a + b*b == c*c;
-}
-
-void problem9() {
-    auto N = enumerate();
-    // Taking the tail of an infinite list (N) will cause an infinite loop when
-    // tail() calls dup. But there's no problem with tail_wrap.
-    cout << head(tail_wrap(N)) << endl;
-}
 
 int main() {
     problem1();
@@ -217,5 +216,4 @@ int main() {
     problem6();
     problem7();
     problem8();
-    problem9();
 }
