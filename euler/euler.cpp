@@ -91,7 +91,9 @@ long int last_prime() {
     return last( primes.primes );
 }
 
-int next_prime( const vector<int>& past ) {
+using PrimeType = unsigned long long int;
+
+PrimeType next_prime( const vector<PrimeType>& past ) {
     int x = last( past );
 
     do x += 2;
@@ -107,7 +109,7 @@ void problem3() {
 
     cout << "The largest prime divisor of " << START << flush;
 
-    auto primes = memorize( next_prime, 2, 3 );
+    auto primes = memorize( next_prime, 2ull, 3ull );
     auto p = begin( primes );
 
     while( *p < std::sqrt(x) )
@@ -141,9 +143,12 @@ void problem4() {
     cout << "The largest palindrome product of three digit numbers :"
          << flush;
     cout << maximum ( 
-        concatMap ( 
-            []( vector<int> r ) -> vector<int> {
-                return filtrate( times(last(r)), palindrome, init(move(r)) );
+        map ( 
+            []( const IRange& r ) -> unsigned int {
+                auto ps = filter( palindrome, 
+                                  map_to<vector<unsigned int>>(times(last(r)), 
+                                                      init(r)) );
+                return not_null(ps) ? maximum(ps) : 0;
             },
             drop (
                 // We remove the first three values: {} {100}, and {100,101}.
@@ -176,17 +181,20 @@ void problem6() {
     cout << "The difference between the sum squared and squared sum "
             "of each number between 1 and 100: " << flush;
 
-    vector<int> N = enumerate( 1, 101 );
+    constexpr auto N = enumerate( 1, 101 );
 
     using P = float(*)(float,float);
-    cout << int( pow( sum(N), 2) - sum( map_to<vector<int>>(rclosure(P(pow),2), N) ) ) 
-         << endl;
+    cout << int ( 
+        pow(sum(N), 2.f) - sum ( 
+            map_to<vector<int>>( rclosure(P(pow), 2), N ) 
+        ) 
+    ) << endl;
 }
 
 void problem7() {
     cout << "The 1001'st prime number: " << flush;
     cout << *next ( 
-        begin( memorize(next_prime,1,2,3) ), 
+        begin( memorize(next_prime,1ull,2ull,3ull) ), 
         10001 - 3 
     ) << endl;
 }
@@ -215,6 +223,7 @@ void problem9() {
 
     unsigned int a = 4, b = 5;
     auto c = [&]() { return std::hypot(a,b); };
+
     while( a+b+c() != 1000 ) {
         a++;
         for( b = a+1; a + b + c() < 1000; b++ ) { 
@@ -224,6 +233,17 @@ void problem9() {
     cout << a << ',' << b << ',' << c()
          << "), equals " << a+b+c() << " when added and " 
          << int(a*b*c()) << " when multiplied. " << endl;
+}
+
+void problem10() {
+    // TODO: This is too slow, too brute force.
+    cout << "The sum of all primes below 4 million is: " << flush;
+    PrimeType sum = 1ull;
+    auto primes = memorize( next_prime, 1ull, 2ull, 3ull );
+    auto p = begin( primes );
+    while( *p < PrimeType(4000000) ) 
+        sum += *p++;
+    cout << sum << endl;
 }
 
 int main() {
@@ -236,4 +256,5 @@ int main() {
     problem7();
     problem8();
     problem9();
+    //problem10(); -- TOO SLOW!
 }

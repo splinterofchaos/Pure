@@ -938,8 +938,8 @@ Dup<S> tail( const S& s ) {
 }
 
 template< class S > 
-Dup<S> init( const S& s ) {
-    return dup( init_wrap(s) );
+S init( const S& s ) {
+    return S( begin(s), prev(end(s)) );
 }
 
 template< class S >
@@ -1388,8 +1388,8 @@ Dup<IC> dup_range( I b, I e ) {
 }
 
 template< class F, class X, class ...Y, class R = Remember<F,X> >
-constexpr R memorize( F f, X x, Y ...y ) {
-    return R( move(f), move(x), move(y)... );
+constexpr R memorize( F f, X x, Y&& ...y ) {
+    return R( move(f), move(x), forward<Y>(y)... );
 }
 
 template< class F, class X >
@@ -1417,24 +1417,64 @@ constexpr I bi_iterate( F f, X a, X b ) {
     );
 }
 
-/* enumerate 1 5 = [1,2,3,4,5] */
-template< class X, class Y, class F = decltype(inc<X>)* >
-constexpr vector<Decay<X>> enumerate( X&& from, Y&& to, F f = inc<X> ) {
-    return take_while (
-        less_than(forward<Y>(to)),
-        iterate( move(f), forward<X>(from) )
-    );
+template< class I > struct XRange {
+    using value_type = I;
+
+    struct iterator 
+        : std::iterator<random_access_iterator_tag,int,int>
+    {
+        value_type i;
+
+        constexpr iterator( value_type i ) : i(i) { }
+
+        constexpr iterator operator* () { return i; }
+        iterator operator++ () { return ++i; }
+        iterator operator-- () { return --i; }
+        iterator operator-- (int) { return i--; }
+        iterator operator++ (int) { return i++; }
+
+        constexpr iterator operator- ( iterator other ) { 
+            return i - other; 
+        }
+
+        iterator& operator-= ( iterator other ) { 
+            i -= other;
+            return *this;
+        }
+
+        constexpr iterator operator+ ( iterator other ) { 
+            return i + other; 
+        }
+
+        iterator operator+= ( iterator other ) { 
+            i += other; 
+            return *this;
+        }
+
+        constexpr operator value_type () { return i; }
+    };
+
+    iterator b, e;
+
+    constexpr XRange( value_type b, value_type e ) : b(b), e(e) { }
+    constexpr XRange() : b(0), e(0) { }
+
+    constexpr iterator begin() { return b; }
+    constexpr iterator end()   { return e; }
+};
+
+using IRange = XRange<unsigned int>;
+
+constexpr IRange enumerate( unsigned int b, unsigned int e ) {
+    return IRange(b,e); 
 }
 
-/* enumerate 1 = [1..] */
-template< class X = unsigned int, class F = decltype(inc<X>)* >
-constexpr auto enumerate( X&& x = 1, F f = inc<X> ) 
-    // Calling enumerate(1,2) creates an ambiguity on whether you want this or
-    // the above version. Just disable this version when the second argument
-    // isn't callable.
-    -> Decay<decltype( f(declval<X>()), declval<Iterate<F,X>>() )>
-{
-    return iterate( move(f), forward<X>(x) );
+constexpr IRange enumerate( unsigned int b ) {
+    return IRange(b,std::numeric_limits<unsigned int>::max()); 
+}
+
+constexpr IRange enumerate_to( unsigned int e ) {
+    return IRange(0,e); 
 }
 
 template< class X >
@@ -1643,7 +1683,7 @@ _S take_while( P&& p, S&& s ) {
 }
 
 template< class S >
-Dup<S> drop( size_t n, const S& s ) {
+S drop( size_t n, const S& s ) {
     return S( next(begin(s),n), end(s) );
 }
 
