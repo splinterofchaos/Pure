@@ -206,6 +206,25 @@ void problem8() {
     ) << endl;
 }
 
+constexpr bool triplet( int a, int b, int c ) {
+    return a < b and b < c and a*a + b*b == c*c;
+}
+
+void problem9() {
+    cout << "The triplet, (" << flush;
+
+    unsigned int a = 4, b = 5;
+    auto c = [&]() { return std::hypot(a,b); };
+    while( a+b+c() != 1000 ) {
+        a++;
+        for( b = a+1; a + b + c() < 1000; b++ ) { 
+        }
+    }
+
+    cout << a << ',' << b << ',' << c()
+         << "), equals " << a+b+c() << " when added and " 
+         << int(a*b*c()) << " when multiplied. " << endl;
+}
 
 int main() {
     problem1();
@@ -216,4 +235,5 @@ int main() {
     problem6();
     problem7();
     problem8();
+    problem9();
 }
