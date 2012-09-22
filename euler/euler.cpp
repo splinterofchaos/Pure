@@ -31,12 +31,12 @@ void problem1() {
 }
 
 template< class F, class X > struct LastAccum {
-    F f;
-    X x;
+    mutable F f;
+    mutable X x;
 
-    constexpr LastAccum( F f, X x ) : f(move(f)), x(move(x)) { }
+    LastAccum( F f, X x ) : f(move(f)), x(move(x)) { }
 
-    X operator()( X y ) {
+    X operator()( X y ) const {
         std::swap( x, y );
         x = f( y, x );
         return y;
@@ -44,7 +44,7 @@ template< class F, class X > struct LastAccum {
 };
 
 template< class F, class X > 
-constexpr LastAccum<F,X> last_accum( F f, X x ) {
+LastAccum<F,X> last_accum( F f, X x ) {
     return LastAccum<F,X>( move(f), move(x) );
 }
 
@@ -58,9 +58,7 @@ void problem2() {
                  even,
                  take_while (
                      less_than( 4000000 ),
-                     // iterate and last_accum, together, 
-                     // give us the two-value accumulator we need.
-                     iterate( last_accum(Add(),2), 1 ) 
+                     bi_iterate( Add(), 1, 2 )
                  )
              )
          ) << endl;

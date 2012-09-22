@@ -335,9 +335,8 @@ struct Composition<F,G>
 {
     F f; G g;
 
-    template< class _F, class _G >
-    constexpr Composition( _F&& f, _G&& g ) 
-        : f(forward<_F>(f)), g(forward<_G>(g)) { }
+    constexpr Composition( F f, G g) 
+        : f(move(f)), g(move(g)) { }
 
     template< class X, class ...Y >
     constexpr decltype( f(g(declval<X>()), declval<Y>()...) )
@@ -456,12 +455,12 @@ constexpr C ncompose( F f, G ...g ) {
  * n-ary.
  */
 template< class F, class G, class H >
-struct BCompoposition
+struct BComposition
 {
     F f; G g; H h;
 
     template< class _F, class _G, class _H >
-    constexpr BCompoposition( _F&& f, _G&& g, _H&& h ) 
+    constexpr BComposition( _F&& f, _G&& g, _H&& h ) 
         : f(forward<_F>(f)), g(forward<_G>(g)), h(forward<_H>(h)) { }
 
     template< class ...X >
@@ -471,7 +470,7 @@ struct BCompoposition
     }
 };
 
-template< class F, class G, class H, class C = BCompoposition<F,G,H> >
+template< class F, class G, class H, class C = BComposition<F,G,H> >
 constexpr C bcompose( F f, G g, H h ) {
     return C( move(f), move(g), move(h) );
 }
@@ -758,6 +757,19 @@ template< class X >
 constexpr X last( const initializer_list<X>& l, size_t n = 0 ) {
     return *prev( end(l), n+1 );
 }
+
+struct Last {
+    size_t N;
+
+    constexpr Last( size_t N=0 ) : N(N) { }
+
+    template< class X >
+    constexpr auto operator() ( X&& x ) 
+        -> decltype( last(declval<X>()) )
+    {
+        return last( forward<X>(x), N );
+    }
+};
 
 template< class S, class I = typename S::iterator > struct Range {
     I b, e;
@@ -1250,26 +1262,32 @@ Scanr<F,S> scanr( F&& f, S&& s ) {
                   last(forward<S>(s)), init_wrap(forward<S>(s)) );
 }
 
-template< class F, class X > struct IteratorC {
+template< class F, class X > struct Remember {
     using container  = vector<Decay<X>>;
     using reference  = typename container::reference;
     using value_type = typename container::value_type;
     using citerator  = typename container::iterator;
 
+    // Unfortunately, as a requirement for declaring the Fnct::operator() as a
+    // constexper convention, this must define its () as const. This feels
+    // hackish, but the standard doesn't provide a way of saying a constexpr
+    // function is non-const when its arguments aren't constexprs. We can
+    // either remove the constexper convention for generality, or just define
+    // these as mutable.
     mutable F f;
     mutable container c;
 
     struct iterator 
         : std::iterator<bidirectional_iterator_tag,value_type> 
     {
-        const IteratorC& c;
+        const Remember& c;
         citerator it;
 
-        iterator( const IteratorC<F,X>& _c )
+        iterator( const Remember<F,X>& _c )
             : c(_c), it(std::begin(c.c))
         {
         }
-        iterator( const IteratorC<F,X>& _c, citerator i )
+        iterator( const Remember<F,X>& _c, citerator i )
             : c(_c), it(i)
         {
         }
@@ -1281,7 +1299,7 @@ template< class F, class X > struct IteratorC {
 
         void _grow() {
             size_t dist = it - std::begin(c.c);
-            c.c.emplace_back( c.f(last(c.c)) );
+            c.c.emplace_back( c.f(c.c) );
             it = std::begin(c.c) + dist;
         }
 
@@ -1329,21 +1347,16 @@ template< class F, class X > struct IteratorC {
     };
 
     
-    template< class _X >
-    constexpr IteratorC( F f, _X&& x ) 
-        : f(move(f)), 
-          c{forward<_X>(x)}
-    {
-    }
+    template< class ..._X >
+    Remember( F f, _X&& ...x ) 
+        : f(move(f)), c{forward<_X>(x)...} { }
     
-    constexpr iterator begin() { return *this; }
-    constexpr iterator end() { return iterator(*this,std::end(c)); }
-
-    operator container () const { return c; }
+    iterator begin() const { return *this; }
+    iterator end()   const { return iterator(*this,std::end(c)); }
 };
 
 template< class F, class X >
-constexpr size_t length( const IteratorC<F,X>& ) {
+constexpr size_t length( const Remember<F,X>& ) {
     return std::numeric_limits<size_t>::max();
 }
 
@@ -1352,30 +1365,45 @@ D dup_range( I b, I e ) {
     return D( b, e );
 }
 
-template< class F, class X, class I = IteratorC<F,X> >
-vector<X> dup( const IteratorC<F,X>& c ) {
+template< class F, class X, class I = Remember<F,X> >
+vector<X> dup( const Remember<F,X>& c ) {
     return c;
 }
 
-template< class F, class X, class I = IteratorC<F,X> >
-vector<X> dup( IteratorC<F,X> c, size_t n ) {
+template< class F, class X, class I = Remember<F,X> >
+vector<X> dup( Remember<F,X> c, size_t n ) {
     return _dup<vector<X>>( move(c), n );
 }
 
-template< class F, class X, class IC = IteratorC<F,X>,
+template< class F, class X, class IC = Remember<F,X>,
           class I = typename IC::iterator >
 Dup<IC> dup_range( I b, I e ) {
     return dup_range( b.it, e.it );
 }
 
-template< class F, class X, class I = IteratorC<F,Decay<X>> >
-constexpr I iterate( F f, X&& x ) {
-    return I( move(f), forward<X>(x) );
+template< class F, class X >
+using Iterate = Remember< Composition<F,Last>, X >;
+
+template< class F, class X, class I = Iterate<F,X> >
+constexpr I iterate( F f, X x ) {
+    return I ( 
+        compose( move(f), Last() ), 
+        move(x) 
+    );
 }
 
-template< class X, class F = Id >
-constexpr IteratorC<F,X> repeat( X&& x, F f = F() ) {
-    return iterate( move(f), forward<X>(x) );
+template< class X, class I = Iterate<Id,X> >
+constexpr I repeat( X x ) {
+    return iterate( Id(), move(x) );
+}
+
+template< class F, class X, 
+          class I = Remember< BComposition<F,Last,Last>, X > >
+constexpr I bi_iterate( F f, X a, X b ) {
+    return I (
+        bcompose( move(f), Last(1), Last() ),
+        move(a), move(b)
+    );
 }
 
 /* enumerate 1 5 = [1,2,3,4,5] */
@@ -1393,7 +1421,7 @@ constexpr auto enumerate( X&& x = 1, F f = inc<X> )
     // Calling enumerate(1,2) creates an ambiguity on whether you want this or
     // the above version. Just disable this version when the second argument
     // isn't callable.
-    -> Decay<decltype( f(declval<X>()), declval<IteratorC<F,X>>() )>
+    -> Decay<decltype( f(declval<X>()), declval<Iterate<F,X>>() )>
 {
     return iterate( move(f), forward<X>(x) );
 }
@@ -1595,7 +1623,7 @@ _S take_while( P&& p, S&& s ) {
          it++ ;
 
     // TODO: This is a hack and won't work on non-random iterators, but
-    // required to work with IteratorC. I should implement Dup as a class that
+    // required to work with Remember. I should implement Dup as a class that
     // can be specialized similarly to Functor and Monad.
     return take (
         it - begin(s),
