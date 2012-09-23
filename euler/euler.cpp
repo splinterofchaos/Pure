@@ -30,24 +30,6 @@ void problem1() {
          << endl;
 }
 
-template< class F, class X > struct LastAccum {
-    mutable F f;
-    mutable X x;
-
-    LastAccum( F f, X x ) : f(move(f)), x(move(x)) { }
-
-    X operator()( X y ) const {
-        std::swap( x, y );
-        x = f( y, x );
-        return y;
-    }
-};
-
-template< class F, class X > 
-LastAccum<F,X> last_accum( F f, X x ) {
-    return LastAccum<F,X>( move(f), move(x) );
-}
-
 constexpr auto even = fnot( rcloset( Mod(), 2 ) );
 
 void problem2() {
@@ -64,33 +46,6 @@ void problem2() {
          ) << endl;
 }
 
-struct Primes {
-    vector<long int> primes;
-
-    Primes() : primes{ 1, 2, 3, 5, 7 } { }
-
-    const vector<long int>& so_far() const {
-        return primes; 
-    }
-
-    bool prime( long int x ) {
-        return none( divisor_of(x), tail_wrap(primes) );
-    }
-
-    void add_next_prime() {
-        int x = last(so_far()) + 2; // Start at the next odd number.
-
-        while( not prime(x) ) 
-            x += 2;
-
-        primes.push_back( x );
-    }
-} primes;
-
-long int last_prime() {
-    return last( primes.primes );
-}
-
 using PrimeType = unsigned long long int;
 
 PrimeType next_prime( const vector<PrimeType>& past ) {
@@ -101,7 +56,7 @@ PrimeType next_prime( const vector<PrimeType>& past ) {
     return x;
 }
 
-bool prime( int x ) { return primes.prime(x); }
+auto primes = memorize( next_prime, 2ull, 3ull );
 
 void problem3() {
     const long int START = 600851475143;
@@ -109,7 +64,6 @@ void problem3() {
 
     cout << "The largest prime divisor of " << START << flush;
 
-    auto primes = memorize( next_prime, 2ull, 3ull );
     auto p = begin( primes );
 
     while( *p < std::sqrt(x) )
@@ -197,7 +151,7 @@ void problem6() {
 void problem7() {
     cout << "The 1001'st prime number: " << flush;
     cout << *next ( 
-        begin( memorize(next_prime,2ull,3ull) ), 
+        begin( primes ), 
         10000 
     ) << endl;
 }
