@@ -938,8 +938,8 @@ Dup<S> tail( const S& s ) {
 }
 
 template< class S > 
-S init( const S& s ) {
-    return S( begin(s), prev(end(s)) );
+Dup<S> init( const S& s ) {
+    return dup( init_wrap(s) );
 }
 
 template< class S >
@@ -1421,7 +1421,7 @@ template< class I > struct XRange {
     using value_type = I;
 
     struct iterator 
-        : std::iterator<random_access_iterator_tag,int,int>
+        : std::iterator<random_access_iterator_tag,I,I>
     {
         value_type i;
 
@@ -1433,34 +1433,43 @@ template< class I > struct XRange {
         iterator operator-- (int) { return i--; }
         iterator operator++ (int) { return i++; }
 
-        constexpr iterator operator- ( iterator other ) { 
-            return i - other; 
+
+        constexpr iterator operator+ ( ptrdiff_t n ) { return i + n; }
+        constexpr iterator operator- ( ptrdiff_t n ) { return i - n; } 
+        constexpr ptrdiff_t operator- ( iterator other ) { return i - *other; }
+
+        constexpr bool operator== ( iterator other ) { return i == *other; }
+        constexpr bool operator!= ( iterator other ) { return i != *other; }
+
+        iterator operator+= ( iterator other ) { 
+            i += *other; 
+            return *this;
         }
 
         iterator& operator-= ( iterator other ) { 
-            i -= other;
+            i -= *other;
             return *this;
         }
-
-        constexpr iterator operator+ ( iterator other ) { 
-            return i + other; 
-        }
-
-        iterator operator+= ( iterator other ) { 
-            i += other; 
-            return *this;
-        }
-
-        constexpr operator value_type () { return i; }
     };
 
     iterator b, e;
 
     constexpr XRange( value_type b, value_type e ) : b(b), e(e) { }
+    constexpr XRange( iterator b, iterator e ) : b(b), e(e) { }
 
     constexpr iterator begin() { return b; }
     constexpr iterator end()   { return e; }
 };
+
+template< class I, class R = XRange<I> >
+constexpr R init( XRange<I> r ) {
+    return R( r.b, prev(r.e) );
+}
+
+template< class I, class R = XRange<I> >
+constexpr R tail( XRange<I> r ) {
+    return R( next(r.b), r.e );
+}
 
 using IRange = XRange<unsigned int>;
 

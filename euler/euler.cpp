@@ -197,8 +197,8 @@ void problem6() {
 void problem7() {
     cout << "The 1001'st prime number: " << flush;
     cout << *next ( 
-        begin( memorize(next_prime,1ull,2ull,3ull) ), 
-        10001 - 3 
+        begin( memorize(next_prime,2ull,3ull) ), 
+        10000 
     ) << endl;
 }
 
