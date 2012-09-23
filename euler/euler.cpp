@@ -153,7 +153,7 @@ void problem4() {
             drop (
                 // We remove the first three values: {} {100}, and {100,101}.
                 3,
-                inits( enumerate(100,1000) )
+                inits( enumerate(100,999) )
             )
         )
     ) << endl;
@@ -173,7 +173,7 @@ int lcm( int x, int y ) {
 }
 
 void problem5() {
-    cout << foldl( lcm, enumerate(1,20) ) 
+    cout << foldl( lcm, enumerate(2,19) ) 
          << " is divisible by all numbers 1 thought 20." << endl;
 }
 
@@ -181,11 +181,14 @@ void problem6() {
     cout << "The difference between the sum squared and squared sum "
             "of each number between 1 and 100: " << flush;
 
-    constexpr auto N = enumerate( 1, 101 );
+    constexpr auto N = enumerate( 1, 100 );
+
+    // A sum on an XRange (enumerate's return type) is a constexpr!
+    constexpr auto sqrOfSum = pow( sum(N), 2.f );
 
     using P = float(*)(float,float);
     cout << int ( 
-        pow(sum(N), 2.f) - sum ( 
+        sqrOfSum - sum ( 
             map_to<vector<int>>( rclosure(P(pow), 2), N ) 
         ) 
     ) << endl;
@@ -236,14 +239,22 @@ void problem9() {
 }
 
 void problem10() {
-    // TODO: This is too slow, too brute force.
+    // TODO: This is too slow, too brute force, and WRONG!
     cout << "The sum of all primes below 4 million is: " << flush;
-    PrimeType sum = 1ull;
-    auto primes = memorize( next_prime, 1ull, 2ull, 3ull );
-    auto p = begin( primes );
-    while( *p < PrimeType(4000000) ) 
-        sum += *p++;
-    cout << sum << endl;
+    constexpr auto s = sum( enumerate(5,10) );
+    cout << s;
+    //cout << sum ( 
+    //    take_while( less_than(4000000ull), memorize(next_prime,2ull,3ull) )
+    //) << endl;
+    
+    //unsigned long long sum = 0;
+    //auto primes = memorize( next_prime, 2ull, 3ull );
+    //auto p = begin( primes );
+    //while( *p < PrimeType(4000000ull) ) 
+    //    sum += *p++;
+    //cout << sum << endl;
+
+    cout << endl;
 }
 
 int main() {
@@ -256,5 +267,5 @@ int main() {
     problem7();
     problem8();
     problem9();
-    //problem10(); -- TOO SLOW!
+    problem10(); 
 }

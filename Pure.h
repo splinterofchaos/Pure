@@ -1427,7 +1427,7 @@ template< class I > struct XRange {
 
         constexpr iterator( value_type i ) : i(i) { }
 
-        constexpr iterator operator* () { return i; }
+        constexpr value_type operator* () { return i; }
         iterator operator++ () { return ++i; }
         iterator operator-- () { return --i; }
         iterator operator-- (int) { return i--; }
@@ -1457,7 +1457,6 @@ template< class I > struct XRange {
     iterator b, e;
 
     constexpr XRange( value_type b, value_type e ) : b(b), e(e) { }
-    constexpr XRange() : b(0), e(0) { }
 
     constexpr iterator begin() { return b; }
     constexpr iterator end()   { return e; }
@@ -1465,16 +1464,22 @@ template< class I > struct XRange {
 
 using IRange = XRange<unsigned int>;
 
+/* 
+ * enumerate [b,e] = XRange( [b,e+1) )
+ * Creates an inclusive range from b to e.
+ */
 constexpr IRange enumerate( unsigned int b, unsigned int e ) {
-    return IRange(b,e); 
+    // Adding one to the en
+    return IRange( b, e + 1 ); 
 }
 
+/* enumerate n = [n,n+1,n+2,...] */
 constexpr IRange enumerate( unsigned int b ) {
-    return IRange(b,std::numeric_limits<unsigned int>::max()); 
+    return IRange( b, std::numeric_limits<unsigned int>::max() ); 
 }
 
 constexpr IRange enumerate_to( unsigned int e ) {
-    return IRange(0,e); 
+    return IRange( 0, e ); 
 }
 
 template< class X >
@@ -1906,6 +1911,12 @@ R intersect( XS&& xs, const YS& ys ) {
 template< class S >
 SeqVal<S> sum( const S& s ) {
     return std::accumulate( begin(s), end(s), 0 );
+}
+
+template< class I >
+constexpr I sum( XRange<I> r ) {
+    // sum [m,n] = (n + 1 - m)(n + m)/2
+    return (*r.e - *r.b) * (*r.e - 1 + *r.b) / 2;
 }
 
 template< class S >
