@@ -10,6 +10,7 @@
 #include <utility>
 #include <tuple>
 #include <memory>
+#include <limits>
 
 #include <iostream>
 
@@ -18,6 +19,15 @@ namespace pure {
 using namespace std;
 
 template< class X > using Decay = typename decay<X>::type;
+
+template< class ...X > 
+using CommonType = Decay<typename std::common_type<X...>::type>;
+
+template< class X >
+using IsRval = typename std::is_rvalue_reference<X>;
+
+template< class X, class R >
+using ERVal = typename std::enable_if<IsRval<X>::value,R>::type;
 
 namespace cata {
 
@@ -46,7 +56,7 @@ struct sequence {};
 
 template< class Seq > struct sequence_traits {
     using sequence   = Seq;
-    using iterator   = decltype( begin(declval<Seq>()) );
+    using iterator   = Decay<decltype( begin(declval<Seq>()) )>;
     using reference  = decltype( *declval<iterator>() );
     using value_type = typename remove_reference<reference>::type;
 };
@@ -104,7 +114,7 @@ template< class ... > struct Category;
 
 /* The result of a function applied against X. */
 template< class F, class ...X >
-using Result = decltype( declval<F>()( declval<X>()... ) );
+using Result = Decay<decltype( declval<F>()( declval<X>()... ) )>;
 
 template< class X, class C = Category<X> >
 auto cid( X&& x ) -> decltype( C::id( declval<X>() ) ) {
@@ -331,9 +341,8 @@ struct Composition<F,G>
 {
     F f; G g;
 
-    template< class _F, class _G >
-    constexpr Composition( _F&& f, _G&& g ) 
-        : f(forward<_F>(f)), g(forward<_G>(g)) { }
+    constexpr Composition( F f, G g) 
+        : f(move(f)), g(move(g)) { }
 
     template< class X, class ...Y >
     constexpr decltype( f(g(declval<X>()), declval<Y>()...) )
@@ -452,12 +461,12 @@ constexpr C ncompose( F f, G ...g ) {
  * n-ary.
  */
 template< class F, class G, class H >
-struct BCompoposition
+struct BComposition
 {
     F f; G g; H h;
 
     template< class _F, class _G, class _H >
-    constexpr BCompoposition( _F&& f, _G&& g, _H&& h ) 
+    constexpr BComposition( _F&& f, _G&& g, _H&& h ) 
         : f(forward<_F>(f)), g(forward<_G>(g)), h(forward<_H>(h)) { }
 
     template< class ...X >
@@ -467,7 +476,7 @@ struct BCompoposition
     }
 };
 
-template< class F, class G, class H, class C = BCompoposition<F,G,H> >
+template< class F, class G, class H, class C = BComposition<F,G,H> >
 constexpr C bcompose( F f, G g, H h ) {
     return C( move(f), move(g), move(h) );
 }
@@ -617,6 +626,98 @@ template< class Func > struct Arrow<Func> {
     }
 };
 
+template< class X > constexpr X inc( X x ) { return ++x; }
+template< class X > constexpr X dec( X x ) { return --x; }
+
+struct Add {
+    template< class X, class Y >
+    constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) + forward<Y>(y);
+    }
+};
+
+struct Subtract {
+    template< class X, class Y >
+    constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) - forward<Y>(y);
+    }
+};
+
+struct Mult {
+    template< class X, class Y >
+    constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) * forward<Y>(y);
+    }
+};
+
+template< class X >
+constexpr Closet<Mult,X> times( X x ) {
+    return closet( Mult(), move(x) );
+}
+
+template< class X > 
+constexpr auto plus( X x ) -> Closet<Add,X> {
+    return closet( Add(), move(x) );
+}
+
+struct Less {
+    template< class X, class Y >
+    constexpr bool operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) < forward<Y>(y);
+    }
+};
+
+struct LessEq {
+    template< class X, class Y >
+    constexpr bool operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) <= forward<Y>(y);
+    }
+};
+
+template< class X >
+constexpr RCloset<Less,X> less_than( X x ) {
+    return rcloset(Less(), move(x));
+}
+
+template< class X >
+constexpr Closet<LessEq,X> less_equal_to( X x ) {
+    return closet(LessEq(), move(x));
+}
+
+struct BinaryNot {
+    template< class B >
+    constexpr bool operator() ( B&& b ) {
+        return not (bool)forward<B>(b);
+    }
+};
+
+template< class F >
+constexpr auto fnot( F f ) -> decltype( compose(BinaryNot(),declval<F>()) ) {
+    return compose( BinaryNot(), move(f) );
+}
+
+struct Mod {
+    template< class X, class Y >
+    constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) % forward<Y>(y);
+    }
+};
+
+template< class X >
+constexpr auto divisible_by( X x ) -> Composition<BinaryNot,RCloset<Mod,X>> {
+    return fnot(rcloset( Mod(), move(x) ));
+}
+
+template< class X >
+constexpr auto multiple_of( X x ) -> decltype( divisible_by(move(x)) ) {
+    return divisible_by( move(x) );
+}
+
+template< class X >
+constexpr auto divisor_of( X x ) -> Composition<BinaryNot,Closet<Mod,X>> {
+    return fnot( closet(Mod(), move(x)) );
+}
+
 template< class S >
 constexpr auto length( S&& s ) -> decltype( declval<S>().size() )
 {
@@ -670,9 +771,23 @@ constexpr X last( const initializer_list<X>& l, size_t n = 0 ) {
     return *prev( end(l), n+1 );
 }
 
+struct Last {
+    size_t N;
+
+    constexpr Last( size_t N=0 ) : N(N) { }
+
+    template< class X >
+    constexpr auto operator() ( X&& x ) 
+        -> decltype( last(declval<X>()) )
+    {
+        return last( forward<X>(x), N );
+    }
+};
+
 template< class S, class I = typename S::iterator > struct Range {
     I b, e;
     
+    using sequence_type = Decay<S>;
     using iterator = I; 
     using reference = decltype( *declval<I>() );
     using value_type = Decay<reference>;
@@ -682,6 +797,21 @@ template< class S, class I = typename S::iterator > struct Range {
 
     constexpr I begin() { return b; }
     constexpr I end()   { return e; }
+
+    operator sequence_type () const { return sequence_type( b, e ); }
+};
+
+template< class S, class I1, class I2 >
+struct Range< Range<S,I1>, I2 > : public Range<S,I2> {
+    using parent = Range<S,I2>;
+
+    template< class _I >
+    constexpr Range( _I b, _I e ) : parent( b, e ) { }
+
+    using sequence_type = typename parent::sequence_type;
+    using iterator      = typename parent::iterator; 
+    using reference     = typename parent::reference;
+    using value_type    = typename parent::value_type;
 };
 
 template< class S, class R = Range<S,SeqIter<S>> >
@@ -690,8 +820,18 @@ constexpr R range( S&& s ) {
 }
 
 template< class S, class I, class R = Range<S,I> >
-constexpr R range( I a, I b ) {
+constexpr auto range( I a, I b ) -> R {
     return R( a, b );
+}
+
+template< class S, class R = Range<S,SeqIter<S>> >
+constexpr R range( S&& s,  size_t b, size_t e ) {
+    return R( next(begin(forward<S>(s)),b), next(begin(forward<S>(s)),e) );
+}
+
+template< class S, class R = Range<S,SeqIter<S>> >
+constexpr R range( S&& s,  size_t e ) {
+    return range( forward<S>(s), 0, e );
 }
 
 template< class S, class R = Range<S,SeqIter<S>> >
@@ -703,8 +843,8 @@ constexpr R tail_wrap( S&& s ) {
 
 template< class S, class R = Range<S,SeqIter<S>> >
 constexpr R tail_wrap( size_t n, S&& s ) {
-    return R( prev( end(forward<S>(s)), n ),
-              begin( forward<S>(s) ) );
+    return R( next(begin( forward<S>(s) ),n),
+              end(forward<S>(s)) );
 }
 
 /* 
@@ -755,16 +895,19 @@ constexpr R reverse_wrap( S&& s ) {
 }
 
 template< class R, class S >
-R _dup( const S& s ) {
+R _dup( S&& s ) {
     R r;
-    copy( begin(s), end(s), back_inserter(r) );
+    copy( begin(forward<S>(s)), end(forward<S>(s)),
+          back_inserter(r) );
     return r;
 }
 
 template< class R, class S >
-R _dup( const S& s, size_t n ) {
+R _dup( S&& s, size_t n, size_t off = 0 ) {
     R r;
-    copy_n( begin(s), n, back_inserter(r) );
+    copy_n( next( begin(s), off ), 
+            std::min( n+1, length(s) ) - 1,
+            back_inserter(r) );
     return r;
 }
 
@@ -775,9 +918,10 @@ S dup( const S& s ) {
 
 template< class S > using Dup = decltype( dup(declval<S>()) );
 
-template< class S, class I >
-Dup<S> dup( const Range<S,I>& r ) {
-    return _dup<Dup<S>>( r );
+template< class S, class I, class R = Range<S,I>, 
+          class RS = typename R::sequence_type >
+Dup<RS> dup( const Range<S,I>& r ) {
+    return _dup<Dup<RS>>( r );
 }
 
 template< class X, class V = vector<X> >
@@ -788,6 +932,11 @@ V dup( const initializer_list<X>& l ) {
 template< class S, class D = Dup<S> >
 D dup( S&& s, size_t n ) {
     return _dup<D>( forward<S>(s), n );
+}
+
+template< class S, class D = Dup<S> >
+D dup( S&& s, size_t start, size_t end ) {
+    return _dup<D>( forward<S>(s), end-start, end );
 }
 
 template< class S > 
@@ -801,8 +950,8 @@ Dup<S> init( const S& s ) {
 }
 
 template< class S >
-Dup<S> reverse( const S& s ) {
-    return dup( reverse_wrap(s) );
+Dup<S> reverse( S&& s ) {
+    return dup( reverse_wrap(forward<S>(s)) );
 }
 
 template< class F, class RI, class XS >
@@ -826,9 +975,10 @@ template< class A, class B, class R >
 using XSame = typename std::enable_if< !is_same<A,B>::value, R >::type;
 
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
-template< template<class...> class S, class X, class ...XS, class F,
-          class FX = Result<F,X>, class R = S<FX,XS...> > 
-auto map( F&& f, const S<X,XS...>& xs ) -> XSame< FX, X, R >
+template< template<class...> class S, class X, class ..._X, 
+          class XS = S<X,_X...>,
+          class F, class FX = Result<F,X>, class R = Decay<S<FX,_X...>> > 
+auto map( F&& f, S<X,_X...> xs ) -> XSame< FX, X, R >
 {
     R r;
     _map( forward<F>(f), back_inserter(r), xs );
@@ -836,8 +986,9 @@ auto map( F&& f, const S<X,XS...>& xs ) -> XSame< FX, X, R >
 }
 
 // When mapping from X to X, we can optimize by not returning a new sequence.
-template< template<class...> class S, class X, class ...XS, class F >
-auto map( F&& f, S<X,XS...> xs ) -> ESame< Result<F,X>, X, S<X,XS...> >
+template< template<class...> class S, class X, class ...XS, class F,
+          class R = S<X,XS...> >
+auto map( F&& f, S<X,XS...> xs ) -> ESame< X, Result<F,X>, R >
 {
     _map( forward<F>(f), begin(xs), xs );
     return xs;
@@ -849,6 +1000,15 @@ V map( F&& f, const initializer_list<X>& l ) {
     v.reserve( length(l) );
     _map( forward<F>(f), begin(v), l );
     return v;
+}
+
+/* map_to<R> v = R( map(f,v) ) */
+template< template<class...> class _R, class F, class S,
+          class R = _R< decltype(declval<F>()(declval<SeqVal<S>>())) > >
+R map_to( F&& f, S&& s ) {
+    R r;
+    _map( forward<F>(f), back_inserter(r), forward<S>(s) );
+    return r;
 }
 
 /*
@@ -891,8 +1051,33 @@ void vmap( F&& f, S&& s ) {
     std::for_each( begin(forward<S>(s)), end(forward<S>(s)), forward<F>(f) );
 }
 
-template< class X >
-using Decay = typename decay<X>::type;
+template< template<class...> class S, class X, class ...XS, class F,
+          class R = S<X,XS...> >
+auto map_it( F&& f, S<X,XS...> xs ) -> ESame< Result<F,X>, X, R >
+{
+    for( auto it = begin(xs); it != end(xs); it++ )
+        *it = forward<F>(f)( it );
+    return xs;
+}
+
+template< template<class...> class S, class X, class ...XS, class F,
+          class FX = Result<F,X>, class R = S<FX,XS...> > 
+auto map_it( F&& f, const S<X,XS...>& xs ) -> XSame< FX, X, R >
+{
+    R r;
+    for( auto it = begin(xs); it != end(xs); it++ )
+        r.push_back( forward<F>(f)( it ) );
+    return r;
+}
+
+template< class F, class X, class V = vector< Result<F,X> > >
+V map_iter( F&& f, const initializer_list<X>& l ) {
+    V v; 
+    v.reserve( length(l) );
+    _map( forward<F>(f), begin(v), l );
+    return v;
+}
+
 
 /* each f a b c... = all f [a,b,c...] */
 template< class F, class X >
@@ -927,6 +1112,7 @@ constexpr Decay<X> accuml( F&& f, X&& x,
 
 // GCC does not apply proper tail recursion here,
 // so optimize for the one-list and two-list cases.
+// We use && only to let GCC know to prefer this version.
 template< class F, class X, class S >
 constexpr Decay<X> accuml( F&& f, X&& x, S&& s ) {
     return std::accumulate( begin(s), end(s), 
@@ -1090,35 +1276,50 @@ Scanr<F,S> scanr( F&& f, S&& s ) {
                   last(forward<S>(s)), init_wrap(forward<S>(s)) );
 }
 
-template< class F, class X > struct IteratorC {
-    using container = vector<Decay<X>>;
-    using reference = typename container::reference;
+template< class F, class X > struct Remember {
+    using container  = vector<Decay<X>>;
+    using reference  = typename container::reference;
     using value_type = typename container::value_type;
-    using citerator = typename container::iterator;
+    using citerator  = typename container::iterator;
 
-    F f;
+    // Unfortunately, as a requirement for declaring the Fnct::operator() as a
+    // constexper convention, this must define its () as const. This feels
+    // hackish, but the standard doesn't provide a way of saying a constexpr
+    // function is non-const when its arguments aren't constexprs. We can
+    // either remove the constexper convention for generality, or just define
+    // these as mutable.
+    mutable F f;
     mutable container c;
 
-    struct iterator : std::iterator<forward_iterator_tag,value_type> {
-        const IteratorC& c;
+    struct iterator 
+        : std::iterator<bidirectional_iterator_tag,value_type> 
+    {
+        const Remember& c;
         citerator it;
 
-        iterator( const IteratorC<F,X>& _c )
+        iterator( const Remember<F,X>& _c )
             : c(_c), it(std::begin(c.c))
         {
         }
-        iterator( const IteratorC<F,X>& _c, citerator i )
+        iterator( const Remember<F,X>& _c, citerator i )
             : c(_c), it(i)
         {
         }
 
+        iterator& operator= ( const iterator& other ) {
+            it = other.it;
+            return *this;
+        };
+
+        void _grow() {
+            size_t dist = it - std::begin(c.c);
+            c.c.emplace_back( c.f(c.c) );
+            it = std::begin(c.c) + dist;
+        }
+
         void grow() {
-            if( it == std::end(c.c) ) {
-                c.c.emplace_back (
-                    c.f( last(c.c) )
-                );
-                it = prev( std::end(c.c) );
-            }
+            if( it == std::end(c.c) ) 
+                _grow();
         }
 
 
@@ -1128,9 +1329,20 @@ template< class F, class X > struct IteratorC {
             return *this;
         }
 
-        iterator& operator++ (int) { 
+        iterator& operator-- () { 
+            it--;
+            return *this;
+        }
+
+        iterator operator++ (int) { 
             ++(*this);
             return iterator( c, prev(it) );
+        }
+
+        iterator operator-- (int) { 
+            iterator copy = *this;
+            --(*this);
+            return copy;
         }
 
         reference operator* () {
@@ -1138,42 +1350,162 @@ template< class F, class X > struct IteratorC {
             return *it;
         }
 
+        ptrdiff_t operator- ( const iterator& i ) {
+            return it - i.it;
+        }
+
         constexpr bool operator== ( const iterator& ) { return false; }
         constexpr bool operator!= ( const iterator& ) { return true;  }
+
+        constexpr operator citerator () { return it; }
     };
 
     
-    template< class _F, class _X >
-    constexpr IteratorC( _F&& _f, _X&& x ) 
-        : f(forward<_F>(_f)), 
-          c{forward<_X>(x), f(forward<X>(x))}
-    {
-    }
+    template< class ..._X >
+    Remember( F f, _X&& ...x ) 
+        : f(move(f)), c{forward<_X>(x)...} { }
     
-    constexpr iterator begin() { return *this; }
-    constexpr iterator end() { return iterator(*this,std::end(c)); }
-
-    operator container () { return c; }
+    iterator begin() const { return *this; }
+    iterator end()   const { return iterator(*this,std::end(c)); }
 };
 
-template< class F, class X, class I = IteratorC<F,X> >
-vector<X> dup( const IteratorC<F,X>& c ) {
+template< class F, class X >
+constexpr size_t length( const Remember<F,X>& ) {
+    return std::numeric_limits<size_t>::max();
+}
+
+template< class S, class I, class D = Dup<S> >
+D dup_range( I b, I e ) {
+    return D( b, e );
+}
+
+template< class F, class X, class I = Remember<F,X> >
+vector<X> dup( const Remember<F,X>& c ) {
     return c;
 }
 
-template< class F, class X, class I = IteratorC<F,X> >
-vector<X> dup( IteratorC<F,X>& c, size_t n ) {
-    return dup( c, n );
+template< class F, class X, class I = Remember<F,X> >
+vector<X> dup( Remember<F,X> c, size_t n ) {
+    return _dup<vector<X>>( move(c), n );
+}
+
+template< class F, class X, class IC = Remember<F,X>,
+          class I = typename IC::iterator >
+Dup<IC> dup_range( I b, I e ) {
+    return dup_range( b.it, e.it );
+}
+
+template< class F, class X, class ...Y, class R = Remember<F,X> >
+constexpr R memorize( F f, X x, Y&& ...y ) {
+    return R( move(f), move(x), forward<Y>(y)... );
 }
 
 template< class F, class X >
-constexpr IteratorC<F,X> iterate( F f, X&& x ) {
-    return IteratorC<F,X>( move(f), forward<X>(x) );
+using Iterate = Remember< Composition<F,Last>, X >;
+
+template< class F, class X, class I = Iterate<F,X> >
+constexpr I iterate( F f, X x ) {
+    return memorize ( 
+        compose( move(f), Last() ), 
+        move(x) 
+    );
 }
 
-template< class X, class F = Id >
-constexpr IteratorC<F,X> repeat( X&& x, F&& f = F() ) {
-    return iterate( forward<F>(f), forward<X>(x) );
+template< class X, class I = Iterate<Id,X> >
+constexpr I repeat( X x ) {
+    return iterate( Id(), move(x) );
+}
+
+template< class F, class X,
+          class I = Remember< BComposition<F,Last,Last>, X > >
+constexpr I bi_iterate( F f, X a, X b ) {
+    return I (
+        bcompose( move(f), Last(1), Last() ),
+        move(a), move(b)
+    );
+}
+
+template< class I > struct XRange {
+    using value_type = I;
+
+    struct iterator 
+        : std::iterator<random_access_iterator_tag,I,I>
+    {
+        value_type i;
+
+        constexpr iterator( value_type i ) : i(i) { }
+
+        constexpr value_type operator* () { return i; }
+        iterator operator++ () { return ++i; }
+        iterator operator-- () { return --i; }
+        iterator operator-- (int) { return i--; }
+        iterator operator++ (int) { return i++; }
+
+
+        constexpr iterator operator+ ( ptrdiff_t n ) { return i + n; }
+        constexpr iterator operator- ( ptrdiff_t n ) { return i - n; } 
+        constexpr ptrdiff_t operator- ( iterator other ) { return i - *other; }
+
+        constexpr bool operator== ( iterator other ) { return i == *other; }
+        constexpr bool operator!= ( iterator other ) { return i != *other; }
+
+        iterator operator+= ( iterator other ) { 
+            i += *other; 
+            return *this;
+        }
+
+        iterator& operator-= ( iterator other ) { 
+            i -= *other;
+            return *this;
+        }
+    };
+
+    iterator b, e;
+
+    constexpr XRange( value_type b, value_type e ) : b(b), e(e) { }
+    constexpr XRange( iterator b, iterator e ) : b(b), e(e) { }
+
+    constexpr iterator begin() { return b; }
+    constexpr iterator end()   { return e; }
+};
+
+template< class I, class R = XRange<I> >
+constexpr R init( XRange<I> r ) {
+    return R( r.b, prev(r.e) );
+}
+
+template< class I, class R = XRange<I> >
+constexpr R tail( XRange<I> r ) {
+    return R( next(r.b), r.e );
+}
+
+using IRange = XRange<unsigned int>;
+
+/* 
+ * enumerate [b,e] = XRange( [b,e+1) )
+ * Creates an inclusive range from b to e.
+ */
+constexpr IRange enumerate( unsigned int b, unsigned int e ) {
+    // Adding one to the en
+    return IRange( b, e + 1 ); 
+}
+
+/* enumerate n = [n,n+1,n+2,...] */
+constexpr IRange enumerate( unsigned int b ) {
+    return IRange( b, std::numeric_limits<unsigned int>::max() ); 
+}
+
+constexpr IRange enumerate_to( unsigned int e ) {
+    return IRange( 0, e ); 
+}
+
+constexpr IRange enumerateN( unsigned int b, unsigned int n ) {
+    return IRange( b, b+n );
+}
+
+template< class S >
+constexpr IRange enumerate( const S& s ) {
+    return IRange( 0, length(s) );
 }
 
 template< class X >
@@ -1264,19 +1596,6 @@ bool ordered( const Container& c )
         ).second == end(c);
 }
 
-struct BinaryNot {
-    template< class B >
-    constexpr bool operator() ( B&& b ) {
-        return not (bool)forward<B>(b);
-    }
-};
-
-template< class F >
-constexpr auto fnot( F&& f ) -> decltype( compose(BinaryNot(),declval<F>()) ) 
-{
-    return compose( BinaryNot(), forward<F>(f) );
-}
-
 /* filter f C -> { x for x in C such that f(x) is true. } */
 template< typename Container, typename F >
 Container filter( F&& f, Container cont )
@@ -1295,6 +1614,20 @@ V filter( F&& f, const initializer_list<X>& cont ) {
     v.reserve( length(cont) );
     copy_if( begin(cont), end(cont), back_inserter(v), forward<F>(f) );
     return v;
+}
+
+// TODO: Perhaps this could be implemented with a filterFold...
+/* filtrate f pred xs = filter pred (map f xs) */
+template< class F, class P, class S, 
+          class R = decltype( map(declval<F>(),declval<S>()) ) >
+R filtrate( F&& f, P&& p, S&& s ) {
+    R r;
+    for( auto& x : forward<S>(s) ) {
+        auto y = forward<F>(f)( x );
+        if( forward<P>(p)(y) )
+            r.push_back( move(y) );
+    }
+    return r;
 }
 
 /* find pred xs -> Maybe x */
@@ -1336,8 +1669,8 @@ template< typename S, typename F >
 constexpr auto cfind_if( F&& f, S&& s )
     -> decltype( begin(declval<S>()) )
 {
-    return find_if( begin(forward<S>(s)), end(forward<S>(s)),
-                    forward<F>(f) );
+    return std::find_if( begin(forward<S>(s)), end(forward<S>(s)),
+                         forward<F>(f) );
 }
 
 template< class S, class T, class F = equal_to<T> >
@@ -1363,24 +1696,26 @@ V find_indecies( F&& f, const S& s ) {
 template< class S, class D = Dup<S> >
 D take( size_t n, S&& s ) {
     return dup( forward<S>(s), n );
-    D r;
-    std::copy_n( begin(forward<S>(s)), n, back_inserter(r) );
-    return r;
-    //return dup( init_wrap(n, forward<S>(s)) );
 }
 
-template< class P, class S, class _S = Decay<S> >
+template< class P, class S, class _S = Dup<S> >
 _S take_while( P&& p, S&& s ) {
-    return _S (
-        begin( forward<S>(s) ),
-        cfind_if( fnot(forward<P>(p)), forward<S>(s) )
+    auto it = begin(forward<S>(s)); 
+    while( it != end(s) and forward<P>(p)(*it) )
+         it++ ;
+
+    // TODO: This is a hack and won't work on non-random iterators, but
+    // required to work with Remember. I should implement Dup as a class that
+    // can be specialized similarly to Functor and Monad.
+    return take (
+        it - begin(s),
+        forward<S>(s)
     );
 }
 
 template< class S >
-Dup<S> drop( size_t n, S&& s ) {
-    return dup( tail_wrap( max( length(s)-n, 0 ),
-                           forward<S>(s) ) );
+S drop( size_t n, const S& s ) {
+    return S( next(begin(s),n), end(s) );
 }
 
 template< class P, class S, class _S = Decay<S> >
@@ -1599,9 +1934,40 @@ R intersect( XS&& xs, const YS& ys ) {
     );
 }
 
+template< class S >
+SeqVal<S> sum( const S& s ) {
+    return std::accumulate( begin(s), end(s), 0 );
+}
+
+template< class I >
+constexpr I sum( XRange<I> r ) {
+    // sum [m,n] = (n + 1 - m)(n + m)/2
+    return (*r.e - *r.b) * (*r.e - 1 + *r.b) / 2;
+}
+
+template< class S >
+SeqVal<S> product( const S& s ) {
+    return std::accumulate( begin(s), end(s), 1, Mult() );
+}
+
+template< class S >
+SeqRef<S> maximum( S&& s ) {
+    return *std::max_element( begin(forward<S>(s)), end(forward<S>(s)) );
+}
+
+template< class F, class S >
+bool all( F&& f, const S& s ) {
+    return std::all_of( begin(s), end(s), forward<F>(f) );
+}
+
 template< class F, class S >
 bool any( F&& f, const S& s ) {
     return any_of( begin(s), end(s), forward<F>(f) );
+}
+
+template< class F, class S >
+bool none( F&& f, const S& s ) {
+    return std::none_of( begin(s), end(s), forward<F>(f) );
 }
 
 template< class F, class XS, class YS >
@@ -1719,13 +2085,6 @@ template< class S, class V = SeqSeq<S> >
 V permutations( S&& original ) {
     return ordered(original) ? sorted_permutations( forward<S>(original) )
         : _permutations( forward<S>(original) );
-}
-
-/* all f C -> true when f(x) is true for all x in C; otherwise false. */
-template< typename Container, typename F >
-bool all( F&& f, const Container& cont )
-{
-    return all_of( begin(cont), end(cont), forward<F>(f) );
 }
 
 /* 
@@ -2148,8 +2507,8 @@ template< class X, class Y > struct Monoid< pair<X,Y> > {
     static P mempty() { return P( fwd_mempty<X>(), fwd_mempty<Y>() ); }
 
     static P mappend( const P& a, const P& b ) {
-        return P( ::mappend(a.first,b.first), 
-                  ::mappend(a.second,b.second) );
+        return P( fwd_mappend(a.first,b.first), 
+                  fwd_mappend(a.second,b.second) );
     }
 
     template< class S > static P mconcat( const S& s ) {
