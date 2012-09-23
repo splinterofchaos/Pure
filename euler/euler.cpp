@@ -100,15 +100,12 @@ void problem4() {
         map ( 
             []( const IRange& r ) -> unsigned int {
                 auto ps = filter( palindrome, 
-                                  map_to<vector<unsigned int>>(times(last(r)), 
+                                  map_to<vector>(times(last(r)), 
                                                       init(r)) );
                 return not_null(ps) ? maximum(ps) : 0;
             },
-            drop (
-                // We remove the first three values: {} {100}, and {100,101}.
-                3,
-                inits( enumerate(100,999) )
-            )
+            // We remove the first three values: {} {100}, and {100,101}.
+            drop( 3, inits(enumerate(100,999)) ) 
         )
     ) << endl;
 }
@@ -138,13 +135,11 @@ void problem6() {
     constexpr auto N = enumerate( 1, 100 );
 
     // A sum on an XRange (enumerate's return type) is a constexpr!
-    constexpr auto sqrOfSum = pow( sum(N), 2.f );
+    constexpr unsigned int sqrOfSum = pow( sum(N), 2.f );
 
     using P = float(*)(float,float);
-    cout << int ( 
-        sqrOfSum - sum ( 
-            map_to<vector<int>>( rclosure(P(pow), 2), N ) 
-        ) 
+    cout << sqrOfSum - (unsigned int)sum ( 
+        map_to<vector>( rclosure(P(pow), 2), N ) 
     ) << endl;
 }
 
@@ -166,7 +161,7 @@ void problem8() {
     cout << maximum (
         map ( 
             []( const vector<int>& v ) { return product( take(5,v) ); },
-            tails( map_to<vector<int>>(from_sym,nsStr) )
+            tails( map_to<vector>(from_sym,nsStr) )
         ) 
     ) << endl;
 }

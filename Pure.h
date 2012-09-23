@@ -996,7 +996,8 @@ V map( F&& f, const initializer_list<X>& l ) {
 }
 
 /* map_to<R> v = R( map(f,v) ) */
-template< class R, class F, class S >
+template< template<class...> class _R, class F, class S,
+          class R = _R< decltype(declval<F>()(declval<SeqVal<S>>())) > >
 R map_to( F&& f, S&& s ) {
     R r;
     _map( forward<F>(f), back_inserter(r), forward<S>(s) );
