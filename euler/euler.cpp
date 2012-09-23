@@ -4,6 +4,8 @@
 using namespace pure;
 
 #include <iostream>
+#include <fstream>
+#include <sstream>
 
 using std::cout;
 using std::endl;
@@ -11,7 +13,17 @@ using std::flush;
 
 template< class X >
 std::ostream& operator<< ( std::ostream& os, const std::vector<X>& v ) {
+    os << "{ ";
     std::copy( begin(v), end(v), std::ostream_iterator<X>(os," ") );
+    os << "}";
+    return os;
+}
+
+template< class X, size_t N >
+std::ostream& operator<< ( std::ostream& os, const std::array<X,N>& v ) {
+    os << "< ";
+    std::copy( begin(v), end(v), std::ostream_iterator<X>(os," ") );
+    os << ">";
     return os;
 }
 
@@ -91,8 +103,6 @@ bool palindrome( int x ) {
     return _palindrome( digits(x) );
 }
 
-auto N = enumerate(0);
-
 void problem4() {
     cout << "The largest palindrome product of three digit numbers :"
          << flush;
@@ -135,7 +145,7 @@ void problem6() {
     constexpr auto N = enumerate( 1, 100 );
 
     // A sum on an XRange (enumerate's return type) is a constexpr!
-    constexpr unsigned int sqrOfSum = pow( sum(N), 2.f );
+    constexpr unsigned int sqrOfSum = sum(N) * sum(N);
 
     using P = float(*)(float,float);
     cout << sqrOfSum - (unsigned int)sum ( 
@@ -190,8 +200,6 @@ void problem9() {
 void problem10() {
     // TODO: This is too slow, too brute force, and WRONG!
     cout << "The sum of all primes below 4 million is: " << flush;
-    constexpr auto s = sum( enumerate(5,10) );
-    cout << s;
     //cout << sum ( 
     //    take_while( less_than(4000000ull), memorize(next_prime,2ull,3ull) )
     //) << endl;
@@ -206,6 +214,69 @@ void problem10() {
     cout << endl;
 }
 
+using Row = vector<unsigned int>;
+using Mat = vector<Row>;
+
+using Vec = std::array<int,2>;
+int get_x( const Vec& v ) { return get<0>(v); }
+int get_y( const Vec& v ) { return get<1>(v); }
+
+Vec operator+ ( const Vec& a, const Vec& b ) {
+    return zip_with( Add(), a, b );
+}
+
+Vec operator- ( const Vec& a, const Vec& b ) {
+    return zip_with( Subtract(), a, b );
+}
+
+Vec operator* ( Vec a, int x ) {
+    return map( pure::plus(x), move(a) );
+}
+
+unsigned int take_dir_prod( Vec dir, Vec pos, size_t n, const Mat& m ) {
+    unsigned int prod = 1;
+
+    Vec end = pos + dir * n;
+    if(    get_y(end) < 0 or get_y(end) >= (int)length(m) 
+        or get_x(end) < 0 or get_x(end) >= (int)length(m[0]) )
+        return 1;
+
+    for( ; n--; pos = pos+dir ) 
+        prod *= ( m[get_y(pos)][get_x(pos)] );
+
+    return prod;
+}
+
+void problem11() {
+    std::ifstream fin( "e11" );
+
+    cout << "The largest product is: ";
+
+    Mat mat;
+    std::string tmp;
+    while( std::getline(fin,tmp) ) {
+        std::stringstream line( tmp );
+        unsigned int x;
+        Row row;
+        while( line >> x ) 
+            row.push_back( x );
+        mat.push_back( row );
+    }
+
+    unsigned int largest = 0;
+
+    for( Vec dir : {Vec{{-1,0}},Vec{{1,1}},Vec{{0,1}},Vec{{-1,1}}} ) 
+    {
+        for( int j : enumerate(mat) ) for( int i : enumerate(mat[0]) )
+            largest = std::max (
+                largest,
+                take_dir_prod( dir, {{i,j}}, 4, mat )
+            );
+    }
+
+    cout << largest << endl;
+}
+
 int main() {
     problem1();
     problem2();
@@ -217,4 +288,5 @@ int main() {
     problem8();
     problem9();
     problem10(); 
+    problem11(); 
 }

@@ -636,6 +636,13 @@ struct Add {
     }
 };
 
+struct Subtract {
+    template< class X, class Y >
+    constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) - forward<Y>(y);
+    }
+};
+
 struct Mult {
     template< class X, class Y >
     constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
@@ -836,8 +843,8 @@ constexpr R tail_wrap( S&& s ) {
 
 template< class S, class R = Range<S,SeqIter<S>> >
 constexpr R tail_wrap( size_t n, S&& s ) {
-    return R( prev( end(forward<S>(s)), n ),
-              begin( forward<S>(s) ) );
+    return R( next(begin( forward<S>(s) ),n),
+              end(forward<S>(s)) );
 }
 
 /* 
@@ -1490,6 +1497,15 @@ constexpr IRange enumerate( unsigned int b ) {
 
 constexpr IRange enumerate_to( unsigned int e ) {
     return IRange( 0, e ); 
+}
+
+constexpr IRange enumerateN( unsigned int b, unsigned int n ) {
+    return IRange( b, b+n );
+}
+
+template< class S >
+constexpr IRange enumerate( const S& s ) {
+    return IRange( 0, length(s) );
 }
 
 template< class X >
