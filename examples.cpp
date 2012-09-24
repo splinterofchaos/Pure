@@ -28,13 +28,13 @@ constexpr int get_y( const Vec& v ) { return v[1]; }
 
 Vec operator + ( const Vec& a, const Vec& b )
 { 
-    return zip_with( plus<float>(), a, b ); 
+    return zipWith( Add(), a, b ); 
 }
 
 
 Vec operator * ( Vec&& a, float x )
 {
-    return map( closure(multiplies<float>(),x), move(a) ); 
+    return map( closure(Mult(),x), move(a) ); 
 }
 Vec operator * ( float x, Vec&& a )      { return move(a) * x; }
 Vec operator * ( const Vec& a, float x ) { return Vec(a) * x; }
@@ -60,13 +60,12 @@ unique_ptr<Vec> quadratic_root( float a, float b, float c )
 }
 
 int five() { return 5; }
-constexpr int times(int x,int y) { return x*y; }
-auto times_two = closet( times, 2 );
+constexpr auto times_two = times(2);
 constexpr int plus_two(int x) { return x + 2; }
 
 // squash(f) returns a functor that duplicates its first argument.
-constexpr auto square = squash( times );
-// square(x) = times(x,x)
+constexpr auto square = squash( Mult() );
+// square(x) = x * x
 
 float to_float( int x ) { return x; }
 
@@ -192,18 +191,18 @@ int main()
             show( tail(evens) ).c_str(), show( init(evens) ).c_str() );
     printf( "\tinits es = %s\n", show( inits(evens) ).c_str() );
     printf( "\treverse es = %s\n", show( reverse(evens) ).c_str() );
-    printf( "\tisPrefixOf [2,4] es = %s\n", show( is_prefix({2,4},evens) ).c_str() );
+    printf( "\tisPrefixOf [2,4] es = %s\n", show( prefix({2,4},evens) ).c_str() );
     printf( "\telem 2 es = %s\n",   show( elem(  2,evens) ).c_str() );
     printf( "\tdelete 4 es = %s\n", show( erase( 4,evens) ).c_str() );
     printf( "\tinsert 5 es = %s\n", show( insert(5,evens) ).c_str() );
     printf( "\tdeleteFirstBy (==) es [2,6] = %s\n", 
-            show( erase_first( equal_to<int>(),evens,vector<int>{1,2,6} ) ).c_str() );
+            show( eraseFirst( equal_to<int>(),evens,vector<int>{1,2,6} ) ).c_str() );
     printf( "\tpermutations (take 3 es) = %s\n", 
             show( permutations( take(3,evens) ) ).c_str() );
     printf( "\tscanl (+) %s = %s\n", 
-            show( evens ).c_str(), show( scanl( plus<int>(), evens ) ).c_str() );
+            show( evens ).c_str(), show( scanl( Add(), evens ) ).c_str() );
     printf( "\tscanr (+) %s = %s\n", 
-            show( evens ).c_str(), show( scanr( plus<int>(), evens ) ).c_str() );
+            show( evens ).c_str(), show( scanr( Add(), evens ) ).c_str() );
     puts("");
 
     printf( "intersparse ',' \"abcd\" = %s\n",
@@ -226,7 +225,7 @@ int main()
     printf( "goup \"footoonopor\" = %s\n",
             show( group(string("footoonopor")) ).c_str() );
     printf( "elemIndecies 'o' \"footoonopor\" = %s\n",
-            show( elem_indecies('o',string("footoonopor")) ).c_str() );
+            show( elemIndecies('o',string("footoonopor")) ).c_str() );
     printf( "nub \"footoonopor\" = %s\n",
             show( nub(string("footoonopor")) ).c_str() );
     printf( "\"footo\" `union` \"onopor\" = %s\n",
@@ -236,14 +235,14 @@ int main()
     printf( "\"footo\" `intersect` \"onopor\" = %s\n",
             show( intersect(string("footo"),string("onopor")) ).c_str() );
     printf( "intersectBy (<) \"footo\" \"onopor\" = %s\n",
-            show( intersect_if(std::greater<char>(),string("footo"),string("onopor")) ).c_str() );
+            show( intersectIf(std::greater<char>(),string("footo"),string("onopor")) ).c_str() );
 
     // isspace is a macro, so we need to wrap it to pass it.
     auto is_space = [](char c){ return isspace(c); };
     printf( "dropWhile isspace \" \\tfoo\" = \"%s\"\n",
-            drop_while( is_space, string(" \tfoo") ).c_str() );
+            dropWhile( is_space, string(" \tfoo") ).c_str() );
     printf( "dropWhileEnd isspace \"foo\\n\" = %s\n",
-            show( drop_while_end(is_space, string("foo\n")) ).c_str() );
+            show( dropWhileEnd(is_space, string("foo\n")) ).c_str() );
 
     puts("");
 
@@ -261,7 +260,7 @@ int main()
     Vec fiveTwo = {{5,2}}, twoFive = {{2,5}};
 
     // Join lets us adapt an N-ary function to an (N-1) one.
-    printf( "\t5 * 2 = %d\n", bcompose(times, get_x, get_y)(fiveTwo) );
+    printf( "\t5 * 2 = %d\n", bcompose(Mult(), get_x, get_y)(fiveTwo) );
     //         is the same as times(get_x(fiveTwo), get_y(fiveTwo)).
 
     auto sevens = fiveTwo + twoFive;
@@ -286,8 +285,8 @@ int main()
     printf( "addM2 2 4 = %s\n\n",
             show( addM2(Just(2), Just(4)) ).c_str() );
 
-    printf( "5 * 2 = %d\n", closet(times,5)(2) );
-    printf( "5 * 2 = %d\n", closet(times,5,2)() );
+    printf( "5 * 2 = %d\n", closet(Mult(),5)(2) );
+    printf( "5 * 2 = %d\n", closet(Mult(),5,2)() );
 
     puts("");
     puts("p2M = fmap (+2)");
@@ -332,7 +331,7 @@ int main()
                        vector<int>{5,6}) ).c_str() );
     using V = vector<int>;
     printf( "\tzip_with add3 [1,2] [3,4] [5,6] = %s\n",
-            show( zip_with(add3,V{1,2},V{3,4},V{5,6}) ).c_str() );
+            show( zipWith(add3,V{1,2},V{3,4},V{5,6}) ).c_str() );
     printf( "\tfold add3 10 [1,2] [3,4] = %s\n",
             show( foldl(add3,10,V{1,2},V{3,4}) ).c_str() );
     puts("");

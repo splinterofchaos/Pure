@@ -10,8 +10,13 @@
 #include <utility>
 #include <tuple>
 #include <memory>
+#include <limits>
 
 #include <iostream>
+
+#include "Common.h"
+#include "List.h"
+#include "Functional.h"
 
 namespace pure {
 
@@ -33,19 +38,7 @@ namespace cata {
  * The following traits classes merely act as a shortcut to using decltype.
  */
 
-/*
- * []
- * Any type that:
- *      Has a defined begin(s) and end(s).
- */
-template< class S > struct sequence { using type = S; };
-
-template< class Seq > struct sequence_traits {
-    using sequence   = Seq;
-    using iterator   = decltype( begin(declval<Seq>()) );
-    using reference  = decltype( *declval<iterator>() );
-    using value_type = typename remove_reference<reference>::type;
-};
+struct other {};
 
 /*
  * Maybe 
@@ -54,7 +47,7 @@ template< class Seq > struct sequence_traits {
  *      Can be converted to a boolean. (isJust/isNothing)
  *      But is not a function
  */
-template< class M > struct maybe { using type = M; };
+struct maybe {};
 
 // If we want to return a pointer that defines ownership, we want a smart
 // pointer. Consider any non-raw pointer good 'nuff.
@@ -65,7 +58,7 @@ template< class Ptr > struct maybe_traits {
     using pointer    = Ptr;
     using smart_ptr  = typename SmartPtr<pointer>::type;
     using reference  = decltype( *declval<pointer>() );
-    using value_type = typename decay<reference>::type;
+    using value_type = Decay<reference>;
 };
 
 /*
@@ -77,13 +70,13 @@ template< class X >
 X cat( ... );
 
 template< class S >
-auto cat( const S& s ) -> decltype( begin(s), end(s), sequence<S>() );
+auto cat( const S& s ) -> decltype( begin(s), end(s), sequence() );
 
 template< class M >
-auto cat( const M& m ) -> decltype( *m, (bool)m, maybe<M>() );
+auto cat( const M& m ) -> decltype( *m, (bool)m, maybe() );
 
 template< class T > struct Cat {
-    using type = decltype( cat<T>(declval<T>()) );
+    using type = decltype( cat<Decay<T>>(declval<T>()) );
 };
 
 // Prevent function pointers from being deduced as maybe types.
@@ -93,21 +86,15 @@ template< class R, class ...X > struct Cat< R(&)(X...) > {
 
 } // namespace cata
 
-template< class ... > struct Category;
+template< class X >
+using Cat = typename cata::Cat<X>::type;
 
-/* The result of a function applied against X. */
-template< class F, class ...X >
-using Result = decltype( declval<F>()( declval<X>()... ) );
+template< class ... > struct Category;
 
 template< class X, class C = Category<X> >
 auto cid( X&& x ) -> decltype( C::id( declval<X>() ) ) {
     return C::id( forward<X>(x) );
 }
-
-struct Id {
-    template< class X >
-    constexpr X operator() ( X&& x ) { return forward<X>(x); }
-};
 
 struct CId {
     template< class X >
@@ -123,379 +110,6 @@ comp( F&& f, G&& ...g ) {
     return C::comp( forward<F>(f), forward<G>(g)... );
 }
 
-/* 
- * FUNCTION TRANSFORMERS
- * The fallowing are types that contain one or more functions and act like a
- * function. 
- */
-
-/* Flip f : g(x,y) = f(y,x) */
-template< class F > struct Flip {
-    F f;
-
-    template< class _F >
-    constexpr Flip( _F&& f ) : f(forward<_F>(f)) { }
-
-    template< class X, class Y, class ...Z >
-    constexpr decltype( f(declval<Y>(),declval<X>(),declval<Z>()...) )
-    operator() ( X&& x, Y&& y, Z&& ...z ) {
-        return f( forward<Y>(y), forward<X>(x), forward<Z>(z)... );
-    }
-};
-
-template< class F > 
-constexpr Flip<F> flip( F&& f ) {
-    return Flip<F>( forward<F>(f) );
-}
-
-/* 
- * Partial application.
- * g(y) = f( x, y )
- * partial( f, x ) -> g(y)
- * partial( f, x, y ) -> g()
- */
-template< class F, class ...X >
-struct Part;
-
-template< class F, class X >
-struct Part< F, X >
-{
-    F f;
-    X x;
-
-    template< class _F, class _X >
-    constexpr Part( _F&& f, _X&& x )
-        : f(forward<_F>(f)), x(forward<_X>(x))
-    {
-    }
-
-    /* 
-     * The return type of F only gets deduced based on the number of xuments
-     * supplied. Part otherwise has no idea whether f takes 1 or 10 xs.
-     */
-    template< class ... Xs >
-    constexpr auto operator() ( Xs&& ...xs )
-        -> decltype( f(x,declval<Xs>()...) )
-    {
-        return f( x, forward<Xs>(xs)... );
-    }
-};
-
-/* Recursive, variadic version. */
-template< class F, class X1, class ...Xs >
-struct Part< F, X1, Xs... > 
-    : public Part< Part<F,X1>, Xs... >
-{
-    template< class _F, class _X1, class ..._Xs >
-    constexpr Part( _F&& f, _X1&& x1, _Xs&& ...xs )
-        : Part< Part<F,X1>, Xs... > (
-            Part<F,X1>( forward<_F>(f), forward<_X1>(x1) ),
-            forward<_Xs>(xs)...
-        )
-    {
-    }
-};
-
-/* 
- * Some languages implement partial application through closures, which hold
- * references to the function's arguments. But they also often use reference
- * counting. We must consider the scope of the variables we want to apply. If
- * we apply references and then return the applied function, its references
- * will dangle.
- *
- * See: 
- * upward funarg problem http://en.wikipedia.org/wiki/Upward_funarg_problem
- */
-
-/*
- * closure http://en.wikipedia.org/wiki/Closure_%28computer_science%29
- * Here, closure forwards the arguments, which may be references or rvalues--it
- * does not matter. A regular closure works for passing functions down.
- */
-template< class F, class ...X >
-constexpr Part<F,X...> closure( F&& f, X&& ...x ) {
-    return Part<F,X...>( forward<F>(f), forward<X>(x)... );
-}
-
-/*
- * Thinking as closures as open (having references to variables outside of
- * itself), let's refer to a closet as closed. It contains a function and its
- * arguments (or environment).
- */
-template< class F, class ...X >
-constexpr Part<F,X...> closet( F f, X ...x ) {
-    return Part<F,X...>( move(f), move(x)... );
-}
-
-/*
- * Reverse partial application. 
- * g(z) = f( x, y, z )
- * rpartial( f, y, z ) -> g(x)
- */
-template< class F, class ...X >
-struct RPart;
-
-template< class F, class X >
-struct RPart< F, X > {
-    F f;
-    X x;
-
-    template< class _F, class _X >
-    constexpr RPart( _F&& f, _X&& x ) 
-        : f( forward<_F>(f) ), x( forward<_X>(x) ) { }
-
-    template< class ...Y >
-    constexpr decltype( f(declval<Y>()..., x) )
-    operator() ( Y&& ...y ) {
-        return f( forward<Y>(y)..., x );
-    }
-};
-
-template< class F, class X1, class ...Xs >
-struct RPart< F, X1, Xs... > 
-    : public RPart< RPart<F,Xs...>, X1 >
-{
-    template< class _F, class _X1, class ..._Xs >
-    constexpr RPart( _F&& f, _X1&& x1, _Xs&& ...xs )
-        : RPart< RPart<F,Xs...>, X1 > (
-            RPart<F,Xs...>( forward<_F>(f), forward<_Xs>(xs)... ),
-            forward<_X1>(x1)
-        )
-    {
-    }
-};
-
-template< class F, class ...X, class P = RPart<F,X...> >
-constexpr P rclosure( F&& f, X&& ...x ) {
-    return P( forward<F>(f), forward<X>(x)... );
-}
-
-template< class F, class ...X, class P = RPart<F,X...> >
-constexpr P rcloset( F f, X ...x ) {
-    return P( move(f), move(x)... );
-}
-
-template< class F, class ...X >
-using Closure = decltype( closure(declval<F>(), declval<X>()...) );
-template< class F, class ...X >
-using RClosure = decltype( rclosure(declval<F>(), declval<X>()...) );
-template< class F, class ...X >
-using Closet = decltype( closet(declval<F>(), declval<X>()...) );
-template< class F, class ...X >
-using RCloset = decltype( rcloset(declval<F>(), declval<X>()...) );
-
-/* 
- * Given f(x,y...) and fx(y...)
- *  enclose f = fx
- */
-template< class F > struct Enclosure {
-    F f;
-
-    template< class _F >
-    constexpr Enclosure( _F&& f ) : f(forward<_F>(f)) { }
-
-    template< class ...X >
-    using Result = decltype( closure(f,declval<X>()...) );
-
-    template< class ...X > 
-    constexpr Result<X...> operator() ( X&& ...x ) {
-        return closure( f, forward<X>(x)... );
-    }
-};
-
-template< class F, class E = Enclosure<F> >
-constexpr E enclosure( F&& f ) {
-    return E( forward<F>(f) );
-}
-
-/* 
- * Composition. 
- * Given f(x,y...) and g(z)
- * The composition of f and g, f . g, equals h(z,y...)
- *      h(z,y...) = f( g(z), y... )
- *
- */
-
-template< class F, class ...G >
-struct Composition;
-
-template< class F, class G >
-struct Composition<F,G>
-{
-    F f; G g;
-
-    template< class _F, class _G >
-    constexpr Composition( _F&& f, _G&& g ) 
-        : f(forward<_F>(f)), g(forward<_G>(g)) { }
-
-    template< class X, class ...Y >
-    constexpr decltype( f(g(declval<X>()), declval<Y>()...) )
-    operator() ( X&& x, Y&& ...y ) {
-        return f( g( forward<X>(x) ), forward<Y>(y)... );
-    }
-};
-
-template< class F, class G, class ...H >
-struct Composition<F,G,H...> : Composition<F,Composition<G,H...>>
-{
-    typedef Composition<G,H...> Comp;
-
-    template< class _F, class _G, class ..._H >
-    constexpr Composition( _F&& f, _G&& g, _H&& ...h )
-        : Composition<_F,Composition<_G,_H...>> ( 
-            forward<_F>(f), 
-            Comp( forward<_G>(g), forward<_H>(h)... )
-        )
-    {
-    }
-};
-
-template< class F, class ...G, class C = Composition<F,G...> >
-constexpr C compose( F f, G ...g ) {
-    return C( move(f), move(g)... );
-}
-
-/* A const composition for when g is a constant function. */
-template< class F, class ...G >
-struct CComposition;
-
-template< class F, class G >
-struct CComposition<F,G>
-{
-    F f; G g;
-
-    template< class _F, class _G >
-    constexpr CComposition( _F&& f, _G&& g ) 
-        : f(forward<_F>(f)), g(forward<_G>(g)) { }
-
-    template< class ...Y >
-    constexpr decltype( f(g(), declval<Y>()...) )
-    operator() ( Y&& ...y ) {
-        return f( g(), forward<Y>(y)... );
-    }
-};
-
-template< class F, class G, class ...H >
-struct CComposition<F,G,H...> : CComposition<Composition<F,G>,H...>
-{
-    typedef Composition<F,G> Then;
-    typedef CComposition<Then,H...> CComp;
-
-    template< class _F, class _G, class ..._H >
-    constexpr CComposition( _F&& f, _G&& g, _H&& ...h )
-        : CComp ( 
-            Then( forward<_F>(f), forward<_G>(g) ),
-            forward<_H>(h)...
-        )
-    {
-    }
-};
-
-template< class F, class ...G, class C = CComposition<F,G...> >
-constexpr C ccompose( F f, G ...g ) {
-    return C( move(f), move(g)... );
-}
-
-/* N-ary composition assumes a unary f and N-ary g. */
-template< class F, class ...G >
-struct NCompoposition;
-
-template< class F, class G >
-struct NCompoposition<F,G>
-{
-    F f; G g;
-
-    template< class _F, class _G >
-    constexpr NCompoposition( _F&& f, _G&& g ) 
-        : f(forward<_F>(f)), g(forward<_G>(g)) { }
-
-    template< class ...X >
-    constexpr decltype( f(g(declval<X>()...)) )
-    operator() ( X&& ...x ) {
-        return f( g( forward<X>(x)... ) );
-    }
-};
-
-template< class F, class G, class ...H >
-struct NCompoposition<F,G,H...> : NCompoposition<Composition<F,G>,H...>
-{
-    typedef Composition<F,G> Then;
-    typedef NCompoposition<Then,H...> NComp;
-
-    template< class _F, class _G, class ..._H >
-    constexpr NCompoposition( _F&& f, _G&& g, _H&& ...h )
-        : NComp ( 
-            Then( forward<_F>(f), forward<_G>(g) ),
-            forward<_H>(h)...
-        )
-    {
-    }
-};
-
-template< class F, class ...G, class C = NCompoposition<F,G...> >
-constexpr C ncompose( F f, G ...g ) {
-    return C( move(f), move(g)... );
-}
-
-/*
- * Binary composition 
- *      (compose2 http://www.sgi.com/tech/stl/binary_compose.html)
- * Given g(x)=y,  h(x)=z, and f(y,z), let bf(x) = f( g(x), h(x) )
- * This implementation diverges from compose2 in that it allows g and h to be
- * n-ary.
- */
-template< class F, class G, class H >
-struct BCompoposition
-{
-    F f; G g; H h;
-
-    template< class _F, class _G, class _H >
-    constexpr BCompoposition( _F&& f, _G&& g, _H&& h ) 
-        : f(forward<_F>(f)), g(forward<_G>(g)), h(forward<_H>(h)) { }
-
-    template< class ...X >
-    constexpr decltype( f(g(declval<X>()...), h(declval<X>()...)) )
-    operator() ( X&& ...x ) {
-        return f( g( forward<X>(x)... ), h( forward<X>(x)... ) );
-    }
-};
-
-template< class F, class G, class H, class C = BCompoposition<F,G,H> >
-constexpr C bcompose( F f, G g, H h ) {
-    return C( move(f), move(g), move(h) );
-}
-
-template< size_t N, class P >
-using Nth = decltype( get<N>( declval<P>() ) );
-
-/*
- * Function Pair.
- * pair_compose( f, g ) = \(x,y) -> (f x, g y) 
- */
-template< class F, class G > struct PairCompose {
-    F f; G g;
-
-    template< class _F, class _G >
-    constexpr PairCompose( _F&& f, _G&& g ) 
-        : f(forward<_F>(f)), g(forward<_G>(g)) { }
-
-    template< class Fn, size_t N, class P >
-    using Nth = decltype( declval<Fn>()( declval<Nth<N,P>>() ) );
-
-    template< class P >
-    using Result = decltype( make_pair(declval<Nth<F,0,P>>(),
-                                       declval<Nth<G,1,P>>()) );
-
-    template< class P/*air*/ >
-    constexpr Result<P> operator() ( const P& p ) {
-        return make_pair( f(get<0>(p)), g(get<1>(p)) );
-    }
-};
-
-template< class F, class G, class P = PairCompose<F,G> > 
-constexpr P pair_compose( F f, G g ) {
-    return P( move(f), move(g) );
-}
 /* Default category: function. */
 template< class F > struct Category<F> {
     static constexpr Id id = Id();
@@ -567,7 +181,7 @@ template< class Func > struct Arrow<Func> {
 
     // Same decltype expression used many times. Save typing.
     template< class F, class G >
-    using Split = decltype( pair_compose(declval<F>(), declval<G>()) );
+    using Split = decltype( pairCompose(declval<F>(), declval<G>()) );
 
     /*
      * Note: It would seem that an easier way to define this class might be to
@@ -579,19 +193,19 @@ template< class Func > struct Arrow<Func> {
     template< class F, class G > static 
     constexpr Split<F,G> split ( F&& f, G&& g ) 
     {
-        return pair_compose( forward<F>(f), forward<G>(g) );
+        return pairCompose( forward<F>(f), forward<G>(g) );
     }
 
     template< class F > static 
     constexpr Split<F,Id> first( F&& f ) 
     { 
-        return pair_compose( forward<F>(f), Id() );
+        return pairCompose( forward<F>(f), Id() );
     }
 
     template< class F > static 
     constexpr Split<Id,F> second( F&& f ) 
     {
-        return pair_compose( Id(), forward<F>(f) );
+        return pairCompose( Id(), forward<F>(f) );
     }
 
     struct Splitter {
@@ -605,1143 +219,10 @@ template< class Func > struct Arrow<Func> {
     constexpr auto fan( F&& f, G&& g ) 
         -> decltype( compose(declval< Split<F,G> >(), Splitter()) )
     {
-        return compose( pair_compose( forward<F>(f), forward<G>(g) ), 
+        return compose( pairCompose( forward<F>(f), forward<G>(g) ), 
                         Splitter() );
     }
 };
-
-template< class S >
-constexpr auto length( S&& s ) -> decltype( declval<S>().size() )
-{
-    return forward<S>(s).size();
-}
-
-template< class S >
-constexpr size_t length( const S& s ) {
-    return distance( begin(s), end(s) );
-} 
-
-template< class X, unsigned N >
-constexpr size_t length( X (&)[N] ) {
-    return N;
-}
-
-template< class S >
-constexpr bool null( const S& s ) {
-    return begin(s) == end(s);
-}
-
-template< class S >
-constexpr bool not_null( const S& s ) {
-    return begin(s) != end(s);
-}
-
-template< class S >
-using SeqRef = typename cata::sequence_traits<S>::reference;
-template< class S >
-using SeqVal = typename cata::sequence_traits<S>::value_type;
-template< class S >
-using SeqIter = typename cata::sequence_traits<S>::iterator;
-
-template< class S >
-constexpr SeqRef<S> head( S&& s, size_t n = 0 ) {
-    return *next( begin(forward<S>(s)), n );
-}
-
-template< class X > 
-constexpr X head( const initializer_list<X>& l, size_t n = 0 ) {
-    return *next( begin(l), n );
-}
-
-template< class S >
-constexpr SeqRef<S> last( S&& s, size_t n = 0 ) {
-    return *prev( end(forward<S>(s)), n+1 );
-}
-
-template< class X >
-constexpr X last( const initializer_list<X>& l, size_t n = 0 ) {
-    return *prev( end(l), n+1 );
-}
-
-template< class S, class I = typename S::iterator > struct Range {
-    I b, e;
-    
-    using iterator = I; 
-    using reference = decltype( *declval<I>() );
-    using value_type = typename decay<reference>::type;
-
-    template< class _I >
-    constexpr Range( _I b, _I e ) : b(b), e(e) { }
-
-    constexpr I begin() { return b; }
-    constexpr I end()   { return e; }
-};
-
-template< class S, class R = Range<S,SeqIter<S>> >
-constexpr R range( S&& s ) {
-    return R( begin(forward<S>(s)), end(forward<S>(s)) );
-}
-
-template< class S, class I, class R = Range<S,I> >
-constexpr R range( I a, I b ) {
-    return R( a, b );
-}
-
-template< class S, class R = Range<S,SeqIter<S>> >
-constexpr R tail_wrap( S&& s ) {
-    return length(forward<S>(s)) ? R( next( begin(forward<S>(s)) ), 
-                                      end( forward<S>(s) ) )
-        : range( forward<S>(s) );
-}
-
-template< class S, class R = Range<S,SeqIter<S>> >
-constexpr R tail_wrap( size_t n, S&& s ) {
-    return R( prev( end(forward<S>(s)), n ),
-              begin( forward<S>(s) ) );
-}
-
-/* 
- * Prevent infinitely recursive types! 
- * tail_wrap( tail_wrap(r) ) will not imply a Range<Range<S,I>,I>.
- */
-template< class S, class I >
-Range<S,I> tail_wrap( size_t n, Range<S,I> r ) {
-    r.b = next(r.b, n);
-    return r;
-}
-
-template< class S, class I >
-Range<S,I> tail_wrap( Range<S,I> r ) {
-    return tail_wrap( 1, r );
-}
-
-template< class S, class R = Range<S,SeqIter<S>> >
-constexpr R init_wrap( S&& s ) {
-    return length(forward<S>(s)) ? R( begin(forward<S>(s)), 
-                                      prev( end(forward<S>(s)) ) )
-        : range( forward<S>(s) );
-}
-
-template< class S, class R = Range<S,SeqIter<S>> >
-constexpr R init_wrap( size_t n, S&& s ) {
-    return R ( 
-        begin( forward<S>(s) ),
-        next( begin(forward<S>(s)), n )
-    );
-}
-
-template< class S, class I >
-Range<S,I> init_wrap( size_t n, Range<S,I> r ) {
-    r.e = prev(r.e, n);
-    return r;
-}
-
-template< class S, class I >
-Range<S,I> init_wrap( Range<S,I> r ) {
-    return init_wrap( 1, r );
-}
-
-template< class S, class I = SeqIter<S>, 
-          class R = Range<S,reverse_iterator<I>> >
-constexpr R reverse_wrap( S&& s ) {
-    return R( end(forward<S>(s)), begin(forward<S>(s)) );
-}
-
-template< class R, class S >
-R _dup( const S& s ) {
-    R r;
-    copy( begin(s), end(s), back_inserter(r) );
-    return r;
-}
-
-template< class R, class S >
-R _dup( const S& s, size_t n ) {
-    R r;
-    copy_n( begin(s), n, back_inserter(r) );
-    return r;
-}
-
-template< class S >
-S dup( const S& s ) {
-    return _dup<S>( s );
-}
-
-template< class S > using Dup = decltype( dup(declval<S>()) );
-
-template< class S, class I >
-Dup<S> dup( const Range<S,I>& r ) {
-    return _dup<Dup<S>>( r );
-}
-
-template< class X, class V = vector<X> >
-V dup( const initializer_list<X>& l ) {
-    return _dup<V>( l );
-}
-
-template< class S, class D = Dup<S> >
-D dup( S&& s, size_t n ) {
-    return _dup<D>( forward<S>(s), n );
-}
-
-template< class S > 
-Dup<S> tail( const S& s ) {
-    return dup( tail_wrap(s) );
-}
-
-template< class S > 
-Dup<S> init( const S& s ) {
-    return dup( init_wrap(s) );
-}
-
-template< class S >
-Dup<S> reverse( const S& s ) {
-    return dup( reverse_wrap(s) );
-}
-
-template< class F, class RI, class XS >
-void _map( F&& f, RI&& ri, const XS& xs ) {
-    transform( begin(xs), end(xs), 
-               forward<RI>(ri), forward<F>(f) );
-}
-
-template< class F, class RI, class XS, class YS, class ...ZS >
-void _map( F&& f, RI&& ri, 
-               const XS& xs, const YS& ys, const ZS& ...zs ) 
-{
-    for( const auto& x : xs )
-        _map( closure(forward<F>(f),x), forward<RI>(ri), 
-                  ys, zs... );
-}
-
-template< class A, class B, class R >
-using ESame = typename std::enable_if< is_same<A,B>::value, R >::type;
-template< class A, class B, class R >
-using XSame = typename std::enable_if< !is_same<A,B>::value, R >::type;
-
-/* map f {1,2,3} -> { f(1), f(2), f(3) } */
-template< template<class...> class S, class X, class ...XS, class F,
-          class FX = Result<F,X>, class R = S<FX,XS...> > 
-auto map( F&& f, const S<X,XS...>& xs ) -> XSame< FX, X, R >
-{
-    R r;
-    _map( forward<F>(f), back_inserter(r), xs );
-    return r;
-}
-
-// When mapping from X to X, we can optimize by not returning a new sequence.
-template< template<class...> class S, class X, class ...XS, class F >
-auto map( F&& f, S<X,XS...> xs ) -> ESame< Result<F,X>, X, S<X,XS...> >
-{
-    _map( forward<F>(f), begin(xs), xs );
-    return xs;
-}
-
-template< class F, class X, class V = vector< Result<F,X> > >
-V map( F&& f, const initializer_list<X>& l ) {
-    V v; 
-    v.reserve( length(l) );
-    _map( forward<F>(f), begin(v), l );
-    return v;
-}
-
-/*
- * Variadic map.
- * In Haskell, one might write with Control.Applicative...
- *      (+) <$> [1,2] <*> [3,4]
- * but if we make map variadic to begin with, we can duplicate this behaviour
- * without Control.Applicative and just write
- *      map( (+), [1,2], [3,4] )
- *
- * map f xs ys = concatMap (\x -> map (f x) ys) xs
- * map is, however, more efficient because it does not construct a new sequence
- * for every x.
- */
-template< template<class...> class S, class ..._S,
-          class X, class Y, class ...Z,
-          class F, class FXYZ = Result<F,X,Y,Z...>,
-          class R = S<FXYZ,_S...> >
-R map( F&& f, const S<X,_S...>& xs, 
-       const S<Y,_S...>& ys, const S<Z,_S...>& ...zs )
-{
-   R r;
-   _map( forward<F>(f), back_inserter(r), xs, ys, zs... );
-   return r;
-}
-
-// TODO: requires further specialization.
-template< class X, size_t N, class F, class A = array<Result<F,X>,N> >
-A map( F&& f, const array< X, N >& xs ) {
-    A r;
-    _map( forward<F>(f), begin(r), xs );
-    return r;
-}
-
-template< class F, class ...S >
-using ResultMap = decltype( map(declval<F>(), declval<S>()...) );
-
-template< class F, class S >
-void vmap( F&& f, S&& s ) {
-    std::for_each( begin(forward<S>(s)), end(forward<S>(s)), forward<F>(f) );
-}
-
-template< class X >
-using Decay = typename decay<X>::type;
-
-/* each f a b c... = all f [a,b,c...] */
-template< class F, class X >
-bool each( F&& f, X&& x ) {
-    return forward<F>(f)( forward<X>(x) );
-}
-
-template< class F, class X, class Y, class ...Z >
-bool each( F&& f, X&& x, Y&& y, Z&& ...z ) {
-    return each( forward<F>(f), forward<X>(x) ) and 
-        each( forward<F>(f), forward<Y>(y), forward<Z>(z)... );
-}
-
-struct NotNull {
-    template< class X >
-        bool operator() ( X&& x ) {
-            return not_null( forward<X>(x) );
-        }
-};
-
-/* accuml -- foldl implementaton */
-template< class F, class X, class ...XS >
-constexpr Decay<X> accuml( F&& f, X&& x, 
-                           const XS& ...xs ) {
-    return each(NotNull(), xs... ) ?
-        accuml( forward<F>(f), 
-                forward<F>(f)( forward<X>(x), 
-                               head(xs)... ),
-                tail_wrap(xs)... )
-        : forward<X>(x);
-}
-
-// GCC does not apply proper tail recursion here,
-// so optimize for the one-list and two-list cases.
-template< class F, class X, class S >
-constexpr Decay<X> accuml( F&& f, X&& x, S&& s ) {
-    return std::accumulate( begin(s), end(s), 
-                            forward<X>(x), forward<F>(f) );
-}
-
-template< class F, class X, class XS, class YS >
-X accuml( F&& f, X x, XS&& xs, YS&& ys ) {
-    auto xi = begin( forward<XS>(xs) );
-    auto yi = begin( forward<YS>(ys) );
-
-    for( ; xi != end(xs) and yi != end(ys); xi++, yi++ )
-        x = forward<F>(f)( x, *xi, *yi );
-    return x;
-}
-
-/* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
-template< class F, class X, class ...S >
-constexpr Decay<X> foldl( F&& f, X&& x, S&& ...s ) {
-    return accuml( forward<F>(f), forward<X>(x), forward<S>(s)... );
-}
-
-template< class F, class X, class Y >
-constexpr Decay<X> foldl( F&& f, X&& x, initializer_list<Y> s ) {
-    return accuml( forward<F>(f), forward<X>(x), move(s) );
-}
-
-template< class F, class S, 
-          class X = typename cata::sequence_traits<S>::value_type >
-constexpr X foldl( F&& f, S&& s ) {
-    return foldl( forward<F>(f), 
-                  head(forward<S>(s)), tail_wrap(forward<S>(s)) );
-}
-
-template< class F, class X >
-constexpr X foldl( F&& f, initializer_list<X> s ) {
-    return foldl( forward<F>(f), head(s), tail_wrap(move(s)) );
-}
-
-/* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
-template< class F, class X, class ...S >
-constexpr Decay<X> foldr( F&& f, X&& x, S&& ...s ) {
-    return foldl( flip(forward<F>(f)), forward<X>(x), 
-                  reverse_wrap(forward<S>(s))... );
-}
-
-template< class F, class X, class Y >
-constexpr Decay<X> foldr( F&& f, X&& x, initializer_list<Y> s ) {
-    return foldl( flip(forward<F>(f)), forward<X>(x), reverse_wrap(move(s)) );
-}
-
-template< class F, class S, 
-          class X = typename cata::sequence_traits<S>::value_type >
-constexpr X foldr( F&& f, S&& s ) {
-    return foldr( forward<F>(f), 
-                  last(forward<S>(s)), init_wrap(forward<S>(s)) );
-}
-
-template< class F, class Y >
-constexpr Y foldr( F&& f, initializer_list<Y> s ) {
-    return foldr( forward<F>(f), head(s), tail_wrap(move(s)) );
-}
-
-/* 
- * append({1},{2,3},{4}) -> {1,2,3,4} 
- * Similar to [1]++[2,3]++[4]
- */
-template< typename A, typename B = A >
-A append( A a, const B& b ) {
-    copy( begin(b), end(b), back_inserter(a) );
-    return a;
-}
-
-template< typename A, typename B, typename C, typename ...D >
-A append( A a, const B& b, const C& c, const D& ... d ) {
-    return append( append(move(a), b), c, d... );
-}
-
-struct Append {
-    template< class R, class ...S >
-    constexpr R operator() ( R r, S&& ...s ) {
-        return append( move(r), forward<S>(s)... );
-    }
-};
-
-template< class XS, class X >
-XS cons( XS xs, X&& x ) {
-    xs.push_back( forward<X>(x) );
-    return xs;
-}
-
-template< class XS, class X, class Y, class ...Z >
-XS cons( XS xs, X&& x, Y&& y, Z&& ...z ) {
-    return cons (
-        cons( move(xs), forward<X>(x) ),
-        forward<Y>(y), forward<Z>(z)...
-    );
-}
-
-template< class XS, class X >
-XS rcons( XS xs, X&& x ) {
-    xs.push_front( forward<X>(x) );
-    return xs;
-}
-
-template< class XS, class X, class Y, class ...Z >
-XS rcons( XS xs, X&& x, Y&& y, Z&& ...z ) {
-    return rcons (
-        rcons( move(xs), forward<X>(x) ),
-        forward<Y>(y), forward<Z>(z)...
-    );
-}
-
-struct Cons {
-    template< class S, class ...X >
-    S operator() ( S s, X&& ...x ) const {
-        return cons( move(s), forward<X>(x)... );
-    }
-};
-
-struct RCons {
-    template< class S, class ...X >
-    S operator() ( S s, X&& ...x ) const {
-        return rcons( move(s), forward<X>(x)... );
-    }
-};
-
-template< class F, class X, class S,
-          class V = vector<typename decay<X>::type> >
-V scanl( F&& f, X&& x, const S& s ) {
-    V v{ forward<X>(x) };
-    for( const auto& y : s )
-        v.emplace_back( 
-            forward<F>(f)( last(v), y )
-        );
-    return v;
-}
-
-template< class F, class S >
-using Scanl = decltype( scanl( declval<F>(), declval<SeqRef<S>>(), 
-                               declval<S>() ) );
-
-template< class F, class S >
-Scanl<F,S> scanl( F&& f, S&& s ) {
-    return scanl( forward<F>(f), 
-                  head(forward<S>(s)), tail_wrap(forward<S>(s)) );
-}
-
-template< class F, class X, class S >
-Scanl<F,S> scanr( F&& f, X&& x, const S& s ) {
-    return reverse(scanl( forward<F>(f), forward<X>(x), reverse_wrap(s) ));
-}
-
-template< class F, class S >
-using Scanr = decltype( scanr( declval<F>(), declval<SeqRef<S>>(), 
-                               declval<S>() ) );
-
-template< class F, class S >
-Scanr<F,S> scanr( F&& f, S&& s ) {
-    return scanr( forward<F>(f), 
-                  last(forward<S>(s)), init_wrap(forward<S>(s)) );
-}
-
-template< class F, class X > struct IteratorC {
-    using _X = typename decay<X>::type;
-    using container = vector<_X>;
-    using reference = typename container::reference;
-    using value_type = typename container::value_type;
-    using citerator = typename container::iterator;
-
-    F f;
-    mutable container c;
-
-    struct iterator : std::iterator<forward_iterator_tag,value_type> {
-        const IteratorC& c;
-        citerator it;
-
-        iterator( const IteratorC<F,X>& _c )
-            : c(_c), it(std::begin(c.c))
-        {
-        }
-        iterator( const IteratorC<F,X>& _c, citerator i )
-            : c(_c), it(i)
-        {
-        }
-
-        void grow() {
-            if( it == std::end(c.c) ) {
-                c.c.emplace_back (
-                    c.f( last(c.c) )
-                );
-                it = prev( std::end(c.c) );
-            }
-        }
-
-
-        iterator& operator++ () { 
-            grow();
-            it++;
-            return *this;
-        }
-
-        iterator& operator++ (int) { 
-            ++(*this);
-            return iterator( c, prev(it) );
-        }
-
-        reference operator* () {
-            grow();
-            return *it;
-        }
-
-        constexpr bool operator== ( const iterator& ) { return false; }
-        constexpr bool operator!= ( const iterator& ) { return true;  }
-    };
-
-    
-    template< class _F, class _X >
-    constexpr IteratorC( _F&& _f, _X&& x ) 
-        : f(forward<_F>(_f)), 
-          c{forward<_X>(x), f(forward<X>(x))}
-    {
-    }
-    
-    constexpr iterator begin() { return *this; }
-    constexpr iterator end() { return iterator(*this,std::end(c)); }
-
-    operator container () { return c; }
-};
-
-template< class F, class X, class I = IteratorC<F,X> >
-vector<X> dup( const IteratorC<F,X>& c ) {
-    return c;
-}
-
-template< class F, class X, class I = IteratorC<F,X> >
-vector<X> dup( IteratorC<F,X>& c, size_t n ) {
-    return dup( c, n );
-}
-
-template< class F, class X >
-constexpr IteratorC<F,X> iterate( F f, X&& x ) {
-    return IteratorC<F,X>( move(f), forward<X>(x) );
-}
-
-template< class X, class F = Id >
-constexpr IteratorC<F,X> repeat( X&& x, F&& f = F() ) {
-    return iterate( forward<F>(f), forward<X>(x) );
-}
-
-template< class X, class _X = typename decay<X>::type >
-vector<_X> replicate( size_t n, X&& x ) {
-    return take( n, repeat(forward<X>(x)) );
-}
-
-template< class F, class Y > struct PartMiddle {
-    F f;
-    Y y;
-
-    template< class _F, class _Y >
-    constexpr PartMiddle( _F&& f, _Y&& y ) 
-        : f(forward<F>(f)), y(forward<Y>(y)) 
-    {
-    }
-
-    template< class X, class Z >
-    constexpr auto operator() ( X&& x, Z&& z ) 
-        -> decltype( f(declval<X>(),y,declval<Z>()) )
-    {
-        return f( forward<X>(x), y, forward<Z>(z) );
-    }
-};
-
-template< class F, class Y, class P = PartMiddle<F,Y> >
-P middle_closure( F&& f, Y&& y ) {
-    return P( forward<F>(f), forward<Y>(y) );
-}
-
-/* every_other x [a,b,c...] = [x,a,x,b,x,c...] */
-template< class X, class S, class R >
-constexpr R _every_other( const X& x, const S& s, R r ) {
-    return foldl( middle_closure(Cons(),x), move(r), s );
-}
-
-template< class X, class S >
-constexpr S every_other( const X& x, const S& s ) {
-    return foldl( middle_closure(Cons(),x), S(), s );
-}
-
-/* intersparse x [a,b,c] = [a,x,b,x,c] */
-template< class X, class S >
-constexpr S intersparse( const X& x, const S& s ) {
-    return length(s) > 1 ?
-        _every_other( x, tail_wrap(s), S{head(s)} ) : s;
-}
-
-template< class S, class SS, class R >
-constexpr R _every_other_append( const S& s, const SS& ss, R r ) {
-    using F = R (*)( R, const S&, SeqRef<SS> );
-    return foldl( middle_closure((F)append,s), move(r), ss );
-}
-
-template< class S, class SS >
-constexpr S every_other_append( const S& s, const SS& ss ) {
-    return _every_other_append( s, ss, S() );
-}
-
-/* intercalcate "--" {"ab","cd","ef"} */
-template< class S, class SS >
-S intercalcate( const S& s, const SS& ss ) {
-    return not null(ss) ? 
-        _every_other_append( s, tail_wrap(ss), S{head(ss)} )
-        : S();
-}
-
-/* concat {{1},{2,3},{4}} = {1,2,3,4} */
-template< class SS, class S = typename SS::value_type >
-S concat( const SS& ss ) {
-    return foldl( append<S,S>, S(), ss );
-}
-
-template< class S >
-S sort( S s ) {
-    std::sort( begin(s), end(s) );
-    return s;
-}
-
-template< typename Container >
-bool ordered( const Container& c )
-{
-    return length(c) <= 1
-        or mismatch ( 
-            begin(c), end(c)-1, 
-            begin(c)+1, 
-            less_equal<int>() 
-        ).second == end(c);
-}
-
-struct BinaryNot {
-    template< class B >
-    constexpr bool operator() ( B&& b ) {
-        return not (bool)forward<B>(b);
-    }
-};
-
-template< class F >
-constexpr auto fnot( F&& f ) -> decltype( compose(BinaryNot(),declval<F>()) ) 
-{
-    return compose( BinaryNot(), forward<F>(f) );
-}
-
-/* filter f C -> { x for x in C such that f(x) is true. } */
-template< typename Container, typename F >
-Container filter( F&& f, Container cont )
-{
-    cont.erase ( 
-        remove_if( begin(cont), end(cont), 
-                   fnot( forward<F>(f) ) ),
-        end( cont )
-    );
-    return cont;
-}
-
-template< class X, class F, class V = vector<X> >
-V filter( F&& f, const initializer_list<X>& cont ) {
-    V v;
-    v.reserve( length(cont) );
-    copy_if( begin(cont), end(cont), back_inserter(v), forward<F>(f) );
-    return v;
-}
-
-/* find pred xs -> Maybe x */
-template< class F, class S,
-          class Val = typename cata::sequence_traits<S>::value_type >
-const Val* find( F&& f, const S& s ) {
-    const auto& e = end(s);
-    const auto it = find_if( begin(s), e, forward<F>(f) );
-    return it != e ? &(*it) : nullptr; 
-}
-
-using MaybeIndex = unique_ptr<size_t>;
-
-MaybeIndex JustIndex( size_t x ) { return MaybeIndex( new size_t(x) ); }
-MaybeIndex NothingIndex() { return nullptr; }
-
-/* Construct MaybeIndex from an iterator. */
-template< class I, class S >
-MaybeIndex PossibleIndex( const I& i, const S& s ) {
-    return i != end(s) ? JustIndex( distance(begin(s),i) ) : NothingIndex();
-}
-
-template< class X, class S >
-const X* find_first( const X& x, const S& s ) {
-    auto it = std::find( begin(s), end(s), x );
-    return it != end(s) ? &(*it) : nullptr;
-}
-
-/* cfind x C -> C::iterator */
-template< typename S, typename T >
-constexpr auto cfind( T&& x, S&& s )
-    -> decltype( begin(declval<S>()) )
-{
-    return find( begin(forward<S>(s)), end(forward<S>(s)),
-                 forward<T>(x) );
-}
-
-template< typename S, typename F >
-constexpr auto cfind_if( F&& f, S&& s )
-    -> decltype( begin(declval<S>()) )
-{
-    return find_if( begin(forward<S>(s)), end(forward<S>(s)),
-                    forward<F>(f) );
-}
-
-template< class S, class T, class F = equal_to<T> >
-constexpr auto cfind_not( const T& x, S&& s, F&& f = F() )
-    -> decltype( begin(declval<S>()) )
-{
-    return cfind_if (
-        fnot( closure(forward<F>(f),x) ),
-        forward<S>(s)
-    );
-}
-
-template< class F, class S >
-MaybeIndex find_index( F&& f, const S& s ) {
-    return PossibleIndex( cfind_if(forward<F>(f),s), s );
-}
-
-template< class F, class S, class V = vector<size_t> >
-V find_indecies( F&& f, const S& s ) {
-    return PossibleIndex( cfind_if(forward<F>(f),s), s );
-}
-
-template< class S, class D = Dup<S> >
-D take( size_t n, S&& s ) {
-    return dup( forward<S>(s), n );
-    D r;
-    std::copy_n( begin(forward<S>(s)), n, back_inserter(r) );
-    return r;
-    //return dup( init_wrap(n, forward<S>(s)) );
-}
-
-template< class P, class S, class _S = typename decay<S>::type >
-_S take_while( P&& p, S&& s ) {
-    return _S (
-        begin( forward<S>(s) ),
-        cfind_if( fnot(forward<P>(p)), forward<S>(s) )
-    );
-}
-
-template< class S >
-Dup<S> drop( size_t n, S&& s ) {
-    return dup( tail_wrap( max( length(s)-n, 0 ),
-                           forward<S>(s) ) );
-}
-
-template< class P, class S, class _S = typename decay<S>::type >
-_S drop_while( P&& p, S&& s ) {
-    return _S ( 
-        cfind_if( fnot(forward<P>(p)), forward<S>(s) ),
-        end( forward<S>(s) )
-    );
-}
-
-template< class Pred, class S >
-S drop_while_end( Pred p, S s ) {
-    s.erase( cfind_if(p,s), end(s) );
-    return s;
-}
-
-template< class X, class R > 
-using XInt = typename enable_if< !is_integral<X>::value, R >::type;
-
-template< class I, class S, class _S = typename decay<S>::type, 
-          class P = pair<_S,_S> >
-constexpr XInt<I,P> split_at( I it, S&& s ) 
-{
-    return { _S( begin(forward<S>(s)), it ),
-             _S(  it,  end(forward<S>(s)) ) };
-}
-
-template< class S, class _S = typename decay<S>::type, 
-          class P = pair<_S,_S> >
-constexpr P split_at( size_t n, S&& s ) {
-    return split_at (
-        next( begin(forward<S>(s)), 
-              min(length(s), n) ), // Don't split passed the end!
-        forward<S>(s)
-    );
-}
-
-template< class P,
-          class S, class _S = typename decay<S>::type, 
-          class R = pair<_S,_S> >
-R span( P&& p, S&& s ) {
-    R r;
-    for( auto& x : s )
-        (forward<P>(p)( x ) ? r.second:r.first).push_back( x );
-    return r;
-}
-
-template< class P,
-          class S, class _S = typename decay<S>::type, 
-          class R = pair<_S,_S> >
-R sbreak( P&& p, S&& s ) {
-    return split_at( cfind_if(forward<P>(p),forward<S>(s)), forward<S>(s) );
-}
-
-template< class XS, class YS >
-bool is_prefix( const XS& xs, const YS& ys ) {
-    return std::equal( begin(xs), end(xs), begin(ys) );
-}
-
-template< class X, class S >
-bool is_prefix( const initializer_list<X>& l, const S& s ) {
-    return std::equal( begin(l), end(l), begin(s) );
-}
-
-template< class XS, class YS >
-bool is_suffix( const XS& xs, const YS& ys ) {
-    return is_prefix( reverse_wrap(xs), reverse_wrap(ys) );
-}
-
-template< class X, class S >
-bool is_suffix( const initializer_list<X>& l, const S& s ) {
-    return is_prefix( reverse_wrap(l), reverse_wrap(s) );
-}
-
-template< class XS, class YS >
-bool is_infix( const XS& xs, const YS& ys ) {
-    return std::includes( begin(ys), end(ys), begin(xs), end(xs) );
-}
-
-template< class X, class S >
-bool is_infix( const initializer_list<X>& l, const S& s ) {
-    return std::includes( begin(s), end(s), begin(l), end(l) );
-}
-
-template< class XS, class YS >
-bool equal( const XS& xs, const YS& ys ) {
-    return length(xs) == length(ys) and is_prefix( xs, ys );
-}
-
-template< class X, class S >
-bool elem( const X& x, const S& s ) {
-    return find_first( x, s );
-}
-
-template< class X, class S >
-bool not_elem( const X& x, const S& s ) {
-    return not elem( x, s );
-}
-
-template< class X, class S >
-MaybeIndex elem_index( const X& x, const S& s ) {
-    return PossibleIndex( cfind(x,s), s );
-}
-
-template< class X, class S, class V = vector<size_t> >
-V elem_indecies( const X& x, const S& s ) {
-    V v;
-    auto it = begin(s);
-    while(true) {
-        it = cfind( x, range<S>(it,end(s)) );
-        if( it != end(s) )
-            v.push_back( distance(begin(s),it++) );
-        else 
-            break;
-    }
-    return v;
-}
-
-/* insert 3 [1,2,4] = [1,2,3,4] */
-template< class X, class S >
-S insert( X&& x, S s ) {
-    s.insert( 
-        upper_bound( begin(s), end(s), forward<X>(x) ),
-        forward<X>(x)
-    );
-    return s;
-}
-
-/* insert p y xs -- inserts into the first place where (p x) == True. */
-template< class P, class X, class S >
-S insert( P&& p, X&& x, S s ) {
-    s.insert( 
-        upper_bound( begin(s), end(s), forward<X>(x), forward<P>(p) ),
-        forward<X>(x)
-    );
-    return s;
-}
-
-template< class X, class S >
-S erase( const X& x, S s ) {
-    auto it = cfind( x, s );
-    if( it != end(s) )
-        s.erase( it );
-    return s;
-}
-
-template< class F, class X, class S >
-S erase( F&& f, const X& x, S s ) {
-    auto it = cfind_if( closure(forward<F>(f),x), s );
-    if( it != end(s) )
-        s.erase( it );
-    return s;
-}
-
-template< class P, class XS, class YS >
-XS erase_first( P&& p, XS xs, YS&& ys ) {
-    using F = XS(*)( const P&, SeqRef<YS>, XS );
-    return foldl (
-        // \s x -> erase p x s
-        flip( closure( (F)erase, forward<P>(p) ) ), 
-        move(xs), forward<YS>(ys) 
-    ); 
-}
-
-template< class P, class XS, class Y >
-XS erase_first( P&& p, XS xs, initializer_list<Y> l ) {
-    using F = XS(*)( const P&, const Y&, XS );
-    return foldl( flip(closure((F)erase,forward<P>(p))), 
-                  xs, move(l) ); 
-}
-
-template< class S, class X >
-S cons_set( S s, X&& x ) {
-    return not_elem(x,s) ?  cons( move(s), forward<X>(x) ) : s;
-}
-
-template< class DS, class S, class X >
-S cons_difference( const DS& ds, S s, X&& x ) {
-    return not_elem(x,ds) ?  cons( move(s), forward<X>(x) ) : s;
-}
-
-template< class DS, class S, class X >
-S cons_intersection( const DS& ds, S s, X&& x ) {
-    return elem(x,ds) ?  cons( move(s), forward<X>(x) ) : s;
-}
-
-template< class S, class X >
-S cons_when( bool b, S s, X&& x ) {
-    return b ? cons( move(s), forward<X>(x) ) : s;
-}
-
-template< class S >
-S nub( const S& s ) {
-    using F = S(*)( S, SeqRef<S> );
-    return foldl( (F)cons_set, S(), s );
-}
-
-template< class XS, class YS, class R = typename decay<XS>::type >
-R difference( XS&& xs, const YS& ys ) {
-    using F = R(*)( const YS&, XS, SeqRef<XS> );
-    return foldl ( 
-        closure( (F)cons_difference, ys ),
-        R(), forward<XS>(xs)
-    );
-}
-template< class XS, class YS >
-XS sunion( XS xs, YS&& ys ) {
-    using F = XS(*)( XS, SeqRef<YS> );
-    return foldl( (F)cons_set, move(xs), forward<YS>(ys) );
-}
-
-template< class XS, class YS, class R = typename decay<XS>::type >
-R intersect( XS&& xs, const YS& ys ) {
-    using F = R(*)( const YS&, XS, SeqRef<XS> );
-    return foldl (
-        closure( (F)cons_intersection, ys ),
-        R(), forward<XS>(xs)
-    );
-}
-
-template< class F, class S >
-bool any( F&& f, const S& s ) {
-    return any_of( begin(s), end(s), forward<F>(f) );
-}
-
-template< class F, class XS, class YS >
-XS intersect_if( F&& f, const XS& xs, const YS& ys ) {
-    XS r;
-    for( auto& x : xs )
-        if( any( closure(forward<F>(f),x), ys ) )
-            r.push_back( x );
-    return r;
-}
-
-template< class XS, class YS, class U = unique_ptr<YS> >
-U strip_prefix( const XS& xs, const YS& ys ) {
-    return not is_prefix( xs, ys ) ? nullptr :
-        U( new YS( next(begin(ys),length(xs)), end(ys) ) );
-}
-
-template< class M > struct Return;
-
-template< class XS, class YS >
-constexpr XS maybe_cons_range( XS xs, YS&& ys ) {
-    return not null(ys) ? cons( move(xs), forward<YS>(ys) )
-        : xs;
-}
-
-template< class S, class P = std::equal_to<SeqRef<S>>,
-          class _S = typename decay<S>::type, class V = vector<_S> >
-V group( S&& s, P&& p = P() ) {
-    V v;
-
-    auto it = begin( forward<S>(s) ), next = it;
-    const auto e = end( forward<S>(s) );
-
-    for( ; it != e; it = next) {
-        auto adj = adjacent_find( it, e, forward<P>(p) );
-        v = maybe_cons_range ( 
-            // First, cons all the non-adjacent members.
-            foldl (
-                // \v s -> cons v (return s)
-                flip( compose(flip(Cons()), Return<_S>()) ),
-                move(v), range<S>( it, adj ) 
-            ),
-            // Then cons the adjacent members.
-            _S( adj, 
-                next = cfind_not( *adj, range<S>(adj,e),
-                                  forward<P>(p) ) ) 
-        );
-    }
-
-    return v;
-}
-
-template< class S, class V = vector<S> >
-V _inits( const S& s ) {
-    V v;
-    for( auto it = begin(s); it != end(s); it++ )
-        v.emplace_back( S(begin(s),it) );
-    return v;
-}
-
-template< class S, class V = vector<S> >
-V inits( const S& s ) {
-    return not null(s) ? _inits(s) : V();
-}
-
-template< class S, class V = vector<S> >
-V _tails( const S& s ) {
-    V v{ S() };
-    for( auto it = end(s); it != begin(s); )
-        v.emplace_back( S(--it,end(s)) );
-    return v;
-}
-
-template< class S, class V = vector<S> >
-V tails( const S& s ) {
-    return not null(s) ? _tails(s) : V();
-}
-
-template< class S >
-bool _next_p_ref( S& s ) {
-    return std::next_permutation( begin(s), end(s) );
-}
-
-template< class S >
-S _next_p( S s ) {
-    _next_p_ref( s );
-    return s;
-}
-
-template< class S >
-using SeqSeq = vector<typename decay<S>::type>;
-
-template< class S, class V = SeqSeq<S> >
-V sorted_permutations( S&& original ) {
-    V r{ forward<S>(original) };
-    Dup<S> next;
-    while( next = last(r), _next_p_ref(next) )
-        r.emplace_back( move(next) );
-    return r;
-}
-
-template< class S, class V = SeqSeq<S> >
-V _permutations( S&& original ) {
-    V r{ forward<S>(original) };
-    while( true ) {
-        auto next = _next_p( last(r) );
-        if( next != head(r) )
-            r.emplace_back( move(next) );
-        else
-            return r;
-    }
-}
-
-template< class S, class V = SeqSeq<S> >
-V permutations( S&& original ) {
-    return ordered(original) ? sorted_permutations( forward<S>(original) )
-        : _permutations( forward<S>(original) );
-}
-
-/* all f C -> true when f(x) is true for all x in C; otherwise false. */
-template< typename Container, typename F >
-bool all( F&& f, const Container& cont )
-{
-    return all_of( begin(cont), end(cont), forward<F>(f) );
-}
-
-/* 
- * concatMap f s = concat (map f s)
- *      where f is a function: a -> [b]
- *            map f s produces a type: [[b]]
- * The operation "map then concat" may be inefficient compared to an inlined
- * loop, which would not require allocating a sequence of sequences to be
- * concatenated. This is an optimization that should be equivalent to the
- * inlined loop.
- */
-template< class F, class ...S,
-          class R = Result<F,SeqRef<S>...> >
-R concatMap( F&& f, S&& ...xs ) {
-    return foldl (
-        // \xs x -> append xs (f x)
-        flip( compose( flip(Append()), forward<F>(f) ) ), 
-        R(), forward<S>(xs)...
-    );
-}
 
 template< typename Container, typename F >
 void for_each( F&& f, const Container& cont ) {
@@ -1762,7 +243,6 @@ void for_ij( const F& f, const I& imax, const J& jmax ) {
             f( i, j );
 }
 
-
 /* 
  * Just  x -> Maybe (Just x) | with a definite value.
  * Nothing -> Maybe Nothing  | with definitely no value.
@@ -1771,6 +251,13 @@ template< class T, class M = std::unique_ptr<T> >
 constexpr M Just( T t ) {
     return M( new T(move(t)) );
 }
+
+struct ReturnJust {
+    template< class X >
+    unique_ptr<Decay<X>> operator() ( X&& x ) {
+        return Just( forward<X>(x) );
+    }
+};
 
 template< class T, class M = std::unique_ptr<T> > 
 constexpr M Nothing() {
@@ -1911,7 +398,7 @@ constexpr Pure<X> pure( X&& x )
 template< class ...F > struct Functor;
 
 template< class F, class G, class ...H,
-          class Fn = Functor< typename cata::Cat<G>::type > >
+          class Fn = Functor< Cat<G> > >
 constexpr auto fmap( F&& f, G&& g, H&& ...h )
     -> decltype( Fn::fmap(declval<F>(),declval<G>(),declval<H>()...) ) 
 {
@@ -1965,8 +452,8 @@ struct Functor< pair<X,Y> > {
     }
 };
 
-template< class _M >
-struct Functor< cata::maybe<_M> > {
+template<>
+struct Functor< cata::maybe > {
     template< class M > 
     static constexpr bool each( const M& m ) {
         return (bool)m;
@@ -1977,22 +464,21 @@ struct Functor< cata::maybe<_M> > {
         return (bool)m1 && each( ms... );
     }
 
-    template< class F, class ...M >
-    using Result = decltype( Just(declval<F>()( *declval<M>()... )) );
-
     /*
      * f <$> Just x = Just (f x)
      * f <$> Nothing = Nothing
      */
     template< class F, class ...M >
-    static constexpr Result<F,M...> fmap( F&& f, M&& ...m ) {
+    static constexpr auto fmap( F&& f, M&& ...m ) 
+        -> decltype( Just(declval<F>()( *declval<M>()... )) )
+    {
         return each( forward<M>(m)... ) ? 
             Just( forward<F>(f)( *forward<M>(m)... ) ) : nullptr;
     }
 };
 
-template< class Seq >
-struct Functor< cata::sequence<Seq> > {
+template<>
+struct Functor< cata::sequence > {
     /* f <$> [x0,x1,...] = [f x0, f x1, ...] */
     template< class F, class ...S >
     static constexpr decltype( map(declval<F>(),declval<S>()...) )
@@ -2025,9 +511,11 @@ template< class C, class R > struct ESeq : enable_if<IsSeq<C>::value,R> { };
 /* Disable if is sequence. */
 template< class C, class R > struct XSeq : enable_if<not IsSeq<C>::value,R> { };
 
+/* f <$> m */
 template< class F, class M >
-constexpr decltype( fmap(declval<F>(), declval<M>()) )
-operator^ ( F&& f, M&& m ) {
+constexpr auto operator^ ( F&& f, M&& m ) 
+    -> decltype( fmap(declval<F>(), declval<M>()) )
+{
     return fmap( forward<F>(f), forward<M>(m) );
 }
 
@@ -2039,15 +527,16 @@ operator^ ( F&& f, M&& m ) {
  *
  *      mconcat = foldr mappend mempty
  */
-template< class ...M > struct Monoid;
+template< class > struct Monoid;
 
-template< class M, class Mo = Monoid<typename cata::Cat<M>::type> >
+template< class M, class Mo = Monoid<Cat<M>> >
 decltype( Mo::mempty() ) mempty() { return Mo::mempty(); }
 
 template< class M1, class M2, 
-          class Mo = Monoid<typename cata::Cat<M1>::type> >
-decltype( Mo::mappend(declval<M1>(),declval<M2>()) )
-mappend( M1&& a, M2&& b ) {
+          class Mo = Monoid<Cat<M1>> >
+auto mappend( M1&& a, M2&& b ) 
+    -> decltype( Mo::mappend(declval<M1>(),declval<M2>()) )
+{
     return Mo::mappend( forward<M1>(a), forward<M2>(b) );
 }
 
@@ -2056,17 +545,9 @@ mappend( M1&& a, M2&& b ) {
  * The above && version will always be preferred, except in the case of a
  * const&. In other words, this version will NEVER be preferred otherwise.
  */
-template< class M1, class M2, 
-          class Mo = Monoid<typename cata::Cat<M1>::type> >
-decltype( Mo::mappend(declval<M1>(),declval<M2>()) )
-mappend( const M1& a, M2&& b ) {
-    return Mo::mappend( a, forward<M2>(b) );
-}
 
-template< class S, class V = typename cata::sequence_traits<S>::value_type,
-          class M = Monoid<typename cata::Cat<V>::type> >
-decltype( M::mconcat(declval<S>()) ) mconcat( S&& s ) 
-{
+template< class S, class V = SeqVal<S>, class M = Monoid<Cat<V>> >
+auto mconcat( S&& s ) -> decltype( M::mconcat(declval<S>()) ) {
     return M::mconcat( forward<S>(s) );
 }
 
@@ -2083,40 +564,55 @@ fwd_mappend( XS&& xs, YS&& ys ) {
 template< class M > 
 decltype( mempty<M>() ) fwd_mempty() { return mempty<M>(); }
 
-template< class Seq > struct Monoid< cata::sequence<Seq> > {
-    static Seq mempty() { return Seq{}; }
+template<> struct Monoid< cata::sequence > {
+    template< class S >
+    static S mempty() { return S{}; }
 
     template< class XS, class YS >
-    static decltype( append(declval<XS>(),declval<YS>()) )
-    mappend( XS&& xs, YS&& ys ) {
-        return append( forward<XS>(xs), forward<YS>(ys) );
+    static XS mappend( XS xs, YS&& ys ) {
+        return append( move(xs), forward<YS>(ys) );
     }
 
     template< class SS >
-    static decltype( concat(declval<SS>()) )
-    mconcat( SS&& ss ) {
+    static auto mconcat( SS&& ss ) -> decltype( concat(declval<SS>()) )
+    {
         return concat( forward<SS>(ss) ); 
     }
 };
 
 /* Monoid (Maybe X) -- where X is a monoid. */
-template< class M > struct Monoid< cata::maybe<M> > {
+template<> struct Monoid< cata::maybe > {
+    template< class M >
     static constexpr M mempty() { return nullptr; }
+
+    template< class M >
+    static M dup( const M& m ) {
+        return maybe( mempty<M>(), ReturnJust(), m );
+    }
+
+    template< class X >
+    using ERVal = ERVal<X,Decay<X>>;
+
+    template< class M >
+    constexpr static ERVal<M> dup( M&& m ) {
+        return m;
+    }
 
     /*
      * Just x <> Just y = Just (x <> y)
      *      a <> b      = a | b
      */
-    static constexpr M mappend( M&& x, M&& y ) {
+    template< class M >
+    static constexpr Decay<M> mappend( M&& x, M&& y ) {
         return x and y ? Just( fwd_mappend(*forward<M>(x), *forward<M>(y)) )
-            : forward<M>(x) || forward<M>(y);
+            : dup(forward<M>(x) || forward<M>(y));
     }
 
     /* mconcat [Just x, Just y, Nothing] = Just (x <> y <> Nothing)*/
-    template< class S > 
-    static M mconcat( S&& s ) {
-        typedef M (*F) ( const M&, const M& );
-        return foldl( (F)mappend, mempty(), forward<S>(s) );
+    template< class S, class M = SeqRef<S>, class R = Decay<M> > 
+    static R mconcat( S&& s ) {
+        using F = R (*) ( const M&, const M& );
+        return foldl( (F)mappend, mempty<R>(), forward<S>(s) );
     }
 };
 
@@ -2150,7 +646,7 @@ template< class ...M > struct Monad;
 
 /* m >> k */
 template< class A, class B,
-          class Mo = Monad<typename cata::Cat<A>::type> >
+          class Mo = Monad<Cat<A>> >
 decltype( Mo::mdo(declval<A>(),declval<B>()) ) 
 mdo( A&& a, B&& b ) {
     return Mo::mdo( forward<A>(a), forward<B>(b) ); 
@@ -2158,34 +654,37 @@ mdo( A&& a, B&& b ) {
 
 /* m >>= k */
 template< class M, class F,
-          class Mo = Monad<typename cata::Cat<M>::type> >
-decltype( Mo::mbind(declval<M>(),declval<F>()) ) 
-mbind( M&& m, F&& f ) {
+          class Mo = Monad<Cat<M>> >
+auto mbind( M&& m, F&& f ) 
+    -> decltype( Mo::mbind(declval<M>(),declval<F>()) ) 
+{
     return Mo::mbind( forward<M>(m), forward<F>(f) ); 
 }
 
 /* return<M> x = M x */
-template< class M, class X > M mreturn( X&& x ) {
-    return Monad< typename cata::Cat<M>::type >::mreturn( forward<X>(x) );
+template< class M, class X > 
+M mreturn( X&& x ) {
+    return Monad< Cat<M> >::template mreturn<M>( forward<X>(x) );
 }
 
 /* mreturn () = (\x -> return x) */
-template< class M, class Mo = Monad<typename cata::Cat<M>::type> > 
-constexpr decltype( Mo::mreturn() ) mreturn() { 
+template< class M, class Mo = Monad<Cat<M>> > 
+constexpr auto mreturn() -> decltype( Mo::mreturn() ) { 
     return Mo::mreturn();
 }
 
 template< class M > struct Return {
     template< class X >
-    constexpr decltype( mreturn<M>(declval<X>()) )
-    operator() ( X&& x ) {
+    constexpr auto operator() ( X&& x ) 
+        -> decltype( mreturn<M>(declval<X>()) ) 
+    {
         return mreturn<M>( forward<X>(x) );
     }
 };
 
 template< class M >
 M mfail( const char* const why ) {
-    return Monad< typename cata::Cat<M>::type >::mfail( why );
+    return Monad< Cat<M> >::template mfail<M>( why );
 }
 
 template< class X, class Y >
@@ -2200,14 +699,14 @@ operator >> ( X&& x, Y&& y ) {
     return mdo( forward<X>(x), forward<Y>(y) );
 }
 
-template< class Seq >
-struct Monad< cata::sequence<Seq> > {
-    template< class X >
-    static Seq mreturn( X&& x ) { 
-        return Seq{ forward<X>(x) }; 
+template<> struct Monad< cata::sequence > {
+    template< class S, class X >
+    constexpr static S mreturn( X&& x ) { 
+        return S{ forward<X>(x) }; 
     }
 
-    static Seq mfail(const char*) { return Seq(); }
+    template< class S >
+    constexpr static S mfail(const char*) { return S(); }
 
     template< class S, class YS >
     static YS mdo( const S& a, const YS& b ) {
@@ -2223,7 +722,7 @@ struct Monad< cata::sequence<Seq> > {
         return c;
     }
 
-    /* m >>= k -- where m is a cata::sequence. */
+    /* m >>= k -- where m is a sequence. */
     template< class S, class F >
     static decltype( concatMap(declval<F>(),declval<S>()) )
     mbind( S&& xs, F&& f ) { 
@@ -2239,32 +738,34 @@ template< class P > struct IsPointerImpl {
     using bool_type = decltype( (bool)declval<P>() );
 };
 
-template< class M > 
-struct Monad< cata::maybe<M> > {
-    using traits = cata::maybe_traits<M>;
-    using value_type = typename traits::value_type;
-    using smart_ptr  = typename traits::smart_ptr;
+template<> struct Monad< cata::maybe > {
+    template< class M > using traits = cata::maybe_traits<M>;
+    template< class M > using value_type = typename traits<M>::value_type;
+    template< class M > using smart_ptr  = typename traits<M>::smart_ptr;
 
-    template< class X >
-    static smart_ptr mreturn( X&& x ) { 
-        return smart_ptr( new X(forward<X>(x)) ); 
+    template< class M, class X, class P = smart_ptr<M> >
+    static P mreturn( X&& x ) { 
+        return P( new X(forward<X>(x)) ); 
     }
 
-    using Return = smart_ptr (*) ( value_type );
-    static constexpr Return mreturn() { return Just; }
+    template< class M >
+    using Return = smart_ptr<M> (*) ( value_type<M> );
 
-    static constexpr smart_ptr mfail(const char*) { return nullptr; }
+    static constexpr ReturnJust mreturn() { return ReturnJust(); }
 
-    template< class PZ >
+    template< class M >
+    static constexpr smart_ptr<M> mfail(const char*) { return nullptr; }
+
+    template< class M, class PZ >
     static constexpr PZ mdo( const M& x, PZ&& z ) {
         return x ? forward<PZ>(z) : nullptr;
     }
 
-    template< class F >
-    using Result = Result< F, value_type >;
+    template< class M, class F >
+    using Result = Result< F, value_type<M> >;
 
-    template< class F >
-    static constexpr Result<F> mbind( M&& x, F&& f ) {
+    template< class M, class F >
+    static constexpr Result<M,F> mbind( M&& x, F&& f ) {
         return x ? forward<F>(f)( *forward<M>(x) ) : nullptr;
     }
 };
@@ -2278,29 +779,31 @@ struct Monad< cata::maybe<M> > {
  */
 template< class ...F > struct MonadPlus;
 
-template< class M, class Mo = MonadPlus<typename cata::Cat<M>::type> >
+template< class M, class Mo = MonadPlus<Cat<M>> >
 decltype( Mo::mzero() ) mzero() { return Mo::mzero(); }
 
 template< class M1, class M2, 
-          class Mo = MonadPlus<typename cata::Cat<M1>::type> >
-decltype( Mo::mplus(declval<M1>(),declval<M2>()) )
-mplus( M1&& a, M2&& b ) {
+          class Mo = MonadPlus<Cat<M1>> >
+auto mplus( M1&& a, M2&& b ) 
+    -> decltype( Mo::mplus(declval<M1>(),declval<M2>()) )
+{
     return Mo::mplus( forward<M1>(a), forward<M2>(b) );
 }
 
-template< class Seq >
-struct MonadPlus< cata::sequence<Seq> > {
-    static Seq mzero() { return Seq(); }
+template<> struct MonadPlus< cata::sequence > {
+    template< class S >
+    static S mzero() { return S(); }
 
     template< class SX, class SY >
-    static decltype( append(declval<SX>(),declval<SY>()) )
-    mplus( SX&& sx, SY&& sy ) {
+    static auto mplus( SX&& sx, SY&& sy ) 
+        -> decltype( append(declval<SX>(),declval<SY>()) )
+    {
         return append( forward<SX>(sx), forward<SY>(sy) );
     }
 };
 
-template< class M > 
-struct MonadPlus< cata::maybe<M> > {
+template<> struct MonadPlus< cata::maybe > {
+    template< class M >
     static M mzero() { return nullptr; }
 
     template< class A, class B >
@@ -2313,17 +816,17 @@ struct MonadPlus< cata::maybe<M> > {
 };
 
 /*
- * Rotation.
- * f(x...,y) = g(y,x...)
- * rot f = g
- * rrot g = f
- * rrot( rot f ) = f
- *
- * In stack-based (or concatenative languages) rotation applies to the top
- * three elements on the stack. Here, the function's arguments are treated as a
- * stack and rotated. The entire stack gets rotated, rather than the top three
- * elements.
- */
+* Rotation.
+* f(x...,y) = g(y,x...)
+* rot f = g
+* rrot g = f
+* rrot( rot f ) = f
+*
+* In stack-based (or concatenative languages) rotation applies to the top
+* three elements on the stack. Here, the function's arguments are treated as a
+* stack and rotated. The entire stack gets rotated, rather than the top three
+* elements.
+*/
 template< class F, class ...Args >
 struct PartLast; // Apply the last argument.
 
@@ -2363,7 +866,7 @@ struct PartInit< F, Arg1, Arg2 > : public Part< F, Arg1 >
 
 template< class F, class Arg1, class ...Args >
 struct PartInit< F, Arg1, Args... > 
-    : public PartInit< Part<F,Arg1>, Args... >
+: public PartInit< Part<F,Arg1>, Args... >
 {
     template< class _F, class _Arg1, class ..._Args >
     PartInit( _F&& f, _Arg1&& arg1, _Args&& ...args )
@@ -2417,13 +920,13 @@ struct RRot // Reverse Rotate
     }
 };
 
-template< class F >
+    template< class F >
 constexpr Rot<F> rot( F&& f )
 {
     return Rot<F>( forward<F>(f) );
 }
 
-template< class F >
+    template< class F >
 constexpr RRot<F> rrot( F&& f )
 {
     return RRot<F>( forward<F>(f) );
@@ -2461,18 +964,16 @@ template< unsigned int N, class F >
 struct RNRot : public RNRot< N-1, RRot<F> >
 {
     template< class _F >
-    RNRot( _F&& f ) : RNRot<N-1,RRot<F>>( rrot(forward<_F>(f)) ) { }
+        RNRot( _F&& f ) : RNRot<N-1,RRot<F>>( rrot(forward<_F>(f)) ) { }
 };
 
 template< unsigned int N, class F >
-constexpr NRot<N,F> nrot( F&& f )
-{
+constexpr NRot<N,F> nrot( F&& f ) {
     return NRot<N,F>( forward<F>(f) );
 }
 
 template< unsigned int N, class F >
-constexpr RNRot<N,F> rnrot( F&& f )
-{
+constexpr RNRot<N,F> rnrot( F&& f ) {
     return RNRot<N,F>( forward<F>(f) );
 }
 
@@ -2494,7 +995,7 @@ struct Squash
     }
 };
 
-template< class F >
+    template< class F >
 constexpr Squash<F> squash( F f )
 {
     return Squash<F>( move(f) );
@@ -2505,8 +1006,8 @@ constexpr Squash<F> squash( F f )
  *  where x = l(z) and y = r(z)
  * join( f, l, r ) = g
  *
- * Similar to bcompose, but expects a unary l and r and an nary f.
- */
+* Similar to bcompose, but expects a unary l and r and an nary f.
+*/
 template< class F, class Left, class Right >
 struct Join
 {
@@ -2534,33 +1035,9 @@ struct Join
     }
 };
 
-template< class F, class L, class R >
-constexpr Join<F,L,R> join( F&& f, L&& l, R&& r )
-{
+    template< class F, class L, class R >
+constexpr Join<F,L,R> join( F&& f, L&& l, R&& r ) {
     return Join<F,L,R>( forward<F>(f), forward<L>(l), forward<R>(r) );
-}
-
-/* zip_with f A B -> { f(a,b) for a in A and b in B } */
-template< typename Container, typename F >
-Container zip_with( F&& f, const Container& a, Container b )
-{
-    transform( begin(a), end(a), begin(b), 
-               begin(b), forward<F>(f) );
-    return b;
-}
-
-template< class F, class R, class ...S >
-R _zip_with( F&& f, R r, const S& ...s ) {
-    return each( NotNull(), s... ) ?
-        _zip_with( forward<F>(f),
-                   cons( move(r), forward<F>(f)( head(s)... ) ),
-                   tail_wrap( s )... )
-        : r;
-}
-
-template< class F, class XS, class ...YS, class R = Dup<XS> >
-R zip_with( F&& f, const XS& xs, const YS& ...ys ) {
-    return _zip_with( forward<F>(f), R(), xs, ys... );
 }
 
 
@@ -2602,12 +1079,12 @@ vector<T> generate( F&& f, unsigned int n ) {
 
 template< class Cmp, class S, class R = decltype( begin(declval<Cmp>()) ) >
 constexpr R max( Cmp&& cmp, const S& cont ) {
-    return max_element( begin(cont), end(cont), forward<Cmp>(cmp) );
+return max_element( begin(cont), end(cont), forward<Cmp>(cmp) );
 }
 
 template< class S >
 constexpr auto max( const S& cont ) -> decltype( begin(cont) ) {
-    return max_element( begin(cont), end(cont) );
+return max_element( begin(cont), end(cont) );
 }
 
 template< class Cmp, class S >
@@ -2616,9 +1093,7 @@ constexpr auto min( Cmp&& cmp, const S& cont ) -> decltype( begin(cont) ) {
 }
 
 template< class Container >
-constexpr auto min( const Container& cont )
-    -> decltype( begin(cont) )
-{
+constexpr auto min( const Container& cont ) -> decltype( begin(cont) ) {
     return min_element( begin(cont), end(cont) );
 }
 
