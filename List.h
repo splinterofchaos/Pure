@@ -215,15 +215,15 @@ constexpr R reverse_wrap( S&& s ) {
 }
 
 template< class R, class S >
-R _dup( S&& s ) {
+R dupExactly( const S& s ) {
     R r;
-    copy( begin(forward<S>(s)), end(forward<S>(s)),
+    copy( begin(s), end(s),
           std::back_inserter(r) );
     return r;
 }
 
 template< class R, class S >
-R _dup( S&& s, size_t n, size_t off = 0 ) {
+R dupExactly( const S& s, size_t n, size_t off = 0 ) {
     R r;
     copy_n( next( begin(s), off ), 
             std::min( n+1, length(s) ) - 1,
@@ -231,32 +231,44 @@ R _dup( S&& s, size_t n, size_t off = 0 ) {
     return r;
 }
 
+template< template<class...> class _R, class S,
+          class R = _R< SeqVal<S> > >
+R dupTo( S&& s ) {
+    return dupExactly<R>( forward<S>(s) );
+}
+
+template< template<class...> class _R, class S,
+          class R = _R< SeqVal<S> > >
+R dupTo( S&& s, size_t n, size_t off = 0 ) {
+    return dupExactly<R>( forward<S>(s), n, off );
+}
+
 template< class S >
 S dup( const S& s ) {
-    return _dup<S>( s );
+    return s;
+}
+
+template< class S, class I, class R = Range<S,I>, 
+          class RS = typename R::sequence_type >
+RS dup( const Range<S,I>& r ) {
+    return dupExactly<RS>( r );
+}
+
+template< class X >
+std::vector<X> dup( const std::initializer_list<X>& l ) {
+    return dupTo<std::vector>( l );
 }
 
 template< class S > using Dup = decltype( dup(declval<S>()) );
 
-template< class S, class I, class R = Range<S,I>, 
-          class RS = typename R::sequence_type >
-Dup<RS> dup( const Range<S,I>& r ) {
-    return _dup<Dup<RS>>( r );
-}
-
-template< class X, class V = std::vector<X> >
-V dup( const std::initializer_list<X>& l ) {
-    return _dup<V>( l );
-}
-
 template< class S, class D = Dup<S> >
 D dup( S&& s, size_t n ) {
-    return _dup<D>( forward<S>(s), n );
+    return dupExactly<D>( forward<S>(s), n );
 }
 
 template< class S, class D = Dup<S> >
 D dup( S&& s, size_t start, size_t end ) {
-    return _dup<D>( forward<S>(s), end-start, end );
+    return dupExactly<D>( forward<S>(s), end-start, end );
 }
 
 template< class S > 
@@ -290,10 +302,10 @@ void _map( F&& f, RI&& ri,
 }
 
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
-template< template<class...> class S, class X, class ..._X, 
-          class XS = S<X,_X...>,
-          class F, class FX = Result<F,X>, class R = Decay<S<FX,_X...>> > 
-auto map( F&& f, S<X,_X...> xs ) -> XSame< FX, X, R >
+template< template<class...> class S, class X,
+          class XS = S<X>,
+          class F, class FX = Result<F,X>, class R = Decay<S<FX>> > 
+auto map( F&& f, const S<X>& xs ) -> XSame< FX, X, R >
 {
     R r;
     _map( forward<F>(f), back_inserter(r), xs );
@@ -301,9 +313,9 @@ auto map( F&& f, S<X,_X...> xs ) -> XSame< FX, X, R >
 }
 
 // When mapping from X to X, we can optimize by not returning a new sequence.
-template< template<class...> class S, class X, class ...XS, class F,
-          class R = S<X,XS...> >
-auto map( F&& f, S<X,XS...> xs ) -> ESame< X, Result<F,X>, R >
+template< template<class...> class S, class X, class F,
+          class R = S<X> >
+auto map( F&& f, S<X> xs ) -> ESame< X, Result<F,X>, R >
 {
     _map( forward<F>(f), begin(xs), xs );
     return xs;
@@ -317,10 +329,10 @@ V map( F&& f, const std::initializer_list<X>& l ) {
     return v;
 }
 
-/* map_to<R> v = R( map(f,v) ) */
+/* mapTo<R> v = R( map(f,v) ) */
 template< template<class...> class _R, class F, class S,
-          class R = _R< decltype(declval<F>()(declval<SeqVal<S>>())) > >
-R map_to( F&& f, S&& s ) {
+          class R = _R< Result<F,SeqRef<S>> > > 
+R mapTo( F&& f, S&& s ) {
     R r;
     _map( forward<F>(f), back_inserter(r), forward<S>(s) );
     return r;
@@ -691,12 +703,12 @@ constexpr size_t length( const Remember<F,X>& ) {
 
 template< class F, class X, class I = Remember<F,X> >
 std::vector<X> dup( const Remember<F,X>& c ) {
-    return c;
+    return c.c;
 }
 
 template< class F, class X, class I = Remember<F,X> >
 std::vector<X> dup( Remember<F,X> c, size_t n ) {
-    return _dup<std::vector<X>>( move(c), n );
+    return dupTo<std::vector>( move(c), n );
 }
 
 template< class F, class X, class ...Y, class R = Remember<F,X> >

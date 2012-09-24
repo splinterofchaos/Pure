@@ -110,7 +110,7 @@ void problem4() {
         map ( 
             []( const IRange& r ) -> unsigned int {
                 auto ps = filter( palindrome, 
-                                  map_to<vector>(times(last(r)), 
+                                  mapTo<vector>(times(last(r)), 
                                                       init(r)) );
                 return notNull(ps) ? maximum(ps) : 0;
             },
@@ -149,7 +149,7 @@ void problem6() {
 
     using P = float(*)(float,float);
     cout << sqrOfSum - (unsigned int)sum ( 
-        map_to<vector>( rclosure(P(pow), 2), N ) 
+        mapTo<vector>( rclosure(P(pow), 2), N ) 
     ) << endl;
 }
 
@@ -171,7 +171,7 @@ void problem8() {
     cout << maximum (
         map ( 
             []( const vector<int>& v ) { return product( take(5,v) ); },
-            tails( map_to<vector>(from_sym,nsStr) )
+            tails( mapTo<vector>(from_sym,nsStr) )
         ) 
     ) << endl;
 }
