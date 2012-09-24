@@ -181,7 +181,7 @@ template< class Func > struct Arrow<Func> {
 
     // Same decltype expression used many times. Save typing.
     template< class F, class G >
-    using Split = decltype( pair_compose(declval<F>(), declval<G>()) );
+    using Split = decltype( pairCompose(declval<F>(), declval<G>()) );
 
     /*
      * Note: It would seem that an easier way to define this class might be to
@@ -193,19 +193,19 @@ template< class Func > struct Arrow<Func> {
     template< class F, class G > static 
     constexpr Split<F,G> split ( F&& f, G&& g ) 
     {
-        return pair_compose( forward<F>(f), forward<G>(g) );
+        return pairCompose( forward<F>(f), forward<G>(g) );
     }
 
     template< class F > static 
     constexpr Split<F,Id> first( F&& f ) 
     { 
-        return pair_compose( forward<F>(f), Id() );
+        return pairCompose( forward<F>(f), Id() );
     }
 
     template< class F > static 
     constexpr Split<Id,F> second( F&& f ) 
     {
-        return pair_compose( Id(), forward<F>(f) );
+        return pairCompose( Id(), forward<F>(f) );
     }
 
     struct Splitter {
@@ -219,7 +219,7 @@ template< class Func > struct Arrow<Func> {
     constexpr auto fan( F&& f, G&& g ) 
         -> decltype( compose(declval< Split<F,G> >(), Splitter()) )
     {
-        return compose( pair_compose( forward<F>(f), forward<G>(g) ), 
+        return compose( pairCompose( forward<F>(f), forward<G>(g) ), 
                         Splitter() );
     }
 };

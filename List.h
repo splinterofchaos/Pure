@@ -67,7 +67,7 @@ constexpr bool null( const S& s ) {
 }
 
 template< class S >
-constexpr bool not_null( const S& s ) {
+constexpr bool notNull( const S& s ) {
     return begin(s) != end(s);
 }
 
@@ -408,7 +408,7 @@ bool each( F&& f, X&& x, Y&& y, Z&& ...z ) {
 struct NotNull {
     template< class X >
     bool operator() ( X&& x ) {
-        return not_null( forward<X>(x) );
+        return notNull( forward<X>(x) );
     }
 };
 
@@ -689,11 +689,6 @@ constexpr size_t length( const Remember<F,X>& ) {
     return std::numeric_limits<size_t>::max();
 }
 
-template< class S, class I, class D = Dup<S> >
-D dup_range( I b, I e ) {
-    return D( b, e );
-}
-
 template< class F, class X, class I = Remember<F,X> >
 std::vector<X> dup( const Remember<F,X>& c ) {
     return c;
@@ -702,12 +697,6 @@ std::vector<X> dup( const Remember<F,X>& c ) {
 template< class F, class X, class I = Remember<F,X> >
 std::vector<X> dup( Remember<F,X> c, size_t n ) {
     return _dup<std::vector<X>>( move(c), n );
-}
-
-template< class F, class X, class IC = Remember<F,X>,
-          class I = typename IC::iterator >
-Dup<IC> dup_range( I b, I e ) {
-    return dup_range( b.it, e.it );
 }
 
 template< class F, class X, class ...Y, class R = Remember<F,X> >
@@ -733,7 +722,7 @@ constexpr I repeat( X x ) {
 
 template< class F, class X,
           class I = Remember< BComposition<F,Last,Last>, X > >
-constexpr I bi_iterate( F f, X a, X b ) {
+constexpr I biIterate( F f, X a, X b ) {
     return I (
         bcompose( move(f), Last(1), Last() ),
         move(a), move(b)
@@ -811,7 +800,7 @@ constexpr IRange enumerate( unsigned int b ) {
     return IRange( b, std::numeric_limits<unsigned int>::max() ); 
 }
 
-constexpr IRange enumerate_to( unsigned int e ) {
+constexpr IRange enumerateTo( unsigned int e ) {
     return IRange( 0, e ); 
 }
 
@@ -848,44 +837,44 @@ template< class F, class Y > struct PartMiddle {
 };
 
 template< class F, class Y, class P = PartMiddle<F,Y> >
-P middle_closure( F&& f, Y&& y ) {
+P middleClosure( F&& f, Y&& y ) {
     return P( forward<F>(f), forward<Y>(y) );
 }
 
-/* every_other x [a,b,c...] = [x,a,x,b,x,c...] */
+/* everyOther x [a,b,c...] = [x,a,x,b,x,c...] */
 template< class X, class S, class R >
-constexpr R _every_other( const X& x, const S& s, R r ) {
-    return foldl( middle_closure(Cons(),x), move(r), s );
+constexpr R _everyOther( const X& x, const S& s, R r ) {
+    return foldl( middleClosure(Cons(),x), move(r), s );
 }
 
 template< class X, class S >
-constexpr S every_other( const X& x, const S& s ) {
-    return foldl( middle_closure(Cons(),x), S(), s );
+constexpr S everyOther( const X& x, const S& s ) {
+    return foldl( middleClosure(Cons(),x), S(), s );
 }
 
 /* intersparse x [a,b,c] = [a,x,b,x,c] */
 template< class X, class S >
 constexpr S intersparse( const X& x, const S& s ) {
     return length(s) > 1 ?
-        _every_other( x, tail_wrap(s), S{head(s)} ) : s;
+        _everyOther( x, tail_wrap(s), S{head(s)} ) : s;
 }
 
 template< class S, class SS, class R >
-constexpr R _every_other_append( const S& s, const SS& ss, R r ) {
+constexpr R _everyOther_append( const S& s, const SS& ss, R r ) {
     using F = R (*)( R, const S&, SeqRef<SS> );
-    return foldl( middle_closure((F)append,s), move(r), ss );
+    return foldl( middleClosure((F)append,s), move(r), ss );
 }
 
 template< class S, class SS >
-constexpr S every_other_append( const S& s, const SS& ss ) {
-    return _every_other_append( s, ss, S() );
+constexpr S everyOther_append( const S& s, const SS& ss ) {
+    return _everyOther_append( s, ss, S() );
 }
 
 /* intercalcate "--" {"ab","cd","ef"} */
 template< class S, class SS >
 S intercalcate( const S& s, const SS& ss ) {
     return not null(ss) ? 
-        _every_other_append( s, tail_wrap(ss), S{head(ss)} )
+        _everyOther_append( s, tail_wrap(ss), S{head(ss)} )
         : S();
 }
 
@@ -967,7 +956,7 @@ MaybeIndex PossibleIndex( const I& i, const S& s ) {
 }
 
 template< class X, class S >
-const X* find_first( const X& x, const S& s ) {
+const X* findFirst( const X& x, const S& s ) {
     auto it = std::find( begin(s), end(s), x );
     return it != end(s) ? &(*it) : nullptr;
 }
@@ -982,7 +971,7 @@ constexpr auto cfind( T&& x, S&& s )
 }
 
 template< typename S, typename F >
-constexpr auto cfind_if( F&& f, S&& s )
+constexpr auto cfindIf( F&& f, S&& s )
     -> decltype( begin(declval<S>()) )
 {
     return std::find_if( begin(forward<S>(s)), end(forward<S>(s)),
@@ -990,23 +979,23 @@ constexpr auto cfind_if( F&& f, S&& s )
 }
 
 template< class S, class T, class F = std::equal_to<T> >
-constexpr auto cfind_not( const T& x, S&& s, F&& f = F() )
+constexpr auto cfindNot( const T& x, S&& s, F&& f = F() )
     -> decltype( begin(declval<S>()) )
 {
-    return cfind_if (
+    return cfindIf (
         fnot( closure(forward<F>(f),x) ),
         forward<S>(s)
     );
 }
 
 template< class F, class S >
-MaybeIndex find_index( F&& f, const S& s ) {
-    return PossibleIndex( cfind_if(forward<F>(f),s), s );
+MaybeIndex findIndex( F&& f, const S& s ) {
+    return PossibleIndex( cfindIf(forward<F>(f),s), s );
 }
 
 template< class F, class S, class V = std::vector<size_t> >
-V find_indecies( F&& f, const S& s ) {
-    return PossibleIndex( cfind_if(forward<F>(f),s), s );
+V findIndecies( F&& f, const S& s ) {
+    return PossibleIndex( cfindIf(forward<F>(f),s), s );
 }
 
 template< class S, class D = Dup<S> >
@@ -1015,7 +1004,7 @@ D take( size_t n, S&& s ) {
 }
 
 template< class P, class S, class _S = Dup<S> >
-_S take_while( P&& p, S&& s ) {
+_S takeWhile( P&& p, S&& s ) {
     auto it = begin(forward<S>(s)); 
     while( it != end(s) and forward<P>(p)(*it) )
          it++ ;
@@ -1035,16 +1024,16 @@ S drop( size_t n, const S& s ) {
 }
 
 template< class P, class S, class _S = Decay<S> >
-_S drop_while( P&& p, S&& s ) {
+_S dropWhile( P&& p, S&& s ) {
     return _S ( 
-        cfind_if( fnot(forward<P>(p)), forward<S>(s) ),
+        cfindIf( fnot(forward<P>(p)), forward<S>(s) ),
         end( forward<S>(s) )
     );
 }
 
 template< class Pred, class S >
-S drop_while_end( Pred p, S s ) {
-    s.erase( cfind_if(p,s), end(s) );
+S dropWhileEnd( Pred p, S s ) {
+    s.erase( cfindIf(p,s), end(s) );
     return s;
 }
 
@@ -1053,7 +1042,7 @@ using XInt = typename std::enable_if< !std::is_integral<X>::value, R >::type;
 
 template< class I, class S, class _S = Decay<S>, 
           class P = std::pair<_S,_S> >
-constexpr XInt<I,P> split_at( I it, S&& s ) 
+constexpr XInt<I,P> splitAt( I it, S&& s ) 
 {
     return { { begin(forward<S>(s)), it },
              {  it,  end(forward<S>(s)) } };
@@ -1061,8 +1050,8 @@ constexpr XInt<I,P> split_at( I it, S&& s )
 
 template< class S, class _S = Decay<S>, 
           class P = std::pair<_S,_S> >
-constexpr P split_at( size_t n, S&& s ) {
-    return split_at (
+constexpr P splitAt( size_t n, S&& s ) {
+    return splitAt (
         next( begin(forward<S>(s)), 
               min(length(s), n) ), // Don't split passed the end!
         forward<S>(s)
@@ -1081,61 +1070,61 @@ R span( P&& p, S&& s ) {
 
 template< class P, class S, class _S = Decay<S> >
 std::pair<_S,_S> sbreak( P&& p, S&& s ) {
-    return split_at( cfind_if(forward<P>(p),forward<S>(s)), forward<S>(s) );
+    return splitAt( cfindIf(forward<P>(p),forward<S>(s)), forward<S>(s) );
 }
 
 template< class XS, class YS >
-bool is_prefix( const XS& xs, const YS& ys ) {
+bool prefix( const XS& xs, const YS& ys ) {
     return std::equal( begin(xs), end(xs), begin(ys) );
 }
 
 template< class X, class S >
-bool is_prefix( const std::initializer_list<X>& l, const S& s ) {
+bool prefix( const std::initializer_list<X>& l, const S& s ) {
     return std::equal( begin(l), end(l), begin(s) );
 }
 
 template< class XS, class YS >
-bool is_suffix( const XS& xs, const YS& ys ) {
-    return is_prefix( reverse_wrap(xs), reverse_wrap(ys) );
+bool suffix( const XS& xs, const YS& ys ) {
+    return prefix( reverse_wrap(xs), reverse_wrap(ys) );
 }
 
 template< class X, class S >
-bool is_suffix( const std::initializer_list<X>& l, const S& s ) {
-    return is_prefix( reverse_wrap(l), reverse_wrap(s) );
+bool suffix( const std::initializer_list<X>& l, const S& s ) {
+    return prefix( reverse_wrap(l), reverse_wrap(s) );
 }
 
 template< class XS, class YS >
-bool is_infix( const XS& xs, const YS& ys ) {
+bool infix( const XS& xs, const YS& ys ) {
     return std::includes( begin(ys), end(ys), begin(xs), end(xs) );
 }
 
 template< class X, class S >
-bool is_infix( const std::initializer_list<X>& l, const S& s ) {
+bool infix( const std::initializer_list<X>& l, const S& s ) {
     return std::includes( begin(s), end(s), begin(l), end(l) );
 }
 
 template< class XS, class YS >
 bool equal( const XS& xs, const YS& ys ) {
-    return length(xs) == length(ys) and is_prefix( xs, ys );
+    return length(xs) == length(ys) and prefix( xs, ys );
 }
 
 template< class X, class S >
 bool elem( const X& x, const S& s ) {
-    return find_first( x, s );
+    return findFirst( x, s );
 }
 
 template< class X, class S >
-bool not_elem( const X& x, const S& s ) {
+bool notElem( const X& x, const S& s ) {
     return not elem( x, s );
 }
 
 template< class X, class S >
-MaybeIndex elem_index( const X& x, const S& s ) {
+MaybeIndex elemIndex( const X& x, const S& s ) {
     return PossibleIndex( cfind(x,s), s );
 }
 
 template< class X, class S, class V = std::vector<size_t> >
-V elem_indecies( const X& x, const S& s ) {
+V elemIndecies( const X& x, const S& s ) {
     V v;
     auto it = begin(s);
     while(true) {
@@ -1152,7 +1141,7 @@ V elem_indecies( const X& x, const S& s ) {
 template< class X, class S >
 S insert( X&& x, S s ) {
     s.insert( 
-        upper_bound( begin(s), end(s), forward<X>(x) ),
+        std::upper_bound( begin(s), end(s), forward<X>(x) ),
         forward<X>(x)
     );
     return s;
@@ -1162,7 +1151,7 @@ S insert( X&& x, S s ) {
 template< class P, class X, class S >
 S insert( P&& p, X&& x, S s ) {
     s.insert( 
-        upper_bound( begin(s), end(s), forward<X>(x), forward<P>(p) ),
+        std::upper_bound( begin(s), end(s), forward<X>(x), forward<P>(p) ),
         forward<X>(x)
     );
     return s;
@@ -1178,14 +1167,14 @@ S erase( const X& x, S s ) {
 
 template< class F, class X, class S >
 S erase( F&& f, const X& x, S s ) {
-    auto it = cfind_if( closure(forward<F>(f),x), s );
+    auto it = cfindIf( closure(forward<F>(f),x), s );
     if( it != end(s) )
         s.erase( it );
     return s;
 }
 
 template< class P, class XS, class YS >
-XS erase_first( P&& p, XS xs, YS&& ys ) {
+XS eraseFirst( P&& p, XS xs, YS&& ys ) {
     using F = XS(*)( const P&, SeqRef<YS>, XS );
     return foldl (
         // \s x -> erase p x s
@@ -1195,57 +1184,57 @@ XS erase_first( P&& p, XS xs, YS&& ys ) {
 }
 
 template< class P, class XS, class Y >
-XS erase_first( P&& p, XS xs, std::initializer_list<Y> l ) {
+XS eraseFirst( P&& p, XS xs, std::initializer_list<Y> l ) {
     using F = XS(*)( const P&, const Y&, XS );
     return foldl( flip(closure((F)erase,forward<P>(p))), 
                   xs, move(l) ); 
 }
 
 template< class S, class X >
-S cons_set( S s, X&& x ) {
-    return not_elem(x,s) ?  cons( move(s), forward<X>(x) ) : s;
+S consSet( S s, X&& x ) {
+    return notElem(x,s) ?  cons( move(s), forward<X>(x) ) : s;
 }
 
 template< class DS, class S, class X >
-S cons_difference( const DS& ds, S s, X&& x ) {
-    return not_elem(x,ds) ?  cons( move(s), forward<X>(x) ) : s;
+S consDifference( const DS& ds, S s, X&& x ) {
+    return notElem(x,ds) ?  cons( move(s), forward<X>(x) ) : s;
 }
 
 template< class DS, class S, class X >
-S cons_intersection( const DS& ds, S s, X&& x ) {
+S consIntersection( const DS& ds, S s, X&& x ) {
     return elem(x,ds) ?  cons( move(s), forward<X>(x) ) : s;
 }
 
 template< class S, class X >
-S cons_when( bool b, S s, X&& x ) {
+S consWhen( bool b, S s, X&& x ) {
     return b ? cons( move(s), forward<X>(x) ) : s;
 }
 
 template< class S >
 S nub( const S& s ) {
     using F = S(*)( S, SeqRef<S> );
-    return foldl( (F)cons_set, S(), s );
+    return foldl( (F)consSet, S(), s );
 }
 
 template< class XS, class YS, class R = Decay<XS> >
 R difference( XS&& xs, const YS& ys ) {
     using F = R(*)( const YS&, XS, SeqRef<XS> );
     return foldl ( 
-        closure( (F)cons_difference, ys ),
+        closure( (F)consDifference, ys ),
         R(), forward<XS>(xs)
     );
 }
 template< class XS, class YS >
 XS sunion( XS xs, YS&& ys ) {
     using F = XS(*)( XS, SeqRef<YS> );
-    return foldl( (F)cons_set, move(xs), forward<YS>(ys) );
+    return foldl( (F)consSet, move(xs), forward<YS>(ys) );
 }
 
 template< class XS, class YS, class R = Decay<XS> >
 R intersect( XS&& xs, const YS& ys ) {
     using F = R(*)( const YS&, XS, SeqRef<XS> );
     return foldl (
-        closure( (F)cons_intersection, ys ),
+        closure( (F)consIntersection, ys ),
         R(), forward<XS>(xs)
     );
 }
@@ -1287,7 +1276,7 @@ bool none( F&& f, const S& s ) {
 }
 
 template< class F, class XS, class YS >
-XS intersect_if( F&& f, const XS& xs, const YS& ys ) {
+XS intersectIf( F&& f, const XS& xs, const YS& ys ) {
     XS r;
     for( auto& x : xs )
         if( any( closure(forward<F>(f),x), ys ) )
@@ -1296,15 +1285,15 @@ XS intersect_if( F&& f, const XS& xs, const YS& ys ) {
 }
 
 template< class XS, class YS, class U = std::unique_ptr<YS> >
-U strip_prefix( const XS& xs, const YS& ys ) {
-    return not is_prefix( xs, ys ) ? nullptr :
+U stripPrefix( const XS& xs, const YS& ys ) {
+    return not prefix( xs, ys ) ? nullptr :
         U( new YS( next(begin(ys),length(xs)), end(ys) ) );
 }
 
 template< class M > struct Return;
 
 template< class XS, class YS >
-constexpr XS maybe_cons_range( XS xs, YS&& ys ) {
+constexpr XS maybeConsRange( XS xs, YS&& ys ) {
     return not null(ys) ? cons( move(xs), forward<YS>(ys) )
         : xs;
 }
@@ -1319,7 +1308,7 @@ V group( S&& s, P&& p = P() ) {
 
     for( ; it != e; it = next) {
         auto adj = adjacent_find( it, e, forward<P>(p) );
-        v = maybe_cons_range ( 
+        v = maybeConsRange ( 
             // First, cons all the non-adjacent members.
             foldl (
                 // \v s -> cons v (return s)
@@ -1328,7 +1317,7 @@ V group( S&& s, P&& p = P() ) {
             ),
             // Then cons the adjacent members.
             _S( adj, 
-                next = cfind_not( *adj, range<S>(adj,e),
+                next = cfindNot( *adj, range<S>(adj,e),
                                   forward<P>(p) ) ) 
         );
     }
@@ -1377,7 +1366,7 @@ template< class S >
 using SeqSeq = std::vector<Decay<S>>;
 
 template< class S, class V = SeqSeq<S> >
-V sorted_permutations( S&& original ) {
+V sortedPermutations( S&& original ) {
     V r{ forward<S>(original) };
     Dup<S> next;
     while( next = last(r), _next_p_ref(next) )
@@ -1399,7 +1388,7 @@ V _permutations( S&& original ) {
 
 template< class S, class V = SeqSeq<S> >
 V permutations( S&& original ) {
-    return ordered(original) ? sorted_permutations( forward<S>(original) )
+    return ordered(original) ? sortedPermutations( forward<S>(original) )
         : _permutations( forward<S>(original) );
 }
 
@@ -1422,27 +1411,28 @@ R concatMap( F&& f, S&& ...xs ) {
     );
 }
 
-/* zip_with f A B -> { f(a,b) for a in A and b in B } */
+/* zipWith f A B -> { f(a,b) for a in A and b in B } */
 template< class F, class R, class ...S >
-R _zip_with( F&& f, R r, const S& ...s ) {
+R _zipWith( F&& f, R r, const S& ...s ) {
 return each( NotNull(), s... ) ?
-    _zip_with( forward<F>(f),
+    _zipWith( forward<F>(f),
                cons( move(r), forward<F>(f)( head(s)... ) ),
                tail_wrap( s )... )
     : r;
 }
 
 template< class F, class XS, class ...YS, class R = Dup<XS> >
-R zip_with( F&& f, const XS& xs, const YS& ...ys ) {
-    return _zip_with( forward<F>(f), R(), xs, ys... );
+R zipWith( F&& f, const XS& xs, const YS& ...ys ) {
+    return _zipWith( forward<F>(f), R(), xs, ys... );
 }
 
 
 template< typename S, typename F >
-S zip_with( F&& f, const S& a, S b ) {
+S zipWith( F&& f, const S& a, S b ) {
     std::transform( begin(a), end(a), begin(b), 
                     begin(b), forward<F>(f) );
     return b;
 }
-}
+
+} // namespace pure.
 

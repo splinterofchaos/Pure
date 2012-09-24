@@ -374,7 +374,7 @@ template< class F, class G > struct PairCompose {
 };
 
 template< class F, class G, class P = PairCompose<F,G> > 
-constexpr P pair_compose( F f, G g ) {
+constexpr P pairCompose( F f, G g ) {
     return P( move(f), move(g) );
 }
 
@@ -427,12 +427,12 @@ struct LessEq {
 };
 
 template< class X >
-constexpr RCloset<Less,X> less_than( X x ) {
+constexpr RCloset<Less,X> lessThan( X x ) {
     return rcloset(Less(), move(x));
 }
 
 template< class X >
-constexpr Closet<LessEq,X> less_equal_to( X x ) {
+constexpr Closet<LessEq,X> lessEqualTo( X x ) {
     return closet(LessEq(), move(x));
 }
 
@@ -456,17 +456,17 @@ struct Mod {
 };
 
 template< class X >
-constexpr auto divisible_by( X x ) -> Composition<BinaryNot,RCloset<Mod,X>> {
+constexpr auto divisibleBy( X x ) -> Composition<BinaryNot,RCloset<Mod,X>> {
     return fnot(rcloset( Mod(), move(x) ));
 }
 
 template< class X >
-constexpr auto multiple_of( X x ) -> decltype( divisible_by(move(x)) ) {
-    return divisible_by( move(x) );
+constexpr auto multipleOf( X x ) -> decltype( divisibleBy(move(x)) ) {
+    return divisibleBy( move(x) );
 }
 
 template< class X >
-constexpr auto divisor_of( X x ) -> Composition<BinaryNot,Closet<Mod,X>> {
+constexpr auto divisorOf( X x ) -> Composition<BinaryNot,Closet<Mod,X>> {
     return fnot( closet(Mod(), move(x)) );
 }
 
