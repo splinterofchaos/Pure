@@ -287,19 +287,15 @@ void problem11() {
         mat.push_back( row );
     }
 
-    unsigned int largest = 0;
 
-    largest = maximum (
-        map ( 
-            [&](int i, int j, const Vec& dir){ 
-                return take_dir_prod( dir, {{i,j}}, 4, mat ); 
-            }, 
-            enumerate(mat), enumerate(mat[0]),  
-            std::initializer_list<Vec>{ Vec{{-1,0}}, Vec{{ 1,1}},
-                                        Vec{{ 0,1}}, Vec{{-1,1}} }
-        )
-    );
-    cout << largest << endl;
+    cout << foldMap ( 
+        [&](int i, int j, const Vec& dir) -> Largest<unsigned int> { 
+            return take_dir_prod( dir, {{i,j}}, 4, mat ); 
+        }, 
+        enumerate(mat), enumerate(mat[0]),  
+        std::initializer_list<Vec>{ Vec{{-1,0}}, Vec{{ 1,1}},
+                                    Vec{{ 0,1}}, Vec{{-1,1}} }
+    ) << endl;
 }
 
 int main() {

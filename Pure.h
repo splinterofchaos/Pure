@@ -825,11 +825,11 @@ auto fold( X&& x ) -> decltype( F::fold(declval<X>()) ) {
     return F::fold( forward<X>(x) );
 }
 
-template< class F, class X, class Fo = Foldable< Cat<X> > >
-auto foldMap( F&& f, X&& x ) 
-    -> decltype( Fo::foldMap(declval<F>(),declval<X>()) ) 
+template< class F, class X, class ...Y, class Fo = Foldable< Cat<X> > >
+auto foldMap( F&& f, X&& x, Y&& ...y ) 
+    -> decltype( Fo::foldMap(declval<F>(),declval<X>(),declval<Y>()...) ) 
 {
-    return Fo::foldMap( forward<F>(f), forward<X>(x) );
+    return Fo::foldMap( forward<F>(f), forward<X>(x), forward<Y>(y)... );
 }
 
 template< class F, class X, class Fo = Foldable< Cat<X> > >
@@ -868,16 +868,33 @@ auto foldr( F&& f, X&& x, Y&& y, Z&& ...z )
 }
 
 template<> struct Foldable< cata::sequence > {
-    template< class S, class X = list::SeqVal<S> > static
+    template< class S > using Val = list::SeqVal<S>;
+    template< class S > using Ref = list::SeqRef<S>;
+
+    template< class S, class X = Val<S> > static
     X fold( const S& s ) {
         return list::foldr( mappend, mempty<X>(), s );
     }
 
-    template< class F, class S, class X = list::SeqVal<S>,
+    template< class F, class S, class X = Val<S>,
               class R = Result<F,X> > 
     static R foldMap( F&& f, const S& s ) {
         return list::foldr( compose( mappend, forward<F>(f) ),
                             mempty<R>(), s );
+    }
+
+    template< class F, class XS, class YS, class ...ZS,
+              class R = decltype (
+                  declval<F>()( declval<Ref<XS>>(), declval<Ref<YS>>(),
+                                declval<Ref<ZS>>()... )
+              ) >
+    static R foldMap( F&& f, const XS& xs, const YS& ys, const ZS& ...zs ) {
+        R r = mempty<R>();
+        for( const auto& x : xs )
+            r = mappend( move(r),
+                         foldMap( closure(forward<F>(f),x), 
+                                  ys, zs... ) );
+        return r;
     }
 
     template< class F, class ...X > static

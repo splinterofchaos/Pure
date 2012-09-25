@@ -516,14 +516,15 @@ constexpr Decay<X> foldr( F&& f, X&& x, S&& ...s ) {
 
 template< class F, class X, class Y >
 constexpr Decay<X> foldr( F&& f, X&& x, std::initializer_list<Y> s ) {
-    return foldl( flip(forward<F>(f)), forward<X>(x), reverse_wrap(move(s)) );
+    return list::foldl( flip(forward<F>(f)), 
+                        forward<X>(x), reverse_wrap(move(s)) );
 }
 
 template< class F, class S, 
           class X = typename cata::sequence_traits<S>::value_type >
 constexpr X foldr( F&& f, S&& s ) {
-    return foldr( forward<F>(f), 
-                  last(forward<S>(s)), init_wrap(forward<S>(s)) );
+    return list::foldr( forward<F>(f), 
+                        last(forward<S>(s)), init_wrap(forward<S>(s)) );
 }
 
 template< class F, class Y >
