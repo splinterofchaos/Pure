@@ -104,19 +104,43 @@ bool palindrome( int x ) {
     return _palindrome( digits(x) );
 }
 
+#include <limits>
+template< class X > struct Largest {
+    X x;
+
+    constexpr Largest( X y ) : x(move(y)) { }
+    constexpr Largest() : x(std::numeric_limits<X>::lowest()) { }
+
+    operator const X& () { return x; }
+};
+
+template< class X >
+Largest<X> returnLargest( X x ) {
+    return x;
+}
+
+namespace pure {
+    template< class X > struct Monoid< Largest<X> > {
+        template< class Larg >
+        static constexpr Larg mempty() { return Larg(); }
+
+        static constexpr X mappend( const X& a, const X& b ) {
+            return std::max( a, b );
+        }
+    };
+}
+
 void problem4() {
     cout << "The largest palindrome product of three digit numbers :"
          << flush;
-    cout << maximum ( 
-        map ( 
-            []( const IRange& r ) -> unsigned int {
+    cout << foldMap (
+            []( const IRange& r ) -> Largest<int> {
                 auto ps = filter( palindrome, 
                                   map( times(last(r)), init(r) ) );
                 return notNull(ps) ? maximum(ps) : 0;
             },
             // We remove the first three values: {} {100}, and {100,101}.
             drop( 3, inits(enumerate(100,999)) ) 
-        )
     ) << endl;
 }
 
@@ -134,7 +158,7 @@ int lcm( int x, int y ) {
 }
 
 void problem5() {
-    cout << foldl( lcm, enumerate(2,19) ) 
+    cout << pure::foldl( lcm, enumerate(2,19) ) 
          << " is divisible by all numbers 1 thought 20." << endl;
 }
 
@@ -168,11 +192,11 @@ void problem8() {
 
     const string nsStr = "7316717653133062491922511967442657474235534919493496983520312774506326239578318016984801869478851843858615607891129494954595017379583319528532088055111254069874715852386305071569329096329522744304355766896648950445244523161731856403098711121722383113622298934233803081353362766142828064444866452387493035890729629049156044077239071381051585930796086670172427121883998797908792274921901699720888093776657273330010533678812202354218097512545405947522435258490771167055601360483958644670632441572215539753697817977846174064955149290862569321978468622482839722413756570560574902614079729686524145351004748216637048440319989000889524345065854122758866688116427171479924442928230863465674813919123162824586178664583591245665294765456828489128831426076900422421902267105562632111110937054421750694165896040807198403850962455444362981230987879927244284909188845801561660979191338754992005240636899125607176060588611646710940507754100225698315520005593572972571636269561882670428252483600823257530420752963450";
 
-    cout << maximum (
-        map ( 
-            []( const vector<int>& v ) { return product( take(5,v) ); },
-            tails( mapTo<vector>(from_sym,nsStr) )
-        ) 
+    cout << foldMap ( 
+        []( const vector<int>& v ) -> Largest<int> {
+            return product( take(5,v) ); 
+        },
+        tails( mapTo<vector>(from_sym,nsStr) )
     ) << endl;
 }
 

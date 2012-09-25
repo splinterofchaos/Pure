@@ -870,13 +870,14 @@ auto foldr( F&& f, X&& x, Y&& y, Z&& ...z )
 template<> struct Foldable< cata::sequence > {
     template< class S, class X = list::SeqVal<S> > static
     X fold( const S& s ) {
-        return foldr( mappend, mempty<X>(), s );
+        return list::foldr( mappend, mempty<X>(), s );
     }
 
     template< class F, class S, class X = list::SeqVal<S>,
               class R = decltype ( declval<F>()(declval<X>()) ) > 
     static R foldMap( F&& f, const S& s ) {
-        return foldr( compose(mappend,forward<F>(f)), mempty<R>(), s );
+        return list::foldr( compose( mappend, forward<F>(f) ),
+                            mempty<R>(), s );
     }
 
     template< class F, class ...X > static
@@ -891,6 +892,18 @@ template<> struct Foldable< cata::sequence > {
         -> decltype( list::foldr(declval<F>(),declval<X>()...) ) 
     {
         return list::foldr( forward<F>(f), forward<X>(x)... );
+    }
+};
+
+template<> struct Foldable< cata::maybe > {
+    template< class F, class X, class M >
+    static Decay<X> foldr( F&& f, X&& x, M&& m ) {
+        return not m ? forward<X>(x)
+            : forward<F>(f)( *forward<M>(m), forward<X>(x) );
+    }
+    template< class F, class X, class M >
+    static Decay<X> foldl( F&& f, X&& x, M&& m ) {
+        return foldr( flip(forward<F>(f)), forward<X>(x), forward<M>(m) );
     }
 };
 

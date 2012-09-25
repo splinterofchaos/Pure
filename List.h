@@ -484,9 +484,10 @@ X accuml( F&& f, X x, XS&& xs, YS&& ys ) {
 }
 
 /* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
-template< class F, class X, class ...S >
-constexpr Decay<X> foldl( F&& f, X&& x, S&& ...s ) {
-    return accuml( forward<F>(f), forward<X>(x), forward<S>(s)... );
+template< class F, class X, class S, class ...YS >
+constexpr Decay<X> foldl( F&& f, X&& x, S&& xs, YS&& ...ys ) {
+    return accuml( forward<F>(f), forward<X>(x), 
+                   forward<S>(xs), forward<YS>(ys)... );
 }
 
 template< class F, class X, class Y >
@@ -509,8 +510,10 @@ constexpr X foldl( F&& f, std::initializer_list<X> s ) {
 /* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
 template< class F, class X, class ...S >
 constexpr Decay<X> foldr( F&& f, X&& x, S&& ...s ) {
-    return foldl( flip(forward<F>(f)), forward<X>(x), 
-                  reverse_wrap(forward<S>(s))... );
+    // Qualify foldl to prevent GCC from deducing pure::foldl.
+    // TODO: Is it a bug that it does?
+    return list::foldl( flip(forward<F>(f)), forward<X>(x), 
+                        reverse_wrap(forward<S>(s))... );
 }
 
 template< class F, class X, class Y >
