@@ -21,15 +21,18 @@ namespace cata {
      */
     struct sequence {};
 
+    template< class I >
+    auto _dist( const I& i ) -> decltype( i - i );
+    template< class I >
+    auto _dist( ... ) -> int;
+
     template< class Seq > struct sequence_traits {
         using sequence   = Seq;
         using iterator   = Decay<decltype( begin(declval<Seq>()) )>;
-        using distance_type = decltype( declval<iterator>() 
-                                        - declval<iterator>() );
+        using distance_type = decltype( _dist<iterator>(declval<iterator>()) );
         using reference  = decltype( *declval<iterator>() );
         using value_type = typename std::remove_reference<reference>::type;
     };
-
 }
 
 
@@ -261,6 +264,21 @@ std::vector<X> dup( const std::initializer_list<X>& l ) {
 
 template< class S > using Dup = decltype( dup(declval<S>()) );
 
+template< class... > struct ReMapT;
+
+template< template<class...> class S, class X > 
+struct ReMapT< S<X> > {
+    template< class Y > using remap = S<Y>;
+};
+
+template< class X, size_t N >
+struct ReMapT< std::array<X,N> > {
+    template< class Y > using remap = std::array<Y,N>;
+};
+
+template< class S, class Y >
+using Remap = typename ReMapT< Dup<S> >::template remap<Y>;
+
 template< class S, class D = Dup<S> >
 D dup( S&& s, size_t n ) {
     return dupExactly<D>( forward<S>(s), n );
@@ -301,41 +319,47 @@ void _map( F&& f, RI&& ri,
                   ys, zs... );
 }
 
-/* map f {1,2,3} -> { f(1), f(2), f(3) } */
-template< template<class...> class S, class X,
-          class XS = S<X>,
-          class F, class FX = Result<F,X>, class R = Decay<S<FX>> > 
-auto map( F&& f, const S<X>& xs ) -> XSame< FX, X, R >
-{
+template< class R, class F, class ...S >
+R mapExactly( F&& f, S&& ...s ) {
     R r;
-    _map( forward<F>(f), back_inserter(r), xs );
+    _map( forward<F>(f), back_inserter(r), forward<S>(s)... );
     return r;
-}
-
-// When mapping from X to X, we can optimize by not returning a new sequence.
-template< template<class...> class S, class X, class F,
-          class R = S<X> >
-auto map( F&& f, S<X> xs ) -> ESame< X, Result<F,X>, R >
-{
-    _map( forward<F>(f), begin(xs), xs );
-    return xs;
-}
-
-template< class F, class X, class V = std::vector< Result<F,X> > >
-V map( F&& f, const std::initializer_list<X>& l ) {
-    V v; 
-    v.reserve( length(l) );
-    _map( forward<F>(f), begin(v), l );
-    return v;
 }
 
 /* mapTo<R> v = R( map(f,v) ) */
-template< template<class...> class _R, class F, class S,
-          class R = _R< Result<F,SeqRef<S>> > > 
-R mapTo( F&& f, S&& s ) {
-    R r;
-    _map( forward<F>(f), back_inserter(r), forward<S>(s) );
-    return r;
+template< template<class...> class _R, class F, class ...S,
+          class R = _R< Result<F,SeqRef<S>...> > > 
+R mapTo( F&& f, S&& ...s ) {
+    return mapExactly<R>( forward<F>(f), forward<S>(s)... );
+}
+
+/* map f {1,2,3} -> { f(1), f(2), f(3) } */
+template< class S, class X = SeqVal<S>,
+          class F, class FX = Result<F,X>, class R = Remap<S,FX> > 
+auto map( F&& f, const S& xs ) -> R
+{
+    return mapExactly<R>( forward<F>(f), xs );
+}
+
+// When mapping from X to X, we can optimize by not returning a new sequence.
+template< class S, class F >
+auto map( F&& f, S&& xs ) -> ESame< SeqVal<S>, Result<F,SeqRef<S>>, 
+                                // If this type dups to something else, 
+                                // we can't use this version.
+                                ESame<Decay<S>,Dup<S>,S> >
+{
+    _map( forward<F>(f), begin(forward<S>(xs)), forward<S>(xs) );
+    return xs;
+}
+
+template< template<class...> class R, class F, class ...S >
+using ResultMapTo = decltype( mapTo<R>(declval<F>(),declval<S>()...) );
+
+template< class F, class ...X >
+auto map( F&& f, const std::initializer_list<X>& ...l ) 
+    -> ResultMapTo< std::vector, F, std::initializer_list<X>... >
+{
+    return mapTo<std::vector>( forward<F>(f), l... );
 }
 
 /*
@@ -350,16 +374,16 @@ R mapTo( F&& f, S&& s ) {
  * map is, however, more efficient because it does not construct a new sequence
  * for every x.
  */
-template< template<class...> class S, class ..._S,
-          class X, class Y, class ...Z,
-          class F, class FXYZ = Result<F,X,Y,Z...>,
-          class R = S<FXYZ,_S...> >
-R map( F&& f, const S<X,_S...>& xs, 
-       const S<Y,_S...>& ys, const S<Z,_S...>& ...zs )
-{
-   R r;
-   _map( forward<F>(f), back_inserter(r), xs, ys, zs... );
-   return r;
+template< class XS, class YS, class ...ZS, class F, 
+          class R = Remap <
+              XS, 
+              decltype (
+                  declval<F>()( declval<SeqVal<XS>>(), declval<SeqVal<YS>>(), 
+                                declval<SeqVal<ZS>>()... )
+              ) > > 
+R map( F&& f, XS&& xs, YS&& ys, ZS&& ...zs ) {
+    return mapExactly<R>( forward<F>(f), 
+                          forward<XS>(xs), forward<YS>(ys), forward<ZS>(zs)... );
 }
 
 // TODO: requires further specialization.
@@ -426,8 +450,7 @@ struct NotNull {
 
 /* accuml -- foldl implementaton */
 template< class F, class X, class ...XS >
-constexpr Decay<X> accuml( F&& f, X&& x, 
-                           const XS& ...xs ) {
+constexpr Decay<X> accuml( F&& f, X&& x, const XS& ...xs ) {
     return each( NotNull(), xs... ) ?
         accuml( forward<F>(f), 
                 forward<F>(f)( forward<X>(x), 
@@ -785,6 +808,11 @@ template< class I > struct XRange {
     constexpr iterator begin() { return b; }
     constexpr iterator end()   { return e; }
 };
+
+template< class I >
+std::vector<I> dup( XRange<I> r ) {
+    return dupTo<std::vector>( r );
+}
 
 template< class I, class R = XRange<I> >
 constexpr R init( XRange<I> r ) {

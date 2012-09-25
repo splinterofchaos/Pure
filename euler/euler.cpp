@@ -110,8 +110,7 @@ void problem4() {
         map ( 
             []( const IRange& r ) -> unsigned int {
                 auto ps = filter( palindrome, 
-                                  mapTo<vector>(times(last(r)), 
-                                                      init(r)) );
+                                  map( times(last(r)), init(r) ) );
                 return notNull(ps) ? maximum(ps) : 0;
             },
             // We remove the first three values: {} {100}, and {100,101}.
@@ -149,7 +148,7 @@ void problem6() {
 
     using P = float(*)(float,float);
     cout << sqrOfSum - (unsigned int)sum ( 
-        mapTo<vector>( rclosure(P(pow), 2), N ) 
+        map( rclosure(P(pow), 2), N ) 
     ) << endl;
 }
 
@@ -265,15 +264,16 @@ void problem11() {
 
     unsigned int largest = 0;
 
-    for( Vec dir : {Vec{{-1,0}},Vec{{1,1}},Vec{{0,1}},Vec{{-1,1}}} ) 
-    {
-        for( int j : enumerate(mat) ) for( int i : enumerate(mat[0]) )
-            largest = std::max (
-                largest,
-                take_dir_prod( dir, {{i,j}}, 4, mat )
-            );
-    }
-
+    largest = maximum (
+        map ( 
+            [&](int i, int j, const Vec& dir){ 
+                return take_dir_prod( dir, {{i,j}}, 4, mat ); 
+            }, 
+            enumerate(mat), enumerate(mat[0]),  
+            std::initializer_list<Vec>{ Vec{{-1,0}}, Vec{{ 1,1}},
+                                        Vec{{ 0,1}}, Vec{{-1,1}} }
+        )
+    );
     cout << largest << endl;
 }
 
