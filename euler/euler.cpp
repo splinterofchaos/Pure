@@ -50,9 +50,9 @@ void problem2() {
          sum ( 
              filter ( 
                  even,
-                 take_while (
-                     less_than( 4000000 ),
-                     bi_iterate( Add(), 1, 2 )
+                 takeWhile (
+                     lessThan( 4000000 ),
+                     biIterate( Add(), 1, 2 )
                  )
              )
          ) << endl;
@@ -64,7 +64,7 @@ PrimeType next_prime( const vector<PrimeType>& past ) {
     int x = last( past );
 
     do x += 2;
-    while( any( divisor_of(x), tail_wrap(past) ) );
+    while( any( divisorOf(x), tail_wrap(past) ) );
     return x;
 }
 
@@ -110,9 +110,8 @@ void problem4() {
         map ( 
             []( const IRange& r ) -> unsigned int {
                 auto ps = filter( palindrome, 
-                                  map_to<vector>(times(last(r)), 
-                                                      init(r)) );
-                return not_null(ps) ? maximum(ps) : 0;
+                                  map( times(last(r)), init(r) ) );
+                return notNull(ps) ? maximum(ps) : 0;
             },
             // We remove the first three values: {} {100}, and {100,101}.
             drop( 3, inits(enumerate(100,999)) ) 
@@ -149,7 +148,7 @@ void problem6() {
 
     using P = float(*)(float,float);
     cout << sqrOfSum - (unsigned int)sum ( 
-        map_to<vector>( rclosure(P(pow), 2), N ) 
+        map( rclosure(P(pow), 2), N ) 
     ) << endl;
 }
 
@@ -171,7 +170,7 @@ void problem8() {
     cout << maximum (
         map ( 
             []( const vector<int>& v ) { return product( take(5,v) ); },
-            tails( map_to<vector>(from_sym,nsStr) )
+            tails( mapTo<vector>(from_sym,nsStr) )
         ) 
     ) << endl;
 }
@@ -201,7 +200,7 @@ void problem10() {
     // TODO: This is too slow, too brute force, and WRONG!
     cout << "The sum of all primes below 4 million is: " << flush;
     //cout << sum ( 
-    //    take_while( less_than(4000000ull), memorize(next_prime,2ull,3ull) )
+    //    takeWhile( less_than(4000000ull), memorize(next_prime,2ull,3ull) )
     //) << endl;
     
     //unsigned long long sum = 0;
@@ -222,11 +221,11 @@ int get_x( const Vec& v ) { return get<0>(v); }
 int get_y( const Vec& v ) { return get<1>(v); }
 
 Vec operator+ ( const Vec& a, const Vec& b ) {
-    return zip_with( Add(), a, b );
+    return zipWith( Add(), a, b );
 }
 
 Vec operator- ( const Vec& a, const Vec& b ) {
-    return zip_with( Subtract(), a, b );
+    return zipWith( Subtract(), a, b );
 }
 
 Vec operator* ( Vec a, int x ) {
@@ -265,15 +264,16 @@ void problem11() {
 
     unsigned int largest = 0;
 
-    for( Vec dir : {Vec{{-1,0}},Vec{{1,1}},Vec{{0,1}},Vec{{-1,1}}} ) 
-    {
-        for( int j : enumerate(mat) ) for( int i : enumerate(mat[0]) )
-            largest = std::max (
-                largest,
-                take_dir_prod( dir, {{i,j}}, 4, mat )
-            );
-    }
-
+    largest = maximum (
+        map ( 
+            [&](int i, int j, const Vec& dir){ 
+                return take_dir_prod( dir, {{i,j}}, 4, mat ); 
+            }, 
+            enumerate(mat), enumerate(mat[0]),  
+            std::initializer_list<Vec>{ Vec{{-1,0}}, Vec{{ 1,1}},
+                                        Vec{{ 0,1}}, Vec{{-1,1}} }
+        )
+    );
     cout << largest << endl;
 }
 
