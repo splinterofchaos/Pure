@@ -12,6 +12,7 @@
 
 using namespace std;
 using namespace pure;
+using namespace pure::list;
 
 template< typename Container >
 void print( const char* const msg, const Container& v )
@@ -293,7 +294,7 @@ int main()
     auto plus_twoM = fmap( plus_two );
     printf( "\tp2M (1,2) = %s\n\tp2M [1,2] = %s\n",
             show( plus_twoM(make_pair(1,2)) ).c_str(),
-            show( plus_twoM(list<int>{1,2}) ).c_str() );
+            show( plus_twoM(std::list<int>{1,2}) ).c_str() );
     puts("");
 
     printf( "(+2) <$> (pure 1) (100) = %d\n", fmap(plus_two, pure::pure(1))(100) );

@@ -2,6 +2,7 @@
 #include "../Pure.h"
 
 using namespace pure;
+using namespace list;
 
 #include <iostream>
 #include <fstream>

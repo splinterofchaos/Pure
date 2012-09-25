@@ -481,9 +481,9 @@ template<>
 struct Functor< cata::sequence > {
     /* f <$> [x0,x1,...] = [f x0, f x1, ...] */
     template< class F, class ...S >
-    static constexpr decltype( map(declval<F>(),declval<S>()...) )
+    static constexpr decltype( list::map(declval<F>(),declval<S>()...) )
     fmap( F&& f, S&& ...s ) {
-        return map( forward<F>(f), forward<S>(s)... );
+        return list::map( forward<F>(f), forward<S>(s)... );
     }
 };
 
@@ -546,7 +546,7 @@ auto mappend( M1&& a, M2&& b )
  * const&. In other words, this version will NEVER be preferred otherwise.
  */
 
-template< class S, class V = SeqVal<S>, class M = Monoid<Cat<V>> >
+template< class S, class V = list::SeqVal<S>, class M = Monoid<Cat<V>> >
 auto mconcat( S&& s ) -> decltype( M::mconcat(declval<S>()) ) {
     return M::mconcat( forward<S>(s) );
 }
@@ -570,7 +570,7 @@ template<> struct Monoid< cata::sequence > {
 
     template< class XS, class YS >
     static XS mappend( XS xs, YS&& ys ) {
-        return append( move(xs), forward<YS>(ys) );
+        return list::append( move(xs), forward<YS>(ys) );
     }
 
     template< class SS >
@@ -609,10 +609,10 @@ template<> struct Monoid< cata::maybe > {
     }
 
     /* mconcat [Just x, Just y, Nothing] = Just (x <> y <> Nothing)*/
-    template< class S, class M = SeqRef<S>, class R = Decay<M> > 
+    template< class S, class M = list::SeqRef<S>, class R = Decay<M> > 
     static R mconcat( S&& s ) {
         using F = R (*) ( const M&, const M& );
-        return foldl( (F)mappend, mempty<R>(), forward<S>(s) );
+        return list::foldl( (F)mappend, mempty<R>(), forward<S>(s) );
     }
 };
 
@@ -628,7 +628,7 @@ template< class X, class Y > struct Monoid< pair<X,Y> > {
     }
 
     template< class S > static P mconcat( const S& s ) {
-        return foldr( mappend, mempty(), s );
+        return list::foldr( mappend, mempty(), s );
     }
 };
 
@@ -716,20 +716,20 @@ template<> struct Monad< cata::sequence > {
         //      for each element in a, duplicate b.
         //      [] >> k = []
         YS c;
-        auto size = length( a );
+        auto size = list::length( a );
         while( size-- )
-            c = append( move(c), b );
+            c = list::append( move(c), b );
         return c;
     }
 
     /* m >>= k -- where m is a sequence. */
     template< class S, class F >
-    static decltype( concatMap(declval<F>(),declval<S>()) )
+    static decltype( list::concatMap(declval<F>(),declval<S>()) )
     mbind( S&& xs, F&& f ) { 
         // xs >>= f = foldr g [] xs 
         //     where g acc x = acc ++ f(x)
         //           ++ = append
-        return concatMap( f, xs );
+        return list::concatMap( f, xs );
     }
 };
 
@@ -796,9 +796,9 @@ template<> struct MonadPlus< cata::sequence > {
 
     template< class SX, class SY >
     static auto mplus( SX&& sx, SY&& sy ) 
-        -> decltype( append(declval<SX>(),declval<SY>()) )
+        -> decltype( list::append(declval<SX>(),declval<SY>()) )
     {
-        return append( forward<SX>(sx), forward<SY>(sy) );
+        return list::append( forward<SX>(sx), forward<SY>(sy) );
     }
 };
 

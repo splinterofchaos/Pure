@@ -13,6 +13,10 @@ using std::end;
 using std::next;
 using std::prev;
 
+// Used by group.
+// TODO: Return<sequence> should be implemented by a function in THIS file.
+template< class M > struct Return;
+
 namespace cata {
     /*
      * []
@@ -35,6 +39,7 @@ namespace cata {
     };
 }
 
+namespace list {
 
 template< class S >
 using SeqRef = typename cata::sequence_traits<S>::reference;
@@ -1330,8 +1335,6 @@ U stripPrefix( const XS& xs, const YS& ys ) {
         U( new YS( next(begin(ys),length(xs)), end(ys) ) );
 }
 
-template< class M > struct Return;
-
 template< class XS, class YS >
 constexpr XS maybeConsRange( XS xs, YS&& ys ) {
     return not null(ys) ? cons( move(xs), forward<YS>(ys) )
@@ -1474,5 +1477,6 @@ S zipWith( F&& f, const S& a, S b ) {
     return b;
 }
 
+} // namespace list.
 } // namespace pure.
 
