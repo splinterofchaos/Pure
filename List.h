@@ -510,8 +510,6 @@ constexpr X foldl( F&& f, std::initializer_list<X> s ) {
 /* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
 template< class F, class X, class ...S >
 constexpr Decay<X> foldr( F&& f, X&& x, S&& ...s ) {
-    // Qualify foldl to prevent GCC from deducing pure::foldl.
-    // TODO: Is it a bug that it does?
     return list::foldl( flip(forward<F>(f)), forward<X>(x), 
                         reverse_wrap(forward<S>(s))... );
 }
@@ -1224,7 +1222,7 @@ S erase( F&& f, const X& x, S s ) {
 template< class P, class XS, class YS >
 XS eraseFirst( P&& p, XS xs, YS&& ys ) {
     using F = XS(*)( const P&, SeqRef<YS>, XS );
-    return foldl (
+    return list::foldl (
         // \s x -> erase p x s
         flip( closure( (F)erase, forward<P>(p) ) ), 
         move(xs), forward<YS>(ys) 
@@ -1234,7 +1232,7 @@ XS eraseFirst( P&& p, XS xs, YS&& ys ) {
 template< class P, class XS, class Y >
 XS eraseFirst( P&& p, XS xs, std::initializer_list<Y> l ) {
     using F = XS(*)( const P&, const Y&, XS );
-    return foldl( flip(closure((F)erase,forward<P>(p))), 
+    return list::foldl( flip(closure((F)erase,forward<P>(p))), 
                   xs, move(l) ); 
 }
 
@@ -1267,7 +1265,7 @@ S nub( const S& s ) {
 template< class XS, class YS, class R = Decay<XS> >
 R difference( XS&& xs, const YS& ys ) {
     using F = R(*)( const YS&, XS, SeqRef<XS> );
-    return foldl ( 
+    return list::foldl ( 
         closure( (F)consDifference, ys ),
         R(), forward<XS>(xs)
     );
@@ -1281,7 +1279,7 @@ XS sunion( XS xs, YS&& ys ) {
 template< class XS, class YS, class R = Decay<XS> >
 R intersect( XS&& xs, const YS& ys ) {
     using F = R(*)( const YS&, XS, SeqRef<XS> );
-    return foldl (
+    return list::foldl (
         closure( (F)consIntersection, ys ),
         R(), forward<XS>(xs)
     );
@@ -1353,10 +1351,10 @@ V group( S&& s, P&& p = P() ) {
     const auto e = end( forward<S>(s) );
 
     for( ; it != e; it = next) {
-        auto adj = adjacent_find( it, e, forward<P>(p) );
+        auto adj = std::adjacent_find( it, e, forward<P>(p) );
         v = maybeConsRange ( 
             // First, cons all the non-adjacent members.
-            foldl (
+            list::foldl (
                 // \v s -> cons v (return s)
                 flip( compose(flip(Cons()), Return<_S>()) ),
                 move(v), range<S>( it, adj ) 
@@ -1450,7 +1448,9 @@ V permutations( S&& original ) {
 template< class F, class ...S,
           class R = Result<F,SeqRef<S>...> >
 R concatMap( F&& f, S&& ...xs ) {
-    return foldl (
+    // Qualify foldl to prevent GCC from deducing pure::foldl.
+    // TODO: Is it a bug that it does?
+    return list::foldl (
         // \xs x -> append xs (f x)
         flip( compose( flip(Append()), forward<F>(f) ) ), 
         R(), forward<S>(xs)...

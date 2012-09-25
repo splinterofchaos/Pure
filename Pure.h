@@ -874,7 +874,7 @@ template<> struct Foldable< cata::sequence > {
     }
 
     template< class F, class S, class X = list::SeqVal<S>,
-              class R = decltype ( declval<F>()(declval<X>()) ) > 
+              class R = Result<F,X> > 
     static R foldMap( F&& f, const S& s ) {
         return list::foldr( compose( mappend, forward<F>(f) ),
                             mempty<R>(), s );
