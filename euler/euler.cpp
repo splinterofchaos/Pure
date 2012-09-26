@@ -293,6 +293,42 @@ void problem11() {
     cout << largest << endl;
 }
 
+#include <cmath>
+PrimeType nFactors( PrimeType x ) {
+    PrimeType fact = 2;
+    PrimeType n = 2; // All numbers, x, have the factors 1 and x.
+    PrimeType smallestBigFactor = std::numeric_limits<PrimeType>::max();
+
+    while( fact < smallestBigFactor ) {
+        if( x % fact == 0 ) {
+            smallestBigFactor = x / fact;
+            n += 2;
+        }
+        fact++;
+    }
+
+    fact--;
+    if( std::ceil(std::sqrt(x)) == (int)std::sqrt(x) )
+        n--;
+
+    return n;
+}
+
+void problem12() {
+    cout << "\nFactors of 100 : " << nFactors(100) << '\n';
+    cout << "The first number with over 500 divisors : " << flush;
+    cout << endl;
+    
+    unsigned int n = 100;
+    while( nFactors(n) <= 500 ) {
+        if( n % 10000 == 0 )
+            cout << "at : " << n << "\nwith : " << nFactors(n) << '\n' << endl;
+        n++;
+    }
+
+    cout << n << endl;
+}
+
 int main() {
     problem1();
     problem2();
@@ -305,4 +341,5 @@ int main() {
     problem9();
     problem10(); 
     problem11(); 
+    problem12();
 }
