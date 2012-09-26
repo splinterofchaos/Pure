@@ -69,7 +69,7 @@ PrimeType next_prime( const vector<PrimeType>& past ) {
     return x;
 }
 
-auto primes = memorize( next_prime, 2ull, 3ull );
+auto primes = memorize( next_prime, 1ull, 2ull, 3ull );
 
 void problem3() {
     const long int START = 600851475143;
@@ -77,7 +77,7 @@ void problem3() {
 
     cout << "The largest prime divisor of " << START << flush;
 
-    auto p = begin( primes );
+    auto p = next(begin( primes ));
 
     while( *p < std::sqrt(x) )
         if( x % *p++ == 0 )
@@ -182,7 +182,7 @@ void problem6() {
 
 void problem7() {
     cout << "The 1001'st prime number: " << flush;
-    cout << *next( begin(primes), 10000 ) << endl;
+    cout << *next( begin(primes), 10001 ) << endl;
 }
 
 int from_sym( char sym ) { return sym - '0'; }
@@ -298,40 +298,59 @@ void problem11() {
     ) << endl;
 }
 
-#include <cmath>
-PrimeType nFactors( PrimeType x ) {
-    PrimeType fact = 2;
-    PrimeType n = 2; // All numbers, x, have the factors 1 and x.
-    PrimeType smallestBigFactor = std::numeric_limits<PrimeType>::max();
+using Factor = PrimeType;
+using Factors = std::vector<PrimeType>;
 
-    while( fact < smallestBigFactor ) {
-        if( x % fact == 0 ) {
-            smallestBigFactor = x / fact;
-            n += 2;
-        }
-        fact++;
-    }
+bool isPrime( Factor x ) {
+    return elem( x, takeWhile( lessThan(x), primes ) );
+}
 
-    fact--;
-    if( std::ceil(std::sqrt(x)) == (int)std::sqrt(x) )
-        n--;
+// Computes the low factors of x, given an accumulation of low factors. 
+// (Low as in less than or equal to sqrt(x).)
+Factors _lowFactors( Factors lfs, Factor x ) {
+    // If len(lfs) == 1, it is prime.
+    // If len(lfs) == 0, panic.
+    if( length(lfs) < 2 )
+        return lfs;
 
-    return n;
+    auto next = filter (
+        [&]( Factor y ) { return y <= std::sqrt(x) and x % y == 0; },
+        nub(map(Mult(), lfs, lfs))
+    );
+
+    return lfs == next ? lfs : _lowFactors( move(next), x );
+}
+
+Factors primeFactors( Factor x ) {
+    return filter (
+        divisorOf(x), 
+        takeWhile( lessThan(std::sqrt(x)), primes ) 
+    );
+}
+
+Factors lowFactors( Factor x ) {
+    return _lowFactors( primeFactors(x), x );
+}
+
+Factor nFactors( Factor x ) {
+    auto fs = lowFactors(x);
+    unsigned long long n = length( fs ) * 2;
+    return n - (last(fs) == std::sqrt(x));
+}
+
+Factor triangleNumber( Factor x ) {
+    return sum( enumerate(1,x) );
 }
 
 void problem12() {
-    cout << "\nFactors of 100 : " << nFactors(100) << '\n';
-    cout << "The first number with over 500 divisors : " << flush;
-    cout << endl;
+    cout << "The first triangle number with over 500 divisors : " << flush;
     
-    unsigned int n = 100;
-    while( nFactors(n) <= 500 ) {
-        if( n % 10000 == 0 )
-            cout << "at : " << n << "\nwith : " << nFactors(n) << '\n' << endl;
+    Factor n = 8;
+    auto tri = [&]() { return triangleNumber(n); };
+    while( nFactors(tri()) <= 500 )  
         n++;
-    }
 
-    cout << n << endl;
+    cout << "traiangle(" << n << ") = " << tri() << endl;
 }
 
 int main() {

@@ -386,7 +386,7 @@ template< class XS, class YS, class ...ZS, class F,
                   declval<F>()( declval<SeqVal<XS>>(), declval<SeqVal<YS>>(), 
                                 declval<SeqVal<ZS>>()... )
               ) > > 
-R map( F&& f, XS&& xs, YS&& ys, ZS&& ...zs ) {
+R map( F&& f, XS& xs, YS&& ys, ZS&& ...zs ) {
     return mapExactly<R>( forward<F>(f), 
                           forward<XS>(xs), forward<YS>(ys), forward<ZS>(zs)... );
 }
@@ -1258,9 +1258,11 @@ S consWhen( bool b, S s, X&& x ) {
 }
 
 template< class S >
-S nub( const S& s ) {
-    using F = S(*)( S, SeqRef<S> );
-    return foldl( (F)consSet, S(), s );
+S nub( S s ) {
+    s = sort( move(s) );
+    auto e = std::unique( begin(s), end(s) );
+    s.erase( e, end(s) );
+    return s;
 }
 
 template< class XS, class YS, class R = Decay<XS> >

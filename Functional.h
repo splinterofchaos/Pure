@@ -432,8 +432,32 @@ constexpr RCloset<Less,X> lessThan( X x ) {
 }
 
 template< class X >
-constexpr Closet<LessEq,X> lessEqualTo( X x ) {
-    return closet(LessEq(), move(x));
+constexpr RCloset<LessEq,X> lessEqualTo( X x ) {
+    return rcloset(LessEq(), move(x));
+}
+
+struct Greater {
+    template< class X, class Y >
+    constexpr bool operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) < forward<Y>(y);
+    }
+};
+
+struct GreaterEq {
+    template< class X, class Y >
+    constexpr bool operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) <= forward<Y>(y);
+    }
+};
+
+template< class X >
+constexpr RCloset<Greater,X> greaterThan( X x ) {
+    return rcloset(Greater(), move(x));
+}
+
+template< class X >
+constexpr Closet<GreaterEq,X> greaterEqualTo( X x ) {
+    return closet(GreaterEq(), move(x));
 }
 
 struct BinaryNot {
