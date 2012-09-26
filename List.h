@@ -13,6 +13,10 @@ using std::end;
 using std::next;
 using std::prev;
 
+// Used by group.
+// TODO: Return<sequence> should be implemented by a function in THIS file.
+template< class M > struct Return;
+
 namespace cata {
     /*
      * []
@@ -35,6 +39,7 @@ namespace cata {
     };
 }
 
+namespace list {
 
 template< class S >
 using SeqRef = typename cata::sequence_traits<S>::reference;
@@ -479,9 +484,10 @@ X accuml( F&& f, X x, XS&& xs, YS&& ys ) {
 }
 
 /* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
-template< class F, class X, class ...S >
-constexpr Decay<X> foldl( F&& f, X&& x, S&& ...s ) {
-    return accuml( forward<F>(f), forward<X>(x), forward<S>(s)... );
+template< class F, class X, class S, class ...YS >
+constexpr Decay<X> foldl( F&& f, X&& x, S&& xs, YS&& ...ys ) {
+    return accuml( forward<F>(f), forward<X>(x), 
+                   forward<S>(xs), forward<YS>(ys)... );
 }
 
 template< class F, class X, class Y >
@@ -504,20 +510,21 @@ constexpr X foldl( F&& f, std::initializer_list<X> s ) {
 /* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
 template< class F, class X, class ...S >
 constexpr Decay<X> foldr( F&& f, X&& x, S&& ...s ) {
-    return foldl( flip(forward<F>(f)), forward<X>(x), 
-                  reverse_wrap(forward<S>(s))... );
+    return list::foldl( flip(forward<F>(f)), forward<X>(x), 
+                        reverse_wrap(forward<S>(s))... );
 }
 
 template< class F, class X, class Y >
 constexpr Decay<X> foldr( F&& f, X&& x, std::initializer_list<Y> s ) {
-    return foldl( flip(forward<F>(f)), forward<X>(x), reverse_wrap(move(s)) );
+    return list::foldl( flip(forward<F>(f)), 
+                        forward<X>(x), reverse_wrap(move(s)) );
 }
 
 template< class F, class S, 
           class X = typename cata::sequence_traits<S>::value_type >
 constexpr X foldr( F&& f, S&& s ) {
-    return foldr( forward<F>(f), 
-                  last(forward<S>(s)), init_wrap(forward<S>(s)) );
+    return list::foldr( forward<F>(f), 
+                        last(forward<S>(s)), init_wrap(forward<S>(s)) );
 }
 
 template< class F, class Y >
@@ -1216,7 +1223,7 @@ S erase( F&& f, const X& x, S s ) {
 template< class P, class XS, class YS >
 XS eraseFirst( P&& p, XS xs, YS&& ys ) {
     using F = XS(*)( const P&, SeqRef<YS>, XS );
-    return foldl (
+    return list::foldl (
         // \s x -> erase p x s
         flip( closure( (F)erase, forward<P>(p) ) ), 
         move(xs), forward<YS>(ys) 
@@ -1226,7 +1233,7 @@ XS eraseFirst( P&& p, XS xs, YS&& ys ) {
 template< class P, class XS, class Y >
 XS eraseFirst( P&& p, XS xs, std::initializer_list<Y> l ) {
     using F = XS(*)( const P&, const Y&, XS );
-    return foldl( flip(closure((F)erase,forward<P>(p))), 
+    return list::foldl( flip(closure((F)erase,forward<P>(p))), 
                   xs, move(l) ); 
 }
 
@@ -1259,7 +1266,7 @@ S nub( const S& s ) {
 template< class XS, class YS, class R = Decay<XS> >
 R difference( XS&& xs, const YS& ys ) {
     using F = R(*)( const YS&, XS, SeqRef<XS> );
-    return foldl ( 
+    return list::foldl ( 
         closure( (F)consDifference, ys ),
         R(), forward<XS>(xs)
     );
@@ -1273,7 +1280,7 @@ XS sunion( XS xs, YS&& ys ) {
 template< class XS, class YS, class R = Decay<XS> >
 R intersect( XS&& xs, const YS& ys ) {
     using F = R(*)( const YS&, XS, SeqRef<XS> );
-    return foldl (
+    return list::foldl (
         closure( (F)consIntersection, ys ),
         R(), forward<XS>(xs)
     );
@@ -1330,8 +1337,6 @@ U stripPrefix( const XS& xs, const YS& ys ) {
         U( new YS( next(begin(ys),length(xs)), end(ys) ) );
 }
 
-template< class M > struct Return;
-
 template< class XS, class YS >
 constexpr XS maybeConsRange( XS xs, YS&& ys ) {
     return not null(ys) ? cons( move(xs), forward<YS>(ys) )
@@ -1347,10 +1352,10 @@ V group( S&& s, P&& p = P() ) {
     const auto e = end( forward<S>(s) );
 
     for( ; it != e; it = next) {
-        auto adj = adjacent_find( it, e, forward<P>(p) );
+        auto adj = std::adjacent_find( it, e, forward<P>(p) );
         v = maybeConsRange ( 
             // First, cons all the non-adjacent members.
-            foldl (
+            list::foldl (
                 // \v s -> cons v (return s)
                 flip( compose(flip(Cons()), Return<_S>()) ),
                 move(v), range<S>( it, adj ) 
@@ -1444,7 +1449,9 @@ V permutations( S&& original ) {
 template< class F, class ...S,
           class R = Result<F,SeqRef<S>...> >
 R concatMap( F&& f, S&& ...xs ) {
-    return foldl (
+    // Qualify foldl to prevent GCC from deducing pure::foldl.
+    // TODO: Is it a bug that it does?
+    return list::foldl (
         // \xs x -> append xs (f x)
         flip( compose( flip(Append()), forward<F>(f) ) ), 
         R(), forward<S>(xs)...
@@ -1474,5 +1481,6 @@ S zipWith( F&& f, const S& a, S b ) {
     return b;
 }
 
+} // namespace list.
 } // namespace pure.
 
