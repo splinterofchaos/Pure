@@ -777,38 +777,51 @@ template< class I > struct XRange {
         : std::iterator<std::random_access_iterator_tag,I,I>
     {
         value_type i;
+        value_type stride;
 
-        constexpr iterator( value_type i ) : i(i) { }
+        constexpr iterator( value_type i, value_type stride ) 
+            : i(i), stride(stride) { }
+        constexpr iterator( iterator it, value_type stride ) 
+            : i(*it), stride(stride) { }
 
         constexpr value_type operator* () { return i; }
-        iterator operator++ () { return ++i; }
-        iterator operator-- () { return --i; }
-        iterator operator-- (int) { return i--; }
-        iterator operator++ (int) { return i++; }
+        iterator operator++ () { ++i; return *this; }
+        iterator operator-- () { --i; return *this; }
+        iterator operator-- (int) { auto cpy = *this; --(*this); return cpy; }
+        iterator operator++ (int) { auto cpy = *this; ++(*this); return cpy; }
 
 
-        constexpr iterator operator+ ( difference_type n ) { return i + n; }
-        constexpr iterator operator- ( difference_type n ) { return i - n; } 
-        constexpr difference_type operator- ( iterator other ) { return i - *other; }
+        constexpr iterator operator+ ( difference_type n ) { 
+            return iterator( i + n, stride );
+        }
+        constexpr iterator operator- ( difference_type n ) {
+            return iterator( i - n, stride );
+        } 
+        constexpr difference_type operator- ( iterator other ) { 
+            return (i - *other) / stride;
+        }
 
         constexpr bool operator== ( iterator other ) { return i == *other; }
         constexpr bool operator!= ( iterator other ) { return i != *other; }
 
-        iterator operator+= ( iterator other ) { 
-            i += *other; 
+        iterator& operator+= ( difference_type other ) { 
+            i += other * stride; 
             return *this;
         }
 
-        iterator& operator-= ( iterator other ) { 
-            i -= *other;
+        iterator& operator-= ( difference_type other ) { 
+            i -= other * stride;
             return *this;
         }
     };
 
+    value_type stride;
     iterator b, e;
 
-    constexpr XRange( value_type b, value_type e ) : b(b), e(e) { }
-    constexpr XRange( iterator b, iterator e ) : b(b), e(e) { }
+    constexpr XRange( value_type b, value_type e, value_type stride=1 ) 
+        : stride(stride), b(b,stride), e(e,stride)  { }
+    constexpr XRange( iterator b, iterator e, value_type stride=1 ) 
+        : stride(stride), b(b,stride), e(e,stride)  { }
 
     constexpr iterator begin() { return b; }
     constexpr iterator end()   { return e; }
@@ -835,14 +848,15 @@ using IRange = XRange<unsigned int>;
  * enumerate [b,e] = XRange( [b,e+1) )
  * Creates an inclusive range from b to e.
  */
-constexpr IRange enumerate( unsigned int b, unsigned int e ) {
+constexpr IRange enumerate( unsigned int b, unsigned int e, 
+                            unsigned int stride = 1 ) {
     // Adding one to the en
-    return IRange( b, e + 1 ); 
+    return IRange( b, e + stride, stride ); 
 }
 
 /* enumerate n = [n,n+1,n+2,...] */
-constexpr IRange enumerate( unsigned int b ) {
-    return IRange( b, std::numeric_limits<unsigned int>::max() ); 
+constexpr IRange enumerate( unsigned int b, unsigned int stride=1 ) {
+    return IRange( b, std::numeric_limits<unsigned int>::max(), stride ); 
 }
 
 constexpr IRange enumerateTo( unsigned int e ) {
