@@ -1218,7 +1218,15 @@ S insert( X&& x, S s ) {
     return s;
 }
 
-/* insert p y xs -- inserts into the first place where (p x) == True. */
+template< class X, class S >
+S nubInsert( X&& x, S s ) {
+    auto it = std::lower_bound( begin(s), end(s), forward<X>(x) );
+    if( *it != x )
+        s.insert( it, forward<X>(x) );
+    return s;
+}
+
+/* insert p y xs -- inserts y into the first place where (p x) == True. */
 template< class P, class X, class S >
 S insert( P&& p, X&& x, S s ) {
     s.insert( 
@@ -1263,7 +1271,7 @@ XS eraseFirst( P&& p, XS xs, std::initializer_list<Y> l ) {
 
 template< class S, class X >
 S consSet( S s, X&& x ) {
-    return notElem(x,s) ?  cons( move(s), forward<X>(x) ) : s;
+    return nubInsert( forward<X>(x), move(s) );
 }
 
 template< class DS, class S, class X >
