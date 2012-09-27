@@ -250,7 +250,7 @@ unsigned int take_dir_prod( Vec dir, Vec pos, size_t n, const Mat& m ) {
 void problem11() {
     std::ifstream fin( "e11" );
 
-    cout << "The largest product is: ";
+    cout << "The largest product is: " << flush;
 
     Mat mat;
     std::string tmp;
