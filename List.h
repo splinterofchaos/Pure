@@ -1117,6 +1117,23 @@ constexpr P splitAt( size_t n, S&& s ) {
     );
 }
 
+template< class P, class S, class _S = Decay<S> >
+std::pair<_S,_S> sbreak( P&& p, S&& s ) {
+    return splitAt( cfindIf(forward<P>(p),forward<S>(s)), forward<S>(s) );
+}
+
+template< class P, class S, class _S = Decay<S>, class V = std::vector<_S> >
+V splitBy( P&& p, S&& s ) {
+    _S low, high;
+    std::tie(low,high) = sbreak( forward<P>(p), forward<S>(s) );
+    high = dropWhile( forward<P>(p), move(high) );
+
+    V r{ move(low) };
+    return null(high) ? r
+        : append( move(r), 
+                  splitBy( forward<P>(p), move(high) ) );
+}
+
 template< class P,
           class S, class _S = Decay<S>, 
           class R = std::pair<_S,_S> >
@@ -1125,11 +1142,6 @@ R span( P&& p, S&& s ) {
     for( auto& x : s )
         (forward<P>(p)( x ) ? r.second:r.first).push_back( x );
     return r;
-}
-
-template< class P, class S, class _S = Decay<S> >
-std::pair<_S,_S> sbreak( P&& p, S&& s ) {
-    return splitAt( cfindIf(forward<P>(p),forward<S>(s)), forward<S>(s) );
 }
 
 template< class XS, class YS >
@@ -1471,11 +1483,11 @@ R concatMap( F&& f, S&& ...xs ) {
 /* zipWith f A B -> { f(a,b) for a in A and b in B } */
 template< class F, class R, class ...S >
 R _zipWith( F&& f, R r, const S& ...s ) {
-return each( NotNull(), s... ) ?
-    _zipWith( forward<F>(f),
-               cons( move(r), forward<F>(f)( head(s)... ) ),
-               tail_wrap( s )... )
-    : r;
+    return each( NotNull(), s... ) ?
+        _zipWith( forward<F>(f),
+                   cons( move(r), forward<F>(f)( head(s)... ) ),
+                   tail_wrap( s )... )
+        : r;
 }
 
 template< class F, class XS, class ...YS, class R = Dup<XS> >
@@ -1489,6 +1501,35 @@ S zipWith( F&& f, const S& a, S b ) {
     std::transform( begin(a), end(a), begin(b), 
                     begin(b), forward<F>(f) );
     return b;
+}
+
+template< class S >
+std::vector<Decay<S>> lines( S&& s ) {
+    return splitBy( equalTo('\n'), forward<S>(s) );
+}
+
+template< class SS, class S = SeqVal<SS> >
+S unlines( const SS& ss ) {
+    // Remove the last '\n'.
+    return init (
+        // Intersperse with '\n'.
+        concatMap( closure(flip(Cons()),'\n'), ss )
+    );
+}
+
+#include <cctype>
+template< class S >
+std::vector<Decay<S>> words( S&& s ) {
+    return splitBy( isspace, forward<S>(s) );
+}
+
+template< class SS, class S = SeqVal<SS> >
+S unwords( const SS& ss ) {
+    // Remove the last ' '.
+    return init (
+        // Intersperse with ' '.
+        concatMap( closure(flip(Cons()),' '), ss )
+    );
 }
 
 } // namespace list.
