@@ -48,14 +48,8 @@ constexpr auto even = fnot( rcloset( Mod(), 2 ) );
 void problem2() {
     cout << "The sum of every even Fibonacci number below 4-million: "
          << flush << 
-         sum ( 
-             filter ( 
-                 even,
-                 takeWhile (
-                     lessThan( 4000000 ),
-                     biIterate( Add(), 1, 2 )
-                 )
-             )
+         ( sum ^ filter(even) ^ takeWhile(lessThan(4000000)) ) (
+                 biIterate( Add(), 1, 2 )
          ) << endl;
 }
 
@@ -110,12 +104,11 @@ void problem4() {
     cout << maximum ( 
         map ( 
             []( const IRange& r ) -> unsigned int {
-                auto ps = filter( palindrome, 
-                                  map( times(last(r)), init(r) ) );
+                auto ps = filter( palindrome )( times(last(r)) ^ init(r) );
                 return notNull(ps) ? maximum(ps) : 0;
             },
             // We remove the first three values: {} {100}, and {100,101}.
-            drop( 3, inits(enumerate(100,999)) ) 
+            ( drop(3) ^ inits )( enumerate(100,999) ) 
         )
     ) << endl;
 }
@@ -148,9 +141,7 @@ void problem6() {
     constexpr unsigned int sqrOfSum = sum(N) * sum(N);
 
     using P = float(*)(float,float);
-    cout << sqrOfSum - (unsigned int)sum ( 
-        map( rclosure(P(pow), 2), N ) 
-    ) << endl;
+    cout << sqrOfSum - (unsigned int)sum( rclosure(P(pow),2) ^ N ) << endl;
 }
 
 void problem7() {

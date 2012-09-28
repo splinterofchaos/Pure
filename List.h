@@ -277,6 +277,15 @@ R dupTo( S&& s, size_t n, size_t off = 0 ) {
     return dupExactly<R>( forward<S>(s), n, off );
 }
 
+template< template<class...> class R > struct DupTo {
+    template< class S > using type = R< SeqVal<S> >;
+
+    template< class S >
+    type<S> operator() ( S&& s ) const {
+        return dupTo<R>( forward<S>(s) );
+    }
+};
+
 template< class S >
 S dup( const S& s ) {
     return s;
@@ -1007,38 +1016,39 @@ using ItTraits = std::iterator_traits<I>;
 template< class I >
 using ItCata = typename ItTraits<I>::iterator_category;
 
-template< typename Container, typename F >
-Container filter( F&& f, Container cont, std::output_iterator_tag )
-{
-    cont.erase ( 
-        remove_if( begin(cont), end(cont), 
-                   fnot( forward<F>(f) ) ),
-        end( cont )
-    );
-    return cont;
-}
+struct Filter {
+    template< typename S, typename F >
+    Dup<S> operator() ( F&& f, S s, std::output_iterator_tag ) const {
+        s.erase ( 
+            remove_if( begin(s), end(s), 
+                       fnot( forward<F>(f) ) ),
+            end( s )
+        );
+        return s;
+    }
 
-template< typename Container, typename F >
-Container filter( F&& f, Container cont, std::input_iterator_tag  )
-{
-    return dupIf( forward<F>(f), cont );
-}
+    template< typename S, typename F >
+    Dup<S> operator() ( F&& f, S s, std::input_iterator_tag ) const {
+        return dupIf( forward<F>(f), move(s) );
+    }
 
-/* filter f C -> { x for x in C such that f(x) is true. } */
-template< typename Container, typename F >
-Container filter( F&& f, Container cont )
-{
-    using I = decltype( begin(cont) );
-    return filter( forward<F>(f), move(cont), ItCata<I>() );
-}
+    /* filter f C -> { x for x in C such that f(x) is true. } */
+    template< typename S, typename F >
+    Dup<S> operator() ( F&& f, S s ) const {
+        using I = decltype( begin(s) );
+        return Filter()( forward<F>(f), move(s), ItCata<I>() );
+    }
 
-template< class X, class F, class V = std::vector<X> >
-V filter( F&& f, const std::initializer_list<X>& cont ) {
-    V v;
-    v.reserve( length(cont) );
-    copy_if( begin(cont), end(cont), tailInserter(v), forward<F>(f) );
-    return v;
-}
+    template< class X, class F, class V = std::vector<X> >
+    V operator() ( F&& f, const std::initializer_list<X>& l ) const {
+        return dupIf( forward<F>(f), l );
+    }
+
+    template< class F >
+    constexpr Closet<Filter,F> operator() ( F f ) {
+        return closet( Filter(), move(f) );
+    }
+} filter;
 
 // TODO: Perhaps this could be implemented with a filterFold...
 /* filtrate f pred xs = filter pred (map f xs) */
@@ -1075,7 +1085,7 @@ MaybeIndex PossibleIndex( const I& i, const S& s ) {
 }
 
 template< class X, class S >
-const X* findFirst( const X& x, const S& s ) {
+const SeqVal<S>* findFirst( const X& x, const S& s ) {
     auto it = std::find( begin(s), end(s), x );
     return it != end(s) ? &(*it) : nullptr;
 }
@@ -1122,25 +1132,55 @@ D take( size_t n, S&& s ) {
     return dup( forward<S>(s), n );
 }
 
-template< class P, class S, class _S = Dup<S> >
-_S takeWhile( P&& p, S&& s ) {
-    auto it = begin(forward<S>(s)); 
-    while( it != end(s) and forward<P>(p)(*it) )
-         it++ ;
+struct Take {
+    template< class S >
+    Dup<S> operator() ( size_t n, S&& s ) const {
+        return dup( forward<S>(s), n );
+    }
+};
 
-    // TODO: This is a hack and won't work on non-random iterators, but
-    // required to work with Remember. I should implement Dup as a class that
-    // can be specialized similarly to Functor and Monad.
-    return take (
-        it - begin(s),
-        forward<S>(s)
-    );
+constexpr Closet<Take,size_t> take( size_t n ) {
+    return closet( Take(), n );
 }
+
+struct TakeWhile {
+    template< class P, class S, class _S = Dup<S> >
+    _S operator() ( P&& p, S&& s ) const {
+        auto it = begin(forward<S>(s)); 
+        while( it != end(s) and forward<P>(p)(*it) )
+             it++ ;
+
+        // TODO: This is a hack and won't work on non-random iterators, but
+        // required to work with Remember. I should implement Dup as a class
+        // that can be specialized similarly to Functor and Monad.
+        return take (
+            it - begin(s),
+            forward<S>(s)
+        );
+    }
+
+    template< class P >
+    constexpr Closet<TakeWhile,P> operator() ( P p ) {
+        return closet( TakeWhile(), move(p) );
+    }
+} takeWhile;
 
 template< class S >
 S drop( size_t n, const S& s ) {
     return S( next(begin(s),n), end(s) );
 }
+
+struct DropN {
+    size_t n;
+    constexpr DropN( size_t n ) : n(n) { }
+
+    template< class S >
+    Decay<S> operator() ( S&& s ) const {
+        return drop( n, forward<S>(s) );
+    }
+};
+
+constexpr DropN drop( size_t n ) { return DropN(n); }
 
 template< class P, class S, class _S = Decay<S> >
 _S dropWhile( P&& p, S&& s ) {
@@ -1379,16 +1419,18 @@ R intersect( XS&& xs, const YS& ys ) {
     );
 }
 
-template< class S >
-SeqVal<S> sum( const S& s ) {
-    return std::accumulate( begin(s), end(s), 0 );
-}
+struct Sum {
+    template< class S >
+    SeqVal<S> operator() ( const S& s ) const {
+        return std::accumulate( begin(s), end(s), 0 );
+    }
 
-template< class I >
-constexpr I sum( XRange<I> r ) {
-    // sum [m,n] = (n + 1 - m)(n + m)/2
-    return (*r.e - *r.b) * (*r.e - 1 + *r.b) / 2;
-}
+    template< class I >
+    constexpr I operator() ( XRange<I> r ) {
+        // sum [m,n] = (n + 1 - m)(n + m)/2
+        return (*r.e - *r.b) * (*r.e - 1 + *r.b) / 2;
+    }
+} sum;
 
 template< class S >
 SeqVal<S> product( const S& s ) {
@@ -1463,72 +1505,78 @@ V group( S&& s, P&& p = P() ) {
     return v;
 }
 
-template< class S, class V = std::vector<S> >
-V _inits( const S& s ) {
-    V v;
-    for( auto it = begin(s); it != end(s); it++ )
-        v.emplace_back( S(begin(s),it) );
-    return v;
-}
-
-template< class S, class V = std::vector<S> >
-V inits( const S& s ) {
-    return not null(s) ? _inits(s) : V();
-}
-
-template< class S, class V = std::vector<S> >
-V _tails( const S& s ) {
-    V v{ S() };
-    for( auto it = end(s); it != begin(s); )
-        v.emplace_back( S(--it,end(s)) );
-    return v;
-}
-
-template< class S, class V = std::vector<S> >
-V tails( const S& s ) {
-    return not null(s) ? _tails(s) : V();
-}
-
-template< class S >
-bool _next_p_ref( S& s ) {
-    return std::next_permutation( begin(s), end(s) );
-}
-
-template< class S >
-S _next_p( S s ) {
-    _next_p_ref( s );
-    return s;
-}
-
-template< class S >
-using SeqSeq = std::vector<Decay<S>>;
-
-template< class S, class V = SeqSeq<S> >
-V sortedPermutations( S&& original ) {
-    V r{ forward<S>(original) };
-    Dup<S> next;
-    while( next = last(r), _next_p_ref(next) )
-        r.emplace_back( move(next) );
-    return r;
-}
-
-template< class S, class V = SeqSeq<S> >
-V _permutations( S&& original ) {
-    V r{ forward<S>(original) };
-    while( true ) {
-        auto next = _next_p( last(r) );
-        if( next != head(r) )
-            r.emplace_back( move(next) );
-        else
-            return r;
+struct Inits {
+    template< class S, class V = std::vector<S> >
+    static V _inits( const S& s ) {
+        V v;
+        for( auto it = begin(s); it != end(s); it++ )
+            v.emplace_back( S(begin(s),it) );
+        return v;
     }
-}
 
-template< class S, class V = SeqSeq<S> >
-V permutations( S&& original ) {
-    return ordered(original) ? sortedPermutations( forward<S>(original) )
-        : _permutations( forward<S>(original) );
-}
+    template< class S, class V = std::vector<S> >
+    V operator() ( const S& s ) const {
+        return not null(s) ? _inits(s) : V();
+    }
+} inits;
+
+struct Tails {
+    template< class S, class V = std::vector<S> >
+    static V _tails( const S& s ) {
+        V v{ S() };
+        for( auto it = end(s); it != begin(s); )
+            v.emplace_back( S(--it,end(s)) );
+        return v;
+    }
+
+    template< class S, class V = std::vector<S> >
+    V operator() ( const S& s ) const {
+        return not null(s) ? _tails(s) : V();
+    }
+} tails;
+
+struct Permutations {
+    template< class S >
+    static bool _next_p_ref( S& s ) {
+        return std::next_permutation( begin(s), end(s) );
+    }
+
+    template< class S >
+    static S _next_p( S s ) {
+        _next_p_ref( s );
+        return s;
+    }
+
+    template< class S >
+    using SeqSeq = std::vector<Decay<S>>;
+
+    template< class S, class V = SeqSeq<S> >
+    static V sortedPermutations( S&& original ) {
+        V r{ forward<S>(original) };
+        Dup<S> next;
+        while( next = last(r), _next_p_ref(next) )
+            r.emplace_back( move(next) );
+        return r;
+    }
+
+    template< class S, class V = SeqSeq<S> >
+    static V _permutations( S&& original ) {
+        V r{ forward<S>(original) };
+        while( true ) {
+            auto next = _next_p( last(r) );
+            if( next != head(r) )
+                r.emplace_back( move(next) );
+            else
+                return r;
+        }
+    }
+
+    template< class S, class V = SeqSeq<S> >
+    V operator() ( S&& original ) const {
+        return ordered(original) ? sortedPermutations( forward<S>(original) )
+            : _permutations( forward<S>(original) );
+    }
+} permutations;
 
 /* 
  * concatMap f s = concat (map f s)
