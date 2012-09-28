@@ -271,21 +271,28 @@ unsigned int take_dir_prod( Vec dir, Vec pos, size_t n, const Mat& m ) {
     return prod;
 }
 
+struct Line {
+    std::string ln;
+    operator const std::string& () { return ln; }
+};
+
+std::istream& operator>> ( std::istream& is, Line& l ) {
+    return std::getline( is, l.ln );
+}
+
+constexpr int toInt( char c ) {
+    return c - '0';
+}
+
 void problem11() {
     std::ifstream fin( "e11" );
 
-    cout << "The largest product is: ";
+    cout << "The largest product is: " << flush;
 
-    Mat mat;
-    std::string tmp;
-    while( std::getline(fin,tmp) ) {
-        std::stringstream line( tmp );
-        unsigned int x;
-        Row row;
-        while( line >> x ) 
-            row.push_back( x );
-        mat.push_back( row );
-    }
+    Mat mat = mapExactly<Mat> ( 
+        []( const Line& l ) { return mapExactly<Row>( toInt, l.ln ); },
+        io::fileContents<Line>( fin ) 
+    );
 
 
     cout << foldMap ( 

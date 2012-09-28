@@ -6,9 +6,11 @@
 #include <vector>
 #include <array>
 #include <list>
+#include <set>
 #include <cctype>
 
 #include <iostream>
+#include <fstream>
 
 using namespace std;
 using namespace pure;
@@ -33,12 +35,10 @@ Vec operator + ( const Vec& a, const Vec& b )
 }
 
 
-Vec operator * ( Vec&& a, float x )
+Vec operator * ( Vec a, float x )
 {
-    return map( closure(Mult(),x), move(a) ); 
+    return map( closure(Mult(),x), a ); 
 }
-Vec operator * ( float x, Vec&& a )      { return move(a) * x; }
-Vec operator * ( const Vec& a, float x ) { return Vec(a) * x; }
 Vec operator * ( float x, const Vec& a ) { return Vec(a) * x; }
 
 Vec operator / ( const Vec& v, float x ) { return v * (1/x); }
@@ -183,7 +183,7 @@ int main()
 {
     rcloset( print_xyz, 2, 3 )( 1 );
 
-    vector<int> evens = filter( even, {1,2,3,4,5,6,7,8,9,10,11,12} );
+    std::set<int> evens = filter( even, std::set<int>{1,2,3,4,5,6,7,8,9,10,11,12} );
     printf( "es = filter even [1..12] = %s\n", show(evens).c_str() );
     printf( "\tnull es = %s\n", show( null(evens) ).c_str() );
     printf( "\tlength es = %lu\n", length(evens) );
@@ -199,7 +199,7 @@ int main()
     printf( "\tdeleteFirstBy (==) es [2,6] = %s\n", 
             show( eraseFirst( equal_to<int>(),evens,vector<int>{1,2,6} ) ).c_str() );
     printf( "\tpermutations (take 3 es) = %s\n", 
-            show( permutations( take(3,evens) ) ).c_str() );
+            show( permutations( dupTo<std::vector>(take(3,evens)) ) ).c_str() );
     printf( "\tscanl (+) %s = %s\n", 
             show( evens ).c_str(), show( scanl( Add(), evens ) ).c_str() );
     printf( "\tscanr (+) %s = %s\n", 
@@ -280,10 +280,10 @@ int main()
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", rsqrDoublePlus2(3) );
 
     puts( "\naddM a b = do\n\tx <- a\n\ty <- b\n\tx + y" );
-    printf( "addM 2 4 = %s\n", 
+    printf( "addM (Just 2) (Just 4) = %s\n", 
             show( addM(Just(2), Just(4)) ).c_str() );
     puts( "addM2 a b = (+) <$> a <*> b" );
-    printf( "addM2 2 4 = %s\n\n",
+    printf( "addM2 (Just 2) (Just 4) = %s\n\n",
             show( addM2(Just(2), Just(4)) ).c_str() );
 
     printf( "5 * 2 = %d\n", closet(Mult(),5)(2) );

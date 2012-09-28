@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <set>
 #include <memory>
 
 namespace pure { 
@@ -35,7 +36,7 @@ namespace cata {
         using iterator   = Decay<decltype( begin(declval<Seq>()) )>;
         using distance_type = decltype( _dist<iterator>(declval<iterator>()) );
         using reference  = decltype( *declval<iterator>() );
-        using value_type = typename std::remove_reference<reference>::type;
+        using value_type = Decay<reference>;
     };
 }
 
@@ -222,11 +223,36 @@ constexpr R reverse_wrap( S&& s ) {
     return R( end(forward<S>(s)), begin(forward<S>(s)) );
 }
 
+template< class S > struct CanBackInsertT {
+    template< class _S > static auto f(_S& s) 
+        -> decltype( s.push_back(s.front()), std::true_type() );
+    template< class _S > static auto f(...) -> std::false_type;
+
+    using type = decltype( f<S>( declval<S&>() ) );
+};
+
+template< class S > using CanBackInsert = typename CanBackInsertT<S>::type;
+
+template< class S, class R >
+using EBackInsert = typename std::enable_if< CanBackInsert<S>::value, R >::type;
+template< class S, class R >
+using XBackInsert = typename std::enable_if< not CanBackInsert<S>::value, R >::type;
+
+template< class S, class _S = Decay<S> >
+auto tailInserter( S&& s ) -> EBackInsert< S, std::back_insert_iterator<_S> > {
+    return std::back_inserter( forward<S>(s) );
+}
+
+template< class S, class _S = Decay<S> >
+auto tailInserter( S&& s ) -> XBackInsert< S, std::insert_iterator<_S> > {
+    return std::inserter( forward<S>(s), end(forward<S>(s)) );
+}
+
 template< class R, class S >
 R dupExactly( const S& s ) {
     R r;
     copy( begin(s), end(s),
-          std::back_inserter(r) );
+          tailInserter(r) );
     return r;
 }
 
@@ -235,7 +261,7 @@ R dupExactly( const S& s, size_t n, size_t off = 0 ) {
     R r;
     copy_n( next( begin(s), off ), 
             std::min( n+1, length(s) ) - 1,
-            std::back_inserter(r) );
+            tailInserter(r) );
     return r;
 }
 
@@ -268,6 +294,13 @@ std::vector<X> dup( const std::initializer_list<X>& l ) {
 }
 
 template< class S > using Dup = decltype( dup(declval<S>()) );
+
+template< class P, class S, class R = Dup<S> >
+R dupIf( P&& p, const S& s ) {
+    R r;
+    std::copy_if( begin(s), end(s), tailInserter(r), forward<P>(p) );
+    return r;
+}
 
 template< class... > struct ReMapT;
 
@@ -310,30 +343,30 @@ Dup<S> reverse( S&& s ) {
 }
 
 template< class F, class RI, class XS >
-void _map( F&& f, RI&& ri, const XS& xs ) {
-    std::transform( begin(xs), end(xs), 
+void _map( F&& f, RI&& ri, XS&& xs ) {
+    std::transform( begin(forward<XS>(xs)), end(forward<XS>(xs)), 
                     forward<RI>(ri), forward<F>(f) );
 }
 
 template< class F, class RI, class XS, class YS, class ...ZS >
 void _map( F&& f, RI&& ri, 
-               const XS& xs, const YS& ys, const ZS& ...zs ) 
+           XS&& xs, YS&& ys, ZS&& ...zs ) 
 {
-    for( const auto& x : xs )
+    for( auto x : forward<XS>(xs) )
         _map( closure(forward<F>(f),x), forward<RI>(ri), 
-                  ys, zs... );
+              forward<YS>(ys), forward<ZS>(zs)... );
 }
 
 template< class R, class F, class ...S >
 R mapExactly( F&& f, S&& ...s ) {
     R r;
-    _map( forward<F>(f), back_inserter(r), forward<S>(s)... );
+    _map( forward<F>(f), tailInserter(r), forward<S>(s)... );
     return r;
 }
 
 /* mapTo<R> v = R( map(f,v) ) */
 template< template<class...> class _R, class F, class ...S,
-          class R = _R< Result<F,SeqRef<S>...> > > 
+          class R = _R< decltype(declval<F>()(*begin(declval<S>())...)) > >
 R mapTo( F&& f, S&& ...s ) {
     return mapExactly<R>( forward<F>(f), forward<S>(s)... );
 }
@@ -353,7 +386,7 @@ auto map( F&& f, S&& xs ) -> ESame< SeqVal<S>, Result<F,SeqRef<S>>,
                                 // we can't use this version.
                                 ESame<Decay<S>,Dup<S>,S> >
 {
-    _map( forward<F>(f), begin(forward<S>(xs)), forward<S>(xs) );
+    _map( forward<F>(f), begin(xs), forward<S>(xs) );
     return xs;
 }
 
@@ -422,7 +455,7 @@ auto map_it( F&& f, const S<X,XS...>& xs ) -> XSame< FX, X, R >
 {
     R r;
     for( auto it = begin(xs); it != end(xs); it++ )
-        r.push_back( forward<F>(f)( it ) );
+        _consRef( r, forward<F>(f)( it ) );
     return r;
 }
 
@@ -538,7 +571,7 @@ constexpr Y foldr( F&& f, std::initializer_list<Y> s ) {
  */
 template< typename A, typename B = A >
 A append( A a, const B& b ) {
-    copy( begin(b), end(b), back_inserter(a) );
+    std::copy( begin(b), end(b), tailInserter(a) );
     return a;
 }
 
@@ -555,9 +588,20 @@ struct Append {
 };
 
 template< class XS, class X >
-XS cons( XS xs, X&& x ) {
+EBackInsert<XS,XS> cons( XS xs, X&& x ) {
     xs.push_back( forward<X>(x) );
     return xs;
+}
+
+template< class XS, class X >
+XBackInsert<XS,XS> cons( XS xs, X&& x ) {
+    xs.insert( forward<X>(x) );
+    return xs;
+}
+
+template< class S, class X >
+void _consRef( S& s, X&& x ) {
+    s = cons( move(s), forward<X>(x) );
 }
 
 template< class XS, class X, class Y, class ...Z >
@@ -601,9 +645,7 @@ template< class F, class X, class S,
 V scanl( F&& f, X&& x, const S& s ) {
     V v{ forward<X>(x) };
     for( const auto& y : s )
-        v.emplace_back( 
-            forward<F>(f)( last(v), y )
-        );
+        _consRef( v, forward<F>(f)( last(v), y ) );
     return v;
 }
 
@@ -779,38 +821,51 @@ template< class I > struct XRange {
         : std::iterator<std::random_access_iterator_tag,I,I>
     {
         value_type i;
+        value_type stride;
 
-        constexpr iterator( value_type i ) : i(i) { }
+        constexpr iterator( value_type i, value_type stride ) 
+            : i(i), stride(stride) { }
+        constexpr iterator( iterator it, value_type stride ) 
+            : i(*it), stride(stride) { }
 
         constexpr value_type operator* () { return i; }
-        iterator operator++ () { return ++i; }
-        iterator operator-- () { return --i; }
-        iterator operator-- (int) { return i--; }
-        iterator operator++ (int) { return i++; }
+        iterator operator++ () { ++i; return *this; }
+        iterator operator-- () { --i; return *this; }
+        iterator operator-- (int) { auto cpy = *this; --(*this); return cpy; }
+        iterator operator++ (int) { auto cpy = *this; ++(*this); return cpy; }
 
 
-        constexpr iterator operator+ ( difference_type n ) { return i + n; }
-        constexpr iterator operator- ( difference_type n ) { return i - n; } 
-        constexpr difference_type operator- ( iterator other ) { return i - *other; }
+        constexpr iterator operator+ ( difference_type n ) { 
+            return iterator( i + n, stride );
+        }
+        constexpr iterator operator- ( difference_type n ) {
+            return iterator( i - n, stride );
+        } 
+        constexpr difference_type operator- ( iterator other ) { 
+            return (i - *other) / stride;
+        }
 
         constexpr bool operator== ( iterator other ) { return i == *other; }
         constexpr bool operator!= ( iterator other ) { return i != *other; }
 
-        iterator operator+= ( iterator other ) { 
-            i += *other; 
+        iterator& operator+= ( difference_type other ) { 
+            i += other * stride; 
             return *this;
         }
 
-        iterator& operator-= ( iterator other ) { 
-            i -= *other;
+        iterator& operator-= ( difference_type other ) { 
+            i -= other * stride;
             return *this;
         }
     };
 
+    value_type stride;
     iterator b, e;
 
-    constexpr XRange( value_type b, value_type e ) : b(b), e(e) { }
-    constexpr XRange( iterator b, iterator e ) : b(b), e(e) { }
+    constexpr XRange( value_type b, value_type e, value_type stride=1 ) 
+        : stride(stride), b(b,stride), e(e,stride)  { }
+    constexpr XRange( iterator b, iterator e, value_type stride=1 ) 
+        : stride(stride), b(b,stride), e(e,stride)  { }
 
     constexpr iterator begin() { return b; }
     constexpr iterator end()   { return e; }
@@ -837,14 +892,15 @@ using IRange = XRange<unsigned int>;
  * enumerate [b,e] = XRange( [b,e+1) )
  * Creates an inclusive range from b to e.
  */
-constexpr IRange enumerate( unsigned int b, unsigned int e ) {
+constexpr IRange enumerate( unsigned int b, unsigned int e, 
+                            unsigned int stride = 1 ) {
     // Adding one to the en
-    return IRange( b, e + 1 ); 
+    return IRange( b, e + stride, stride ); 
 }
 
 /* enumerate n = [n,n+1,n+2,...] */
 constexpr IRange enumerate( unsigned int b ) {
-    return IRange( b, std::numeric_limits<unsigned int>::max() ); 
+    return IRange( b, std::numeric_limits<unsigned int>::max(), 1 ); 
 }
 
 constexpr IRange enumerateTo( unsigned int e ) {
@@ -942,15 +998,20 @@ bool ordered( const Container& c )
 {
     return length(c) <= 1
         or mismatch ( 
-            begin(c), end(c)-1, 
-            begin(c)+1, 
+            begin(c), prev(end(c)), 
+            next(begin(c)), 
             std::less_equal<int>() 
         ).second == end(c);
 }
 
-/* filter f C -> { x for x in C such that f(x) is true. } */
+template< class I >
+using ItTraits = std::iterator_traits<I>;
+
+template< class I >
+using ItCata = typename ItTraits<I>::iterator_category;
+
 template< typename Container, typename F >
-Container filter( F&& f, Container cont )
+Container filter( F&& f, Container cont, std::output_iterator_tag )
 {
     cont.erase ( 
         remove_if( begin(cont), end(cont), 
@@ -960,11 +1021,25 @@ Container filter( F&& f, Container cont )
     return cont;
 }
 
+template< typename Container, typename F >
+Container filter( F&& f, Container cont, std::input_iterator_tag  )
+{
+    return dupIf( forward<F>(f), cont );
+}
+
+/* filter f C -> { x for x in C such that f(x) is true. } */
+template< typename Container, typename F >
+Container filter( F&& f, Container cont )
+{
+    using I = decltype( begin(cont) );
+    return filter( forward<F>(f), move(cont), ItCata<I>() );
+}
+
 template< class X, class F, class V = std::vector<X> >
 V filter( F&& f, const std::initializer_list<X>& cont ) {
     V v;
     v.reserve( length(cont) );
-    copy_if( begin(cont), end(cont), back_inserter(v), forward<F>(f) );
+    copy_if( begin(cont), end(cont), tailInserter(v), forward<F>(f) );
     return v;
 }
 
@@ -977,7 +1052,7 @@ R filtrate( F&& f, P&& p, S&& s ) {
     for( auto& x : forward<S>(s) ) {
         auto y = forward<F>(f)( x );
         if( forward<P>(p)(y) )
-            r.push_back( move(y) );
+            _consRef( r, move(y) );
     }
     return r;
 }
@@ -1105,19 +1180,32 @@ constexpr P splitAt( size_t n, S&& s ) {
     );
 }
 
+template< class P, class S, class _S = Decay<S> >
+std::pair<_S,_S> sbreak( P&& p, S&& s ) {
+    return splitAt( cfindIf(forward<P>(p),forward<S>(s)), forward<S>(s) );
+}
+
+template< class P, class S, class _S = Decay<S>, class V = std::vector<_S> >
+V splitBy( P&& p, S&& s ) {
+    _S low, high;
+    std::tie(low,high) = sbreak( forward<P>(p), forward<S>(s) );
+    high = dropWhile( forward<P>(p), move(high) );
+
+    V r{ move(low) };
+    return null(high) ? r
+        : append( move(r), 
+                  splitBy( forward<P>(p), move(high) ) );
+}
+
 template< class P,
           class S, class _S = Decay<S>, 
           class R = std::pair<_S,_S> >
 R span( P&& p, S&& s ) {
     R r;
     for( auto& x : s )
-        (forward<P>(p)( x ) ? r.second:r.first).push_back( x );
+        _consRef( forward<P>(p)( x ) ? r.second:r.first,
+                  x );
     return r;
-}
-
-template< class P, class S, class _S = Decay<S> >
-std::pair<_S,_S> sbreak( P&& p, S&& s ) {
-    return splitAt( cfindIf(forward<P>(p),forward<S>(s)), forward<S>(s) );
 }
 
 template< class XS, class YS >
@@ -1177,7 +1265,7 @@ V elemIndecies( const X& x, const S& s ) {
     while(true) {
         it = cfind( x, range<S>(it,end(s)) );
         if( it != end(s) )
-            v.push_back( distance(begin(s),it++) );
+            _consRef( v, distance(begin(s),it++) );
         else 
             break;
     }
@@ -1194,7 +1282,15 @@ S insert( X&& x, S s ) {
     return s;
 }
 
-/* insert p y xs -- inserts into the first place where (p x) == True. */
+template< class X, class S >
+S nubInsert( X&& x, S s ) {
+    auto it = std::lower_bound( begin(s), end(s), forward<X>(x) );
+    if( *it != x )
+        s.insert( it, forward<X>(x) );
+    return s;
+}
+
+/* insert p y xs -- inserts y into the first place where (p x) == True. */
 template< class P, class X, class S >
 S insert( P&& p, X&& x, S s ) {
     s.insert( 
@@ -1239,7 +1335,7 @@ XS eraseFirst( P&& p, XS xs, std::initializer_list<Y> l ) {
 
 template< class S, class X >
 S consSet( S s, X&& x ) {
-    return notElem(x,s) ?  cons( move(s), forward<X>(x) ) : s;
+    return nubInsert( forward<X>(x), move(s) );
 }
 
 template< class DS, class S, class X >
@@ -1329,7 +1425,7 @@ XS intersectIf( F&& f, const XS& xs, const YS& ys ) {
     XS r;
     for( auto& x : xs )
         if( any( closure(forward<F>(f),x), ys ) )
-            r.push_back( x );
+            _consRef( r, x );
     return r;
 }
 
@@ -1463,11 +1559,11 @@ R concatMap( F&& f, S&& ...xs ) {
 /* zipWith f A B -> { f(a,b) for a in A and b in B } */
 template< class F, class R, class ...S >
 R _zipWith( F&& f, R r, const S& ...s ) {
-return each( NotNull(), s... ) ?
-    _zipWith( forward<F>(f),
-               cons( move(r), forward<F>(f)( head(s)... ) ),
-               tail_wrap( s )... )
-    : r;
+    return each( NotNull(), s... ) ?
+        _zipWith( forward<F>(f),
+                   cons( move(r), forward<F>(f)( head(s)... ) ),
+                   tail_wrap( s )... )
+        : r;
 }
 
 template< class F, class XS, class ...YS, class R = Dup<XS> >
@@ -1481,6 +1577,35 @@ S zipWith( F&& f, const S& a, S b ) {
     std::transform( begin(a), end(a), begin(b), 
                     begin(b), forward<F>(f) );
     return b;
+}
+
+template< class S >
+std::vector<Decay<S>> lines( S&& s ) {
+    return splitBy( equalTo('\n'), forward<S>(s) );
+}
+
+template< class SS, class S = SeqVal<SS> >
+S unlines( const SS& ss ) {
+    // Remove the last '\n'.
+    return init (
+        // Intersperse with '\n'.
+        concatMap( closure(flip(Cons()),'\n'), ss )
+    );
+}
+
+#include <cctype>
+template< class S >
+std::vector<Decay<S>> words( S&& s ) {
+    return splitBy( isspace, forward<S>(s) );
+}
+
+template< class SS, class S = SeqVal<SS> >
+S unwords( const SS& ss ) {
+    // Remove the last ' '.
+    return init (
+        // Intersperse with ' '.
+        concatMap( closure(flip(Cons()),' '), ss )
+    );
 }
 
 } // namespace list.

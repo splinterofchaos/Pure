@@ -412,6 +412,30 @@ constexpr auto plus( X x ) -> Closet<Add,X> {
     return closet( Add(), move(x) );
 }
 
+struct NotEq {
+    template< class X, class Y >
+    constexpr bool operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) != forward<Y>(y);
+    }
+};
+
+struct Eq {
+    template< class X, class Y >
+    constexpr bool operator() ( X&& x, Y&& y ) {
+        return forward<X>(x) == forward<Y>(y);
+    }
+};
+
+template< class X >
+constexpr Closet<Eq,X> equalTo( X x ) {
+    return closet( Eq(), x );
+}
+
+template< class X >
+constexpr Closet<Eq,X> notEqualTo( X x ) {
+    return closet( NotEq(), x );
+}
+
 struct Less {
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
