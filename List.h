@@ -419,7 +419,7 @@ template< class XS, class YS, class ...ZS, class F,
                   declval<F>()( declval<SeqVal<XS>>(), declval<SeqVal<YS>>(), 
                                 declval<SeqVal<ZS>>()... )
               ) > > 
-R map( F&& f, XS& xs, YS&& ys, ZS&& ...zs ) {
+R map( F&& f, XS&& xs, YS&& ys, ZS&& ...zs ) {
     return mapExactly<R>( forward<F>(f), 
                           forward<XS>(xs), forward<YS>(ys), forward<ZS>(zs)... );
 }
