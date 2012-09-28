@@ -343,17 +343,18 @@ Dup<S> reverse( S&& s ) {
 }
 
 template< class F, class RI, class XS >
-void _map( F&& f, RI&& ri, const XS& xs ) {
-    std::transform( begin(xs), end(xs), 
+void _map( F&& f, RI&& ri, XS&& xs ) {
+    std::transform( begin(forward<XS>(xs)), end(forward<XS>(xs)), 
                     forward<RI>(ri), forward<F>(f) );
 }
 
 template< class F, class RI, class XS, class YS, class ...ZS >
 void _map( F&& f, RI&& ri, 
-           const XS& xs, const YS& ys, const ZS& ...zs ) 
+           XS&& xs, YS&& ys, ZS&& ...zs ) 
 {
-    for( const auto& x : xs )
-        _map( closure(forward<F>(f),x), forward<RI>(ri), ys, zs... );
+    for( auto x : forward<XS>(xs) )
+        _map( closure(forward<F>(f),x), forward<RI>(ri), 
+              forward<YS>(ys), forward<ZS>(zs)... );
 }
 
 template< class R, class F, class ...S >
