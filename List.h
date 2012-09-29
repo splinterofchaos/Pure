@@ -816,9 +816,14 @@ constexpr I biIterate( F f, X a, X b ) {
 template< class I > struct XRange {
     using value_type = I;
     using difference_type = ItDist<I>;
+    using pointer = I*;
+    using const_pointer = const I*;
+    using reference = I&;
+    using const_reference = const I&;
 
     struct iterator 
-        : std::iterator<std::random_access_iterator_tag,I,I>
+        : std::iterator< std::random_access_iterator_tag,
+                         value_type, difference_type, pointer, reference >
     {
         value_type i;
         value_type stride;
@@ -828,7 +833,8 @@ template< class I > struct XRange {
         constexpr iterator( iterator it, value_type stride ) 
             : i(*it), stride(stride) { }
 
-        constexpr value_type operator* () { return i; }
+        constexpr const_reference operator* () const { return i; }
+        reference operator* () { return i; }
         iterator operator++ () { ++i; return *this; }
         iterator operator-- () { --i; return *this; }
         iterator operator-- (int) { auto cpy = *this; --(*this); return cpy; }

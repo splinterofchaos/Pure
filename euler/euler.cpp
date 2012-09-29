@@ -143,13 +143,16 @@ R maybeMaximum( R r, const S& s ) {
 }
 
 #include <limits>
-template< class X > struct Largest {
+template< class X > 
+struct Largest {
     X x;
 
     constexpr Largest( X y ) : x(move(y)) { }
-    constexpr Largest() : x(std::numeric_limits<X>::lowest()) { }
+    constexpr Largest() : x(0) { }
 
-    operator const X& () { return x; }
+    operator X () { return x; }
+
+    X get() { return x; }
 };
 
 template< class X >
@@ -163,7 +166,7 @@ namespace pure {
         static constexpr Larg mempty() { return Larg(); }
 
         static constexpr X mappend( const X& a, const X& b ) {
-            return std::max( a, b );
+            return a > b ? a : b;
         }
     };
 }
@@ -206,8 +209,7 @@ void problem6() {
 
     constexpr auto N = enumerate( 1, 100 );
 
-    // A sum on an XRange (enumerate's return type) is a constexpr!
-    constexpr unsigned int sqrOfSum = sum(N) * sum(N);
+    unsigned int sqrOfSum = sum(N) * sum(N);
 
     using P = float(*)(float,float);
     cout << sqrOfSum - (unsigned int)sum( rclosure(P(pow),2) ^ N ) << endl;
@@ -419,6 +421,45 @@ void problem13() {
     cout << append( digits(carry), take(8,sum) ) << endl;
 }
 
+unsigned int e14Iterate( unsigned int x ) {
+    return even(x) ? x/2 : 3*x + 1;
+}
+
+struct E14 {
+    unsigned int starting;
+    unsigned int count;
+
+    E14( unsigned int start ) : starting(start), count(0) {
+        auto n = starting;
+        count = 1;
+        
+        while( n > 1 ) {
+            count++;
+            n = e14Iterate( n );
+        }
+    }
+};
+
+constexpr bool operator< ( const E14& a, const E14& b ) {
+    return a.count < b.count;
+}
+
+constexpr bool operator> ( const E14& a, const E14& b ) {
+    return a.count > b.count;
+}
+
+void problem14() {
+    cout << "The maximum path of the serries starts on " << flush;
+
+    unsigned int x = 13;
+    E14 max( x );
+    while( x++ < 1000000 ) {
+        max = std::max( max, E14(x) );
+    }
+
+    cout << max.starting << " (" << max.count << " runs)" << endl;
+}
+
 int main() {
     problem1();
     problem2();
@@ -433,4 +474,5 @@ int main() {
     problem11(); 
     problem12();
     problem13();
+    problem14();
 }
