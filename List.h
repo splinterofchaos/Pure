@@ -282,18 +282,18 @@ S dup( const S& s ) {
     return s;
 }
 
-template< class S, class I, class R = Range<S,I>, 
-          class RS = typename R::sequence_type >
-RS dup( const Range<S,I>& r ) {
-    return dupExactly<RS>( r );
-}
-
 template< class X >
 std::vector<X> dup( const std::initializer_list<X>& l ) {
     return dupTo<std::vector>( l );
 }
 
 template< class S > using Dup = decltype( dup(declval<S>()) );
+
+template< class S, class I, class R = Range<S,I>, 
+          class RS = typename R::sequence_type >
+RS dup( const Range<S,I>& r ) {
+    return dupExactly<RS>( r );
+}
 
 template< class P, class S, class R = Dup<S> >
 R dupIf( P&& p, const S& s ) {

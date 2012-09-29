@@ -20,6 +20,17 @@ std::ostream& operator<< ( std::ostream& os, const std::vector<X>& v ) {
     return os;
 }
 
+template< class X >
+std::ostream& operator<< ( std::ostream& os, 
+                           const std::vector<std::vector<X>>& vv ) 
+{
+    os << "{\n";
+    for( auto& v : vv ) 
+        os << '\t' << v << '\n';
+    os << "}";
+    return os;
+}
+
 template< class X, size_t N >
 std::ostream& operator<< ( std::ostream& os, const std::array<X,N>& v ) {
     os << "< ";
@@ -27,6 +38,20 @@ std::ostream& operator<< ( std::ostream& os, const std::array<X,N>& v ) {
     os << ">";
     return os;
 }
+
+struct ToInt {
+    constexpr int operator() ( char c ) {
+        return c - '0';
+    }
+
+    unsigned long long operator() ( const std::string& s ) const {
+        // Be lazy, use the std.
+        std::istringstream is( s );
+        unsigned long long x;
+        is >> x;
+        return x;
+    }
+} toInt;
 
 vector<int> multiples_less_than_1000( int x ) {
     return take (
@@ -88,19 +113,27 @@ void problem3() {
 
 #include <cmath>
 
-vector<int> digits( int x ) {
-    // TODO: Perhaps this would be a good test case for implementing mapAccum.
-    vector<int> ds;
-    for( ; x > 0; x = x / 10 )
-        ds.push_back( x % 10 );
-    return ds;
-}
+using Digits = std::vector<unsigned int>;
 
-bool _palindrome( const vector<int>& v ) {
+struct DigitsT {
+    Digits operator() ( unsigned int x ) {
+        // TODO: Perhaps this would be a good test case for implementing mapAccum.
+        Digits ds;
+        for( ; x > 0; x = x / 10 )
+            ds.push_back( x % 10 );
+        return ds;
+    }
+
+    Digits operator() ( const std::string& s ) {
+        return mapExactly<vector<unsigned int>>( toInt, s );
+    }
+} digits;
+
+bool _palindrome( const vector<unsigned int>& v ) {
     return equal( v, reverse_wrap(v) );
 }
 
-bool palindrome( int x ) {
+bool palindrome( unsigned int x ) {
     return _palindrome( digits(x) );
 }
 
@@ -280,10 +313,6 @@ std::istream& operator>> ( std::istream& is, Line& l ) {
     return std::getline( is, l.ln );
 }
 
-constexpr int toInt( char c ) {
-    return c - '0';
-}
-
 void problem11() {
     std::ifstream fin( "e11" );
 
@@ -360,6 +389,36 @@ void problem12() {
     cout << "traiangle(" << n << ") = " << tri() << endl;
 }
 
+void problem13() {
+    std::ifstream fin( "e13" );
+
+    cout << "The first 10 digits of the sum is : " << flush;
+
+    using DS = std::vector<Digits>;
+
+    auto nums = mapExactly<DS> (
+        digits,
+        io::fileContents<std::string>(fin) 
+    );
+
+    unsigned int carry = 0;
+    auto sum = reverse (
+        map (
+            [&]( unsigned int i ) {
+                unsigned long int sum = carry;
+                for( auto j : enumerate(nums) )
+                    sum += nums[j][i];
+                carry = sum / 10;
+                return sum % 10;
+            },
+            // Reverse the order of the columns: LSD first.
+            reverse( dupTo<std::vector>(enumerate(nums[0])) )
+        )
+    );
+
+    cout << append( digits(carry), take(8,sum) ) << endl;
+}
+
 int main() {
     problem1();
     problem2();
@@ -373,4 +432,5 @@ int main() {
     problem10(); 
     problem11(); 
     problem12();
+    problem13();
 }
