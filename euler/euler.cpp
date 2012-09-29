@@ -460,6 +460,61 @@ void problem14() {
     cout << max.starting << " (" << max.count << " runs)" << endl;
 }
 
+struct Cache { Vec dims; unsigned long long x; };
+
+bool operator== ( const Vec& dims, const Cache& c ) {
+    return c.dims == dims;
+}
+bool operator== ( const Cache& c, const Vec& dims ) {
+    return c.dims == dims;
+}
+
+unsigned long long int& countWaysCached( int x, int y ) {
+    if( x < y )
+        return countWaysCached(y,x);
+
+    static std::vector<Cache> cache = { {{{0,0}},0}, {{{1,1}},2} };
+
+    auto it = cfind( Vec{{x,y}}, cache );
+    if( it != end(cache) )
+        return it->x;
+    else {
+        // When y = 1, we have a grid like this:
+        //     2  1 1 ...
+        //      +-+-+-...-+
+        //      | | | ... |
+        //      +-+-+-...-+
+        // with 2 + (x-1) paths.
+        //
+        // When x or y equals 0, we are looking at a one-path grid.
+        //    1 +-+-...-+
+        //
+        // Return one of the above, signifying the value, or zero signifying it
+        // must be calculated.
+        unsigned int ans = y==1 ? x+1 
+            : x==0 or y==0;
+        cache.push_back( { {{x,y}}, ans } );
+        return cache.back().x;
+    }
+}
+
+unsigned long long int countWays( int max, int x, int y ) {
+    // Get a cached reference.
+    auto& count = countWaysCached( max - x, max - y );
+    return count ?  count 
+        // Cache the value before returning.
+        : (count = countWays(max,x+1,y) + countWays(max,x,y+1));
+}
+
+unsigned long long int countWays( int max ) {
+    return countWays(max,0,0);
+}
+
+void problem15() {
+    cout << "A 20x20 grid can be traversed " << flush;
+    cout << countWays(20) << " ways." << endl;
+}
+
 int main() {
     problem1();
     problem2();
@@ -475,4 +530,5 @@ int main() {
     problem12();
     problem13();
     problem14();
+    problem15();
 }
