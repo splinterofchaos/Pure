@@ -51,6 +51,16 @@ struct ToInt {
         is >> x;
         return x;
     }
+
+    template< class X >
+    constexpr unsigned long long from( const X& x ) {
+        return x;
+    }
+
+    template< class X >
+    constexpr unsigned long long operator() ( const X& x ) {
+        return from(x);
+    }
 } toInt;
 
 vector<int> multiples_less_than_1000( int x ) {
@@ -515,6 +525,31 @@ void problem15() {
     cout << countWays(20) << " ways." << endl;
 }
 
+Digits operator* ( Digits ds, int x ) {
+    unsigned int carry = 0;
+    ds = map (
+        [&]( unsigned int d ) {
+            auto r = d * x + carry;
+            carry = r / 10;
+            return r % 10;
+        },
+        reverse(move(ds))
+    );
+
+    return append( digits(carry), reverse(move(ds)) );
+}
+
+void problem16() {
+    cout << "The sum of " << flush;
+    Digits ds = { 2 };
+    for( unsigned int power = 1; power < 1000; power++ ) {
+        ds = move(ds) * 2;
+    }
+    cout << "2^1000 is " << flush;
+    cout << sum(ds) << endl;
+}
+
+
 int main() {
     problem1();
     problem2();
@@ -531,4 +566,5 @@ int main() {
     problem13();
     problem14();
     problem15();
+    problem16();
 }
