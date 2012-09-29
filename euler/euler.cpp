@@ -607,6 +607,34 @@ void problem17() {
     cout << sum + length("onethousand") << endl;
 }
 
+void problem18() {
+    std::ifstream fin( "e18" );
+
+    auto rows = mapTo<std::vector> (
+        []( const Line& l ) { return mapTo<std::vector>( toInt, 
+                                                         words(l.ln ) ); },
+        io::fileContents<Line>(fin) 
+    );
+    using Rows = decltype( rows );
+    using Row  = list::SeqVal<Rows>;
+
+    cout << "The maximum path computes to : " << flush;
+
+    for( unsigned int y = 1; y < length(rows); y++ ) {
+        for( auto x : enumerate(rows[y]) ) {
+            using U = unsigned long long;
+            U fromAbove = 0;
+            if( x > 0 )
+               fromAbove = rows[y-1][x-1];
+            if( x < length(rows[y]) - 1 ) 
+                fromAbove = std::max( fromAbove, (U)rows[y-1][x] );
+            rows[y][x] += fromAbove;
+        }
+    }
+
+    cout << list::maximum( last(rows) ) << endl;
+}
+
 int main() {
     problem1();
     problem2();
@@ -625,4 +653,5 @@ int main() {
     problem15();
     problem16();
     problem17();
+    problem18();
 }
