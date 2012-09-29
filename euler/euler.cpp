@@ -80,6 +80,13 @@ void problem1() {
 
 constexpr auto even = fnot( rcloset( Mod(), 2 ) );
 
+constexpr unsigned long long operator "" _K ( unsigned long long x ) {
+    return x * 1000;
+}
+constexpr unsigned long long operator "" _M ( unsigned long long x ) {
+    return x * 1000000;
+}
+
 void problem2() {
     cout << "The sum of every even Fibonacci number below 4-million: "
          << flush << 
@@ -87,8 +94,8 @@ void problem2() {
              filter ( 
                  even,
                  takeWhile (
-                     lessThan( 4000000 ),
-                     biIterate( Add(), 1, 2 )
+                     lessThan( 4_M ),
+                     biIterate( Add(), 1u, 2u )
                  )
              )
          ) << endl;
@@ -287,8 +294,10 @@ using Row = vector<unsigned int>;
 using Mat = vector<Row>;
 
 using Vec = std::array<int,2>;
-int get_x( const Vec& v ) { return get<0>(v); }
-int get_y( const Vec& v ) { return get<1>(v); }
+const int& get_x( const Vec& v ) { return get<0>(v); }
+const int& get_y( const Vec& v ) { return get<1>(v); }
+int& get_x( Vec& v ) { return get<0>(v); }
+int& get_y( Vec& v ) { return get<1>(v); }
 
 Vec operator+ ( const Vec& a, const Vec& b ) {
     return zipWith( Add(), a, b );
@@ -300,6 +309,15 @@ Vec operator- ( const Vec& a, const Vec& b ) {
 
 Vec operator* ( Vec a, int x ) {
     return map( pure::plus(x), move(a) );
+}
+
+#include <cstdio>
+Vec operator "" _v ( const char* const str, 
+                                              size_t ) 
+{
+    Vec v;
+    sscanf( str, "%dx%d", &get_x(v), &get_y(v) );
+    return v;
 }
 
 unsigned int take_dir_prod( Vec dir, Vec pos, size_t n, const Mat& m ) {
@@ -341,8 +359,8 @@ void problem11() {
             return take_dir_prod( dir, {{i,j}}, 4, mat ); 
         }, 
         enumerate(mat), enumerate(mat[0]),  
-        std::initializer_list<Vec>{ Vec{{-1,0}}, Vec{{ 1,1}},
-                                    Vec{{ 0,1}}, Vec{{-1,1}} }
+        std::initializer_list<Vec>{ "-1x0"_v, " 1x1"_v,
+                                    " 0x1"_v, "-1x1"_v }
     ) << endl;
 }
 
@@ -463,7 +481,7 @@ void problem14() {
 
     unsigned int x = 13;
     E14 max( x );
-    while( x++ < 1000000 ) {
+    while( x++ < 1_M ) {
         max = std::max( max, E14(x) );
     }
 
@@ -578,8 +596,7 @@ std::string tens( unsigned int x ) {
     unsigned int i = x / 10;
     const std::string HUNDRED = "";
     auto o = ones( x );
-    return 
-        (x >= 100 and i == 0 ? HUNDRED : values[ i ]) 
+    return (x >= 100 and i == 0 ? HUNDRED : values[ i ]) 
         + (length(o) ? "-" + o : std::string(""));
 }
 
@@ -635,6 +652,14 @@ void problem18() {
     cout << list::maximum( last(rows) ) << endl;
 }
 
+void problem20() {
+    cout << "The sum of !100 = " << flush;
+    Digits ds = { 1 };
+    for( unsigned int x = 100; x > 1; x-- )
+        ds = move(ds) * x;
+    cout << sum(ds) << endl;
+}
+
 int main() {
     problem1();
     problem2();
@@ -654,4 +679,6 @@ int main() {
     problem16();
     problem17();
     problem18();
+    // 19!
+    problem20();
 }
