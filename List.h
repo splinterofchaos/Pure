@@ -70,6 +70,11 @@ constexpr size_t length( X (&)[N] ) {
     return N;
 }
 
+template< size_t N >
+constexpr size_t length( const char (&)[N] ) {
+    return N - 1;
+}
+
 template< class S >
 constexpr bool null( const S& s ) {
     return begin(s) == end(s);

@@ -549,6 +549,63 @@ void problem16() {
     cout << sum(ds) << endl;
 }
 
+std::string ones( unsigned int x ) {
+    static const std::vector<std::string> strings = {
+        "", "one", "two", "three", "four", "five", 
+        "six", "seven", "eight", "nine", 
+    };
+    return strings[ x % 10 ];
+}
+
+std::string tens( unsigned int x ) {
+    if( x < 10 )
+        return ones(x);
+
+    static const std::vector<std::string> teens = {
+        "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", 
+        "sixteen", "seventeen", "eighteen", "nineteen"
+    };
+
+    x = x % 100;
+
+    if( x >= 10 and x < 20 )
+        return teens[ x % 10 ];
+
+    static const std::vector<std::string> values = {
+        "", "ten", "twenty", "thirty", "forty", "fifty", 
+        "sixty", "seventy", "eighty", "ninety" 
+    };
+    unsigned int i = x / 10;
+    const std::string HUNDRED = "";
+    auto o = ones( x );
+    return 
+        (x >= 100 and i == 0 ? HUNDRED : values[ i ]) 
+        + (length(o) ? "-" + o : std::string(""));
+}
+
+std::string hundreds( unsigned int x ) {
+    auto t = tens( x % 100 );
+    auto o = ones( x / 100 );
+    return x < 100 ? t 
+        : length(t) ? o + " hundred and " + t
+        : o + " hundred";
+}
+
+void problem17() {
+    cout << "The length of every number, 1-1000, written out : " << flush;
+    unsigned long long sum = 0;
+    for( auto x : enumerate(1,999) ) {
+        auto s = hundreds(x);
+        auto c = std::count_if (
+            begin(s), end(s),
+            []( char c ){
+                return not std::isspace(c) and c != '-';
+            } 
+        );
+        sum += c;
+    }
+    cout << sum + length("onethousand") << endl;
+}
 
 int main() {
     problem1();
@@ -567,4 +624,5 @@ int main() {
     problem14();
     problem15();
     problem16();
+    problem17();
 }
