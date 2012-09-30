@@ -830,10 +830,10 @@ constexpr I biIterate( F f, X a, X b ) {
 template< class I > struct XRange {
     using value_type = I;
     using difference_type = ItDist<I>;
-    using pointer = I*;
-    using const_pointer = const I*;
-    using reference = I&;
-    using const_reference = const I&;
+    using pointer         = I;
+    using const_pointer   = I;
+    using reference       = I;
+    using const_reference = I;
 
     struct iterator 
         : std::iterator< std::random_access_iterator_tag,
