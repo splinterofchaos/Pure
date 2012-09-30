@@ -20,6 +20,17 @@ std::ostream& operator<< ( std::ostream& os, const std::vector<X>& v ) {
     return os;
 }
 
+template< class X >
+std::ostream& operator<< ( std::ostream& os, 
+                           const std::vector<std::vector<X>>& vv ) 
+{
+    os << "{\n";
+    for( auto& v : vv ) 
+        os << '\t' << v << '\n';
+    os << "}";
+    return os;
+}
+
 template< class X, size_t N >
 std::ostream& operator<< ( std::ostream& os, const std::array<X,N>& v ) {
     os << "< ";
@@ -27,6 +38,30 @@ std::ostream& operator<< ( std::ostream& os, const std::array<X,N>& v ) {
     os << ">";
     return os;
 }
+
+struct ToInt {
+    constexpr int operator() ( char c ) {
+        return c - '0';
+    }
+
+    unsigned long long operator() ( const std::string& s ) const {
+        // Be lazy, use the std.
+        std::istringstream is( s );
+        unsigned long long x;
+        is >> x;
+        return x;
+    }
+
+    template< class X >
+    constexpr unsigned long long from( const X& x ) {
+        return x;
+    }
+
+    template< class X >
+    constexpr unsigned long long operator() ( const X& x ) {
+        return from(x);
+    }
+} toInt;
 
 vector<int> multiples_less_than_1000( int x ) {
     return take (
@@ -45,11 +80,18 @@ void problem1() {
 
 constexpr auto even = fnot( rcloset( Mod(), 2 ) );
 
+constexpr unsigned long long operator "" _K ( unsigned long long x ) {
+    return x * 1000;
+}
+constexpr unsigned long long operator "" _M ( unsigned long long x ) {
+    return x * 1000000;
+}
+
 void problem2() {
     cout << "The sum of every even Fibonacci number below 4-million: "
          << flush << 
-         ( sum ^ filter(even) ^ takeWhile(lessThan(4000000)) ) (
-                 biIterate( Add(), 1, 2 )
+         ( sum ^ filter(even) ^ takeWhile(lessThan(4_M)) ) (
+             biIterate( Add(), 1u, 2u )
          ) << endl;
 }
 
@@ -63,7 +105,7 @@ PrimeType next_prime( const vector<PrimeType>& past ) {
     return x;
 }
 
-auto primes = memorize( next_prime, 2ull, 3ull );
+auto primes = memorize( next_prime, 1ull, 2ull, 3ull );
 
 void problem3() {
     const long int START = 600851475143;
@@ -71,7 +113,7 @@ void problem3() {
 
     cout << "The largest prime divisor of " << START << flush;
 
-    auto p = begin( primes );
+    auto p = next(begin( primes ));
 
     while( *p < std::sqrt(x) )
         if( x % *p++ == 0 )
@@ -82,34 +124,75 @@ void problem3() {
 
 #include <cmath>
 
-vector<int> digits( int x ) {
-    // TODO: Perhaps this would be a good test case for implementing mapAccum.
-    vector<int> ds;
-    for( ; x > 0; x = x / 10 )
-        ds.push_back( x % 10 );
-    return ds;
-}
+using Digits = std::vector<unsigned int>;
 
-bool _palindrome( const vector<int>& v ) {
+struct DigitsT {
+    Digits operator() ( unsigned int x ) {
+        // TODO: Perhaps this would be a good test case for implementing mapAccum.
+        Digits ds;
+        for( ; x > 0; x = x / 10 )
+            ds.push_back( x % 10 );
+        return ds;
+    }
+
+    Digits operator() ( const std::string& s ) {
+        return mapExactly<vector<unsigned int>>( toInt, s );
+    }
+} digits;
+
+bool _palindrome( const vector<unsigned int>& v ) {
     return equal( v, reverse_wrap(v) );
 }
 
-bool palindrome( int x ) {
+bool palindrome( unsigned int x ) {
     return _palindrome( digits(x) );
+}
+
+template< class R, class S >
+R maybeMaximum( R r, const S& s ) {
+    return null(s) ? r : std::max( r, maximum(s) );
+}
+
+#include <limits>
+template< class X > 
+struct Largest {
+    X x;
+
+    constexpr Largest( X y ) : x(move(y)) { }
+    constexpr Largest() : x(0) { }
+
+    operator X () { return x; }
+
+    X get() { return x; }
+};
+
+template< class X >
+Largest<X> returnLargest( X x ) {
+    return x;
+}
+
+namespace pure {
+    template< class X > struct Monoid< Largest<X> > {
+        template< class Larg >
+        static constexpr Larg mempty() { return Larg(); }
+
+        static constexpr X mappend( const X& a, const X& b ) {
+            return a > b ? a : b;
+        }
+    };
 }
 
 void problem4() {
     cout << "The largest palindrome product of three digit numbers :"
          << flush;
-    cout << maximum ( 
-        map ( 
-            []( const IRange& r ) -> unsigned int {
-                auto ps = filter( palindrome )( times(last(r)) ^ init(r) );
+    cout << foldMap (
+            []( const IRange& r ) -> Largest<int> {
+                auto ps = filter( palindrome, 
+                                  map( times(last(r)), init(r) ) );
                 return notNull(ps) ? maximum(ps) : 0;
             },
             // We remove the first three values: {} {100}, and {100,101}.
-            ( drop(3) ^ inits )( enumerate(100,999) ) 
-        )
+            drop( 3, inits(enumerate(100,999)) ) 
     ) << endl;
 }
 
@@ -127,7 +210,7 @@ int lcm( int x, int y ) {
 }
 
 void problem5() {
-    cout << foldl( lcm, enumerate(2,19) ) 
+    cout << pure::foldl( lcm, enumerate(2,19) ) 
          << " is divisible by all numbers 1 thought 20." << endl;
 }
 
@@ -137,8 +220,7 @@ void problem6() {
 
     constexpr auto N = enumerate( 1, 100 );
 
-    // A sum on an XRange (enumerate's return type) is a constexpr!
-    constexpr unsigned int sqrOfSum = sum(N) * sum(N);
+    unsigned int sqrOfSum = sum(N) * sum(N);
 
     using P = float(*)(float,float);
     cout << sqrOfSum - (unsigned int)sum( rclosure(P(pow),2) ^ N ) << endl;
@@ -146,10 +228,7 @@ void problem6() {
 
 void problem7() {
     cout << "The 1001'st prime number: " << flush;
-    cout << *next ( 
-        begin( primes ), 
-        10000 
-    ) << endl;
+    cout << *next( begin(primes), 10001 ) << endl;
 }
 
 int from_sym( char sym ) { return sym - '0'; }
@@ -159,11 +238,11 @@ void problem8() {
 
     const string nsStr = "7316717653133062491922511967442657474235534919493496983520312774506326239578318016984801869478851843858615607891129494954595017379583319528532088055111254069874715852386305071569329096329522744304355766896648950445244523161731856403098711121722383113622298934233803081353362766142828064444866452387493035890729629049156044077239071381051585930796086670172427121883998797908792274921901699720888093776657273330010533678812202354218097512545405947522435258490771167055601360483958644670632441572215539753697817977846174064955149290862569321978468622482839722413756570560574902614079729686524145351004748216637048440319989000889524345065854122758866688116427171479924442928230863465674813919123162824586178664583591245665294765456828489128831426076900422421902267105562632111110937054421750694165896040807198403850962455444362981230987879927244284909188845801561660979191338754992005240636899125607176060588611646710940507754100225698315520005593572972571636269561882670428252483600823257530420752963450";
 
-    cout << maximum (
-        map ( 
-            []( const vector<int>& v ) { return product( take(5,v) ); },
-            tails( mapTo<vector>(from_sym,nsStr) )
-        ) 
+    cout << foldMap ( 
+        []( const vector<int>& v ) -> Largest<int> {
+            return product( take(5,v) ); 
+        },
+        tails( mapTo<vector>(from_sym,nsStr) )
     ) << endl;
 }
 
@@ -209,8 +288,10 @@ using Row = vector<unsigned int>;
 using Mat = vector<Row>;
 
 using Vec = std::array<int,2>;
-int get_x( const Vec& v ) { return get<0>(v); }
-int get_y( const Vec& v ) { return get<1>(v); }
+const int& get_x( const Vec& v ) { return get<0>(v); }
+const int& get_y( const Vec& v ) { return get<1>(v); }
+int& get_x( Vec& v ) { return get<0>(v); }
+int& get_y( Vec& v ) { return get<1>(v); }
 
 Vec operator+ ( const Vec& a, const Vec& b ) {
     return zipWith( Add(), a, b );
@@ -224,6 +305,15 @@ Vec operator* ( Vec a, int x ) {
     return map( pure::plus(x), move(a) );
 }
 
+#include <cstdio>
+Vec operator "" _v ( const char* const str, 
+                                              size_t ) 
+{
+    Vec v;
+    sscanf( str, "%dx%d", &get_x(v), &get_y(v) );
+    return v;
+}
+
 unsigned int take_dir_prod( Vec dir, Vec pos, size_t n, const Mat& m ) {
     unsigned int prod = 1;
 
@@ -233,9 +323,18 @@ unsigned int take_dir_prod( Vec dir, Vec pos, size_t n, const Mat& m ) {
         return 1;
 
     for( ; n--; pos = pos+dir ) 
-        prod *= ( m[get_y(pos)][get_x(pos)] );
+        prod *= m[get_y(pos)][get_x(pos)];
 
     return prod;
+}
+
+struct Line {
+    std::string ln;
+    operator const std::string& () { return ln; }
+};
+
+std::istream& operator>> ( std::istream& is, Line& l ) {
+    return std::getline( is, l.ln );
 }
 
 void problem11() {
@@ -243,30 +342,316 @@ void problem11() {
 
     cout << "The largest product is: " << flush;
 
-    Mat mat;
-    std::string tmp;
-    while( std::getline(fin,tmp) ) {
-        std::stringstream line( tmp );
-        unsigned int x;
-        Row row;
-        while( line >> x ) 
-            row.push_back( x );
-        mat.push_back( row );
-    }
+    Mat mat = mapExactly<Mat> ( 
+        []( const Line& l ) { return mapExactly<Row>( toInt, l.ln ); },
+        io::fileContents<Line>( fin ) 
+    );
 
-    unsigned int largest = 0;
 
-    largest = maximum (
-        map ( 
-            [&](int i, int j, const Vec& dir){ 
-                return take_dir_prod( dir, {{i,j}}, 4, mat ); 
-            }, 
-            enumerate(mat), enumerate(mat[0]),  
-            std::initializer_list<Vec>{ Vec{{-1,0}}, Vec{{ 1,1}},
-                                        Vec{{ 0,1}}, Vec{{-1,1}} }
+    cout << foldMap ( 
+        [&](int i, int j, const Vec& dir) -> Largest<unsigned int> { 
+            return take_dir_prod( dir, {{i,j}}, 4, mat ); 
+        }, 
+        enumerate(mat), enumerate(mat[0]),  
+        std::initializer_list<Vec>{ "-1x0"_v, " 1x1"_v,
+                                    " 0x1"_v, "-1x1"_v }
+    ) << endl;
+}
+
+using Factor = PrimeType;
+using Factors = std::vector<PrimeType>;
+
+bool isPrime( Factor x ) {
+    return elem( x, takeWhile( lessThan(x), primes ) );
+}
+
+// Computes the low factors of x, given an accumulation of low factors. 
+// (Low as in less than or equal to sqrt(x).)
+Factors _lowFactors( Factors lfs, Factor x ) {
+    // If len(lfs) == 1, it is prime.
+    // If len(lfs) == 0, panic.
+    if( length(lfs) < 2 )
+        return lfs;
+
+    auto next = filter (
+        [&]( Factor y ) { return y <= std::sqrt(x) and x % y == 0; },
+        nub(map(Mult(), lfs, lfs))
+    );
+
+    return lfs == next ? lfs : _lowFactors( move(next), x );
+}
+
+Factors primeFactors( Factor x ) {
+    return filter (
+        divisorOf(x), 
+        takeWhile( lessThan(std::sqrt(x)), primes ) 
+    );
+}
+
+Factors lowFactors( Factor x ) {
+    return _lowFactors( primeFactors(x), x );
+}
+
+Factor nFactors( Factor x ) {
+    auto fs = lowFactors(x);
+    unsigned long long n = length( fs ) * 2;
+    return n - (last(fs) == std::sqrt(x));
+}
+
+Factor triangleNumber( Factor x ) {
+    return sum( enumerate(1,x) );
+}
+
+void problem12() {
+    cout << "The first triangle number with over 500 divisors : " << flush;
+    
+    Factor n = 8;
+    auto tri = [&]() { return triangleNumber(n); };
+    while( nFactors(tri()) <= 500 )  
+        n++;
+
+    cout << "traiangle(" << n << ") = " << tri() << endl;
+}
+
+void problem13() {
+    std::ifstream fin( "e13" );
+
+    cout << "The first 10 digits of the sum is : " << flush;
+
+    using DS = std::vector<Digits>;
+
+    auto nums = mapExactly<DS> (
+        digits,
+        io::fileContents<std::string>(fin) 
+    );
+
+    unsigned int carry = 0;
+    auto sum = reverse (
+        map (
+            [&]( unsigned int i ) {
+                unsigned long int sum = carry;
+                for( auto j : enumerate(nums) )
+                    sum += nums[j][i];
+                carry = sum / 10;
+                return sum % 10;
+            },
+            // Reverse the order of the columns: LSD first.
+            reverse( dupTo<std::vector>(enumerate(nums[0])) )
         )
     );
-    cout << largest << endl;
+
+    cout << append( digits(carry), take(8,sum) ) << endl;
+}
+
+unsigned int e14Iterate( unsigned int x ) {
+    return even(x) ? x/2 : 3*x + 1;
+}
+
+struct E14 {
+    unsigned int starting;
+    unsigned int count;
+
+    E14( unsigned int start ) : starting(start), count(0) {
+        auto n = starting;
+        count = 1;
+        
+        while( n > 1 ) {
+            count++;
+            n = e14Iterate( n );
+        }
+    }
+};
+
+constexpr bool operator< ( const E14& a, const E14& b ) {
+    return a.count < b.count;
+}
+
+constexpr bool operator> ( const E14& a, const E14& b ) {
+    return a.count > b.count;
+}
+
+void problem14() {
+    cout << "The maximum path of the serries starts on " << flush;
+
+    unsigned int x = 13;
+    E14 max( x );
+    while( x++ < 1_M ) {
+        max = std::max( max, E14(x) );
+    }
+
+    cout << max.starting << " (" << max.count << " runs)" << endl;
+}
+
+struct Cache { Vec dims; unsigned long long x; };
+
+bool operator== ( const Vec& dims, const Cache& c ) {
+    return c.dims == dims;
+}
+bool operator== ( const Cache& c, const Vec& dims ) {
+    return c.dims == dims;
+}
+
+unsigned long long int& countWaysCached( int x, int y ) {
+    if( x < y )
+        return countWaysCached(y,x);
+
+    static std::vector<Cache> cache = { {{{0,0}},0}, {{{1,1}},2} };
+
+    auto it = cfind( Vec{{x,y}}, cache );
+    if( it != end(cache) )
+        return it->x;
+    else {
+        // When y = 1, we have a grid like this:
+        //     2  1 1 ...
+        //      +-+-+-...-+
+        //      | | | ... |
+        //      +-+-+-...-+
+        // with 2 + (x-1) paths.
+        //
+        // When x or y equals 0, we are looking at a one-path grid.
+        //    1 +-+-...-+
+        //
+        // Return one of the above, signifying the value, or zero signifying it
+        // must be calculated.
+        unsigned int ans = y==1 ? x+1 
+            : x==0 or y==0;
+        cache.push_back( { {{x,y}}, ans } );
+        return cache.back().x;
+    }
+}
+
+unsigned long long int countWays( int max, int x, int y ) {
+    // Get a cached reference.
+    auto& count = countWaysCached( max - x, max - y );
+    return count ?  count 
+        // Cache the value before returning.
+        : (count = countWays(max,x+1,y) + countWays(max,x,y+1));
+}
+
+unsigned long long int countWays( int max ) {
+    return countWays(max,0,0);
+}
+
+void problem15() {
+    cout << "A 20x20 grid can be traversed " << flush;
+    cout << countWays(20) << " ways." << endl;
+}
+
+Digits operator* ( Digits ds, int x ) {
+    unsigned int carry = 0;
+    ds = map (
+        [&]( unsigned int d ) {
+            auto r = d * x + carry;
+            carry = r / 10;
+            return r % 10;
+        },
+        reverse(move(ds))
+    );
+
+    return append( digits(carry), reverse(move(ds)) );
+}
+
+void problem16() {
+    cout << "The sum of " << flush;
+    Digits ds = { 2 };
+    for( unsigned int power = 1; power < 1000; power++ ) {
+        ds = move(ds) * 2;
+    }
+    cout << "2^1000 is " << flush;
+    cout << sum(ds) << endl;
+}
+
+std::string ones( unsigned int x ) {
+    static const std::vector<std::string> strings = {
+        "", "one", "two", "three", "four", "five", 
+        "six", "seven", "eight", "nine", 
+    };
+    return strings[ x % 10 ];
+}
+
+std::string tens( unsigned int x ) {
+    if( x < 10 )
+        return ones(x);
+
+    static const std::vector<std::string> teens = {
+        "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", 
+        "sixteen", "seventeen", "eighteen", "nineteen"
+    };
+
+    x = x % 100;
+
+    if( x >= 10 and x < 20 )
+        return teens[ x % 10 ];
+
+    static const std::vector<std::string> values = {
+        "", "ten", "twenty", "thirty", "forty", "fifty", 
+        "sixty", "seventy", "eighty", "ninety" 
+    };
+    unsigned int i = x / 10;
+    const std::string HUNDRED = "";
+    auto o = ones( x );
+    return (x >= 100 and i == 0 ? HUNDRED : values[ i ]) 
+        + (length(o) ? "-" + o : std::string(""));
+}
+
+std::string hundreds( unsigned int x ) {
+    auto t = tens( x % 100 );
+    auto o = ones( x / 100 );
+    return x < 100 ? t 
+        : length(t) ? o + " hundred and " + t
+        : o + " hundred";
+}
+
+void problem17() {
+    cout << "The length of every number, 1-1000, written out : " << flush;
+    unsigned long long sum = 0;
+    for( auto x : enumerate(1,999) ) {
+        auto s = hundreds(x);
+        auto c = std::count_if (
+            begin(s), end(s),
+            []( char c ){
+                return not std::isspace(c) and c != '-';
+            } 
+        );
+        sum += c;
+    }
+    cout << sum + length("onethousand") << endl;
+}
+
+void problem18() {
+    std::ifstream fin( "e18" );
+
+    auto rows = mapTo<std::vector> (
+        []( const Line& l ) { return mapTo<std::vector>( toInt, 
+                                                         words(l.ln ) ); },
+        io::fileContents<Line>(fin) 
+    );
+    using Rows = decltype( rows );
+    using Row  = list::SeqVal<Rows>;
+
+    cout << "The maximum path computes to : " << flush;
+
+    for( unsigned int y = 1; y < length(rows); y++ ) {
+        for( auto x : enumerate(rows[y]) ) {
+            using U = unsigned long long;
+            U fromAbove = 0;
+            if( x > 0 )
+               fromAbove = rows[y-1][x-1];
+            if( x < length(rows[y]) - 1 ) 
+                fromAbove = std::max( fromAbove, (U)rows[y-1][x] );
+            rows[y][x] += fromAbove;
+        }
+    }
+
+    cout << list::maximum( last(rows) ) << endl;
+}
+
+void problem20() {
+    cout << "The sum of !100 = " << flush;
+    Digits ds = { 1 };
+    for( unsigned int x = 100; x > 1; x-- )
+        ds = move(ds) * x;
+    cout << sum(ds) << endl;
 }
 
 int main() {
@@ -281,4 +666,13 @@ int main() {
     problem9();
     problem10(); 
     problem11(); 
+    problem12();
+    problem13();
+    problem14();
+    problem15();
+    problem16();
+    problem17();
+    problem18();
+    // 19!
+    problem20();
 }

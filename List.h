@@ -70,6 +70,11 @@ constexpr size_t length( X (&)[N] ) {
     return N;
 }
 
+template< size_t N >
+constexpr size_t length( const char (&)[N] ) {
+    return N - 1;
+}
+
 template< class S >
 constexpr bool null( const S& s ) {
     return begin(s) == end(s);
@@ -291,18 +296,18 @@ S dup( const S& s ) {
     return s;
 }
 
-template< class S, class I, class R = Range<S,I>, 
-          class RS = typename R::sequence_type >
-RS dup( const Range<S,I>& r ) {
-    return dupExactly<RS>( r );
-}
-
 template< class X >
 std::vector<X> dup( const std::initializer_list<X>& l ) {
     return dupTo<std::vector>( l );
 }
 
 template< class S > using Dup = decltype( dup(declval<S>()) );
+
+template< class S, class I, class R = Range<S,I>, 
+          class RS = typename R::sequence_type >
+RS dup( const Range<S,I>& r ) {
+    return dupExactly<RS>( r );
+}
 
 template< class P, class S, class R = Dup<S> >
 R dupIf( P&& p, const S& s ) {
@@ -352,17 +357,18 @@ Dup<S> reverse( S&& s ) {
 }
 
 template< class F, class RI, class XS >
-void _map( F&& f, RI&& ri, const XS& xs ) {
-    std::transform( begin(xs), end(xs), 
+void _map( F&& f, RI&& ri, XS&& xs ) {
+    std::transform( begin(forward<XS>(xs)), end(forward<XS>(xs)), 
                     forward<RI>(ri), forward<F>(f) );
 }
 
 template< class F, class RI, class XS, class YS, class ...ZS >
 void _map( F&& f, RI&& ri, 
-           const XS& xs, const YS& ys, const ZS& ...zs ) 
+           XS&& xs, YS&& ys, ZS&& ...zs ) 
 {
-    for( const auto& x : xs )
-        _map( closure(forward<F>(f),x), forward<RI>(ri), ys, zs... );
+    for( auto x : forward<XS>(xs) )
+        _map( closure(forward<F>(f),x), forward<RI>(ri), 
+              forward<YS>(ys), forward<ZS>(zs)... );
 }
 
 template< class R, class F, class ...S >
@@ -525,9 +531,10 @@ X accuml( F&& f, X x, XS&& xs, YS&& ys ) {
 }
 
 /* foldl f x {1,2,3} -> f(f(f(x,1),2),3) */
-template< class F, class X, class ...S >
-constexpr Decay<X> foldl( F&& f, X&& x, S&& ...s ) {
-    return accuml( forward<F>(f), forward<X>(x), forward<S>(s)... );
+template< class F, class X, class S, class ...YS >
+constexpr Decay<X> foldl( F&& f, X&& x, S&& xs, YS&& ...ys ) {
+    return accuml( forward<F>(f), forward<X>(x), 
+                   forward<S>(xs), forward<YS>(ys)... );
 }
 
 template< class F, class X, class Y >
@@ -550,20 +557,21 @@ constexpr X foldl( F&& f, std::initializer_list<X> s ) {
 /* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
 template< class F, class X, class ...S >
 constexpr Decay<X> foldr( F&& f, X&& x, S&& ...s ) {
-    return foldl( flip(forward<F>(f)), forward<X>(x), 
-                  reverse_wrap(forward<S>(s))... );
+    return list::foldl( flip(forward<F>(f)), forward<X>(x), 
+                        reverse_wrap(forward<S>(s))... );
 }
 
 template< class F, class X, class Y >
 constexpr Decay<X> foldr( F&& f, X&& x, std::initializer_list<Y> s ) {
-    return foldl( flip(forward<F>(f)), forward<X>(x), reverse_wrap(move(s)) );
+    return list::foldl( flip(forward<F>(f)), 
+                        forward<X>(x), reverse_wrap(move(s)) );
 }
 
 template< class F, class S, 
           class X = typename cata::sequence_traits<S>::value_type >
 constexpr X foldr( F&& f, S&& s ) {
-    return foldr( forward<F>(f), 
-                  last(forward<S>(s)), init_wrap(forward<S>(s)) );
+    return list::foldr( forward<F>(f), 
+                        last(forward<S>(s)), init_wrap(forward<S>(s)) );
 }
 
 template< class F, class Y >
@@ -822,9 +830,14 @@ constexpr I biIterate( F f, X a, X b ) {
 template< class I > struct XRange {
     using value_type = I;
     using difference_type = ItDist<I>;
+    using pointer = I*;
+    using const_pointer = const I*;
+    using reference = I&;
+    using const_reference = const I&;
 
     struct iterator 
-        : std::iterator<std::random_access_iterator_tag,I,I>
+        : std::iterator< std::random_access_iterator_tag,
+                         value_type, difference_type, pointer, reference >
     {
         value_type i;
         value_type stride;
@@ -834,7 +847,8 @@ template< class I > struct XRange {
         constexpr iterator( iterator it, value_type stride ) 
             : i(*it), stride(stride) { }
 
-        constexpr value_type operator* () { return i; }
+        constexpr const_reference operator* () const { return i; }
+        reference operator* () { return i; }
         iterator operator++ () { ++i; return *this; }
         iterator operator-- () { --i; return *this; }
         iterator operator-- (int) { auto cpy = *this; --(*this); return cpy; }
@@ -1356,7 +1370,7 @@ S erase( F&& f, const X& x, S s ) {
 template< class P, class XS, class YS >
 XS eraseFirst( P&& p, XS xs, YS&& ys ) {
     using F = XS(*)( const P&, SeqRef<YS>, XS );
-    return foldl (
+    return list::foldl (
         // \s x -> erase p x s
         flip( closure( (F)erase, forward<P>(p) ) ), 
         move(xs), forward<YS>(ys) 
@@ -1366,7 +1380,7 @@ XS eraseFirst( P&& p, XS xs, YS&& ys ) {
 template< class P, class XS, class Y >
 XS eraseFirst( P&& p, XS xs, std::initializer_list<Y> l ) {
     using F = XS(*)( const P&, const Y&, XS );
-    return foldl( flip(closure((F)erase,forward<P>(p))), 
+    return list::foldl( flip(closure((F)erase,forward<P>(p))), 
                   xs, move(l) ); 
 }
 
@@ -1391,15 +1405,17 @@ S consWhen( bool b, S s, X&& x ) {
 }
 
 template< class S >
-S nub( const S& s ) {
-    using F = S(*)( S, SeqRef<S> );
-    return foldl( (F)consSet, S(), s );
+S nub( S s ) {
+    s = sort( move(s) );
+    auto e = std::unique( begin(s), end(s) );
+    s.erase( e, end(s) );
+    return s;
 }
 
 template< class XS, class YS, class R = Decay<XS> >
 R difference( XS&& xs, const YS& ys ) {
     using F = R(*)( const YS&, XS, SeqRef<XS> );
-    return foldl ( 
+    return list::foldl ( 
         closure( (F)consDifference, ys ),
         R(), forward<XS>(xs)
     );
@@ -1413,7 +1429,7 @@ XS sunion( XS xs, YS&& ys ) {
 template< class XS, class YS, class R = Decay<XS> >
 R intersect( XS&& xs, const YS& ys ) {
     using F = R(*)( const YS&, XS, SeqRef<XS> );
-    return foldl (
+    return list::foldl (
         closure( (F)consIntersection, ys ),
         R(), forward<XS>(xs)
     );
@@ -1487,10 +1503,10 @@ V group( S&& s, P&& p = P() ) {
     const auto e = end( forward<S>(s) );
 
     for( ; it != e; it = next) {
-        auto adj = adjacent_find( it, e, forward<P>(p) );
+        auto adj = std::adjacent_find( it, e, forward<P>(p) );
         v = maybeConsRange ( 
             // First, cons all the non-adjacent members.
-            foldl (
+            list::foldl (
                 // \v s -> cons v (return s)
                 flip( compose(flip(Cons()), Return<_S>()) ),
                 move(v), range<S>( it, adj ) 
@@ -1590,7 +1606,9 @@ struct Permutations {
 template< class F, class ...S,
           class R = Result<F,SeqRef<S>...> >
 R concatMap( F&& f, S&& ...xs ) {
-    return foldl (
+    // Qualify foldl to prevent GCC from deducing pure::foldl.
+    // TODO: Is it a bug that it does?
+    return list::foldl (
         // \xs x -> append xs (f x)
         flip( compose( flip(Append()), forward<F>(f) ) ), 
         R(), forward<S>(xs)...
