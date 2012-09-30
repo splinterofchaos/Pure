@@ -924,7 +924,7 @@ constexpr IRange enumerate( unsigned int b ) {
 }
 
 constexpr IRange enumerateTo( unsigned int e ) {
-    return IRange( 0, e ); 
+    return enumerate( 0, e ); 
 }
 
 constexpr IRange enumerateN( unsigned int b, unsigned int n ) {

@@ -666,6 +666,37 @@ void problem18() {
     cout << list::maximum( last(rows) ) << endl;
 }
 
+bool leapYear( unsigned int yr ) {
+    return yr % 4 == 0 and not (yr % 100 == 0 and yr % 400 != 0);
+}
+
+unsigned int daysInYear( unsigned int year ) {
+    return 365 + leapYear(year);
+}
+
+constexpr unsigned int daysIn[12] = { 31, 28, 31, 30, 31, 30, 
+                                      31, 31, 30, 31, 30, 31 };
+constexpr unsigned int FEB = 1;
+constexpr unsigned int daysInMonth( unsigned int m, bool leap ) {
+    return m != FEB ? daysIn[m]
+        : daysIn[FEB] + leap;
+}
+
+void problem19() {
+    cout << "There were " << flush;
+    unsigned int days /*since Jan 1, 1900*/ = daysInYear(1900);
+    unsigned int sundays = 0;
+    for( unsigned int y : enumerate(1901,2000) ) {
+        bool leap = leapYear( y );
+        for( unsigned int m : enumerateTo(11) ) {
+            sundays += days % 7 == 6;
+            days += daysInMonth( m, leap );
+        }
+    }
+    cout << sundays << 
+        " months beginning on Sunday in the 20th century." << endl;
+}
+
 void problem20() {
     cout << "The sum of !100 = " << flush;
     Digits ds = { 1 };
@@ -693,6 +724,6 @@ int main() {
     problem16();
     problem17();
     problem18();
-    // 19!
+    problem19();
     problem20();
 }
