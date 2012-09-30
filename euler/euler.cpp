@@ -548,7 +548,7 @@ Digits operator* ( Digits ds, int x ) {
         reverse(move(ds))
     );
 
-    return append( digits(carry), reverse(move(ds)) );
+    return reverse( append( move(ds), digits(carry) ) );
 }
 
 void problem16() {
