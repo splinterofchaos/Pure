@@ -90,14 +90,8 @@ constexpr unsigned long long operator "" _M ( unsigned long long x ) {
 void problem2() {
     cout << "The sum of every even Fibonacci number below 4-million: "
          << flush << 
-         sum ( 
-             filter ( 
-                 even,
-                 takeWhile (
-                     lessThan( 4_M ),
-                     biIterate( Add(), 1u, 2u )
-                 )
-             )
+         ( sum ^ filter(even) ^ takeWhile(lessThan(4_M)) ) (
+             biIterate( Add(), 1u, 2u )
          ) << endl;
 }
 
@@ -554,7 +548,7 @@ Digits operator* ( Digits ds, int x ) {
         reverse(move(ds))
     );
 
-    return append( digits(carry), reverse(move(ds)) );
+    return reverse( append( move(ds), digits(carry) ) );
 }
 
 void problem16() {

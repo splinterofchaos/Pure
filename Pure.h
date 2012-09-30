@@ -406,6 +406,14 @@ constexpr auto fmap( F&& f, G&& g, H&& ...h )
     return Fn::fmap( forward<F>(f), forward<G>(g), forward<H>(h)... );
 }
 
+template< class F, class X,
+          class Fn = Functor< cata::sequence > >
+constexpr auto fmap( F&& f, const std::initializer_list<X>& l )
+    -> decltype( Fn::fmap(declval<F>(),l) ) 
+{
+    return Fn::fmap( forward<F>(f), l );
+}
+
 struct FMap {
     template< class F, class ...X >
     constexpr auto operator() ( F&& f, X&& ...x ) 

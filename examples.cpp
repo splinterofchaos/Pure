@@ -80,6 +80,12 @@ string show( int x ) {
     return digits;
 }
 
+string show( unsigned int x ) {
+    char digits[20];
+    sprintf( digits, "%u", x );
+    return digits;
+}
+
 string show( size_t x ) {
     char digits[20];
     sprintf( digits, "%lu", x );
@@ -183,7 +189,7 @@ int main()
 {
     rcloset( print_xyz, 2, 3 )( 1 );
 
-    std::set<int> evens = filter( even, std::set<int>{1,2,3,4,5,6,7,8,9,10,11,12} );
+    auto evens = ( DupTo<std::set>() ^ filter(even) )( enumerate(1,12) );
     printf( "es = filter even [1..12] = %s\n", show(evens).c_str() );
     printf( "\tnull es = %s\n", show( null(evens) ).c_str() );
     printf( "\tlength es = %lu\n", length(evens) );
@@ -199,7 +205,9 @@ int main()
     printf( "\tdeleteFirstBy (==) es [2,6] = %s\n", 
             show( eraseFirst( equal_to<int>(),evens,vector<int>{1,2,6} ) ).c_str() );
     printf( "\tpermutations (take 3 es) = %s\n", 
-            show( permutations( dupTo<std::vector>(take(3,evens)) ) ).c_str() );
+            show ( 
+                ( permutations ^ DupTo<std::vector>() ^ take(3) )( evens ) 
+            ).c_str() );
     printf( "\tscanl (+) %s = %s\n", 
             show( evens ).c_str(), show( scanl( Add(), evens ) ).c_str() );
     printf( "\tscanr (+) %s = %s\n", 
@@ -251,11 +259,11 @@ int main()
 
     printf (
         "sum of (1,2,3,4) = %d\n", // = 10
-        foldl( std::plus<int>(), {1,2,3,4} )
+        foldl( Add(), {1,2,3,4} )
     );
     printf(
         "sum of (4,3,2,1) = %d\n", // = 10
-        foldr( std::plus<int>(), {1,2,3,4} )
+        foldr( Add(), {1,2,3,4} )
     );
 
     Vec fiveTwo = {{5,2}}, twoFive = {{2,5}};
