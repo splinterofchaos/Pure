@@ -98,14 +98,13 @@ void problem2() {
 using PrimeType = unsigned long long int;
 
 PrimeType next_prime( const vector<PrimeType>& past ) {
-    int x = last( past );
-
+    PrimeType x = last( past );
     do x += 2;
-    while( any( divisorOf(x), tail_wrap(past) ) );
+    while( any( divisorOf(x), reverse_wrap(tail_wrap(2,past)) ) );
     return x;
 }
 
-auto primes = memorize( next_prime, 1ull, 2ull, 3ull );
+auto primes = memorize( next_prime, 1ull, 2ull, 3ull, 5ull, 7ull, 11ull );
 
 void problem3() {
     const long int START = 600851475143;
@@ -132,13 +131,43 @@ struct DigitsT {
         Digits ds;
         for( ; x > 0; x = x / 10 )
             ds.push_back( x % 10 );
-        return ds;
+        return reverse(ds);
     }
 
     Digits operator() ( const std::string& s ) {
         return mapExactly<vector<unsigned int>>( toInt, s );
     }
 } digits;
+
+Digits operator* ( Digits ds, int x ) {
+    unsigned int carry = 0;
+    ds = map (
+        [&]( unsigned int d ) {
+            auto r = d * x + carry;
+            carry = r / 10;
+            return r % 10;
+        },
+        reverse(move(ds))
+    );
+
+    return reverse( append( move(ds), digits(carry) ) );
+}
+
+Digits operator* ( int x, Digits ds ) {
+    return move(ds) * x;
+}
+
+Digits operator+ ( Digits ds, unsigned long long x ) {
+    for( size_t i = 0; i < length(ds) and x>0; i++ ) {
+        auto& d = last( ds, i );
+        auto r = d + x;
+        d = r % 10;
+        x = r / 10;
+    }
+
+    return x ? append( reverse(digits(x)), ds )
+        : ds;
+}
 
 bool _palindrome( const vector<unsigned int>& v ) {
     return equal( v, reverse_wrap(v) );
@@ -267,21 +296,26 @@ void problem9() {
          << int(a*b*c()) << " when multiplied. " << endl;
 }
 
-void problem10() {
-    // TODO: This is too slow, too brute force, and WRONG!
-    cout << "The sum of all primes below 4 million is: " << flush;
-    //cout << sum ( 
-    //    takeWhile( less_than(4000000ull), memorize(next_prime,2ull,3ull) )
-    //) << endl;
-    
-    //unsigned long long sum = 0;
-    //auto primes = memorize( next_prime, 2ull, 3ull );
-    //auto p = begin( primes );
-    //while( *p < PrimeType(4000000ull) ) 
-    //    sum += *p++;
-    //cout << sum << endl;
+bool _notDivisibleByOdd( PrimeType odd, PrimeType x ) {
+    for( ; odd <= std::sqrt(x); odd += 2 )
+        if( x % odd == 0 )
+            return false;
+    return true;
+}
 
-    cout << endl;
+bool notDivisibleByOdd( PrimeType x ) {
+    return _notDivisibleByOdd( 3, x );
+}
+
+void problem10() {
+    cout << "The sum of all primes below 2 million is: " << flush;
+    PrimeType ds = 2;
+    for( PrimeType x=3; x < 2000000; x+=2 ) {
+        // Using the memorized "primes" is too slow for large primes. 
+        if( notDivisibleByOdd(x) )
+            ds = ds + x;
+    }
+    cout << ds << endl;
 }
 
 using Row = vector<unsigned int>;
@@ -535,20 +569,6 @@ unsigned long long int countWays( int max ) {
 void problem15() {
     cout << "A 20x20 grid can be traversed " << flush;
     cout << countWays(20) << " ways." << endl;
-}
-
-Digits operator* ( Digits ds, int x ) {
-    unsigned int carry = 0;
-    ds = map (
-        [&]( unsigned int d ) {
-            auto r = d * x + carry;
-            carry = r / 10;
-            return r % 10;
-        },
-        reverse(move(ds))
-    );
-
-    return reverse( append( move(ds), digits(carry) ) );
 }
 
 void problem16() {
