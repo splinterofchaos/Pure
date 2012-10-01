@@ -924,6 +924,32 @@ void problem29() {
     cout << length( nub( map( pow, RNG, RNG ) ) ) << endl;
 }
 
+void problem30() {
+    cout << "Sum of all numbers writable as the fifth power of its digits : " << flush;
+
+    std::vector<unsigned int> xs;
+    auto fifth  = [](unsigned int x){ return x*x*x*x*x; };
+
+    // The maximum value for one digit.
+    constexpr auto maxD = 9*9*9*9*9;
+
+    // Compute the upper limit.
+    unsigned long long limit = 1;
+
+    unsigned int n = 1; // digits.
+    while( limit*std::pow(10,n) < maxD * n )
+        n++;
+    limit = maxD * n;
+
+    for( auto i : enumerate(2,limit) ) {
+        auto s = sum( map(fifth,digits(i)) );
+        if( s == i )
+            xs.push_back( i );
+    }
+
+    cout << sum(xs) << endl;
+}
+
 int main() {
 
     problem1();
@@ -957,5 +983,6 @@ int main() {
 
     problem28();
     problem29();
+    problem30();
 
 }
