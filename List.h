@@ -1296,7 +1296,7 @@ bool equal( const XS& xs, const YS& ys ) {
 
 template< class X, class S >
 bool elem( const X& x, const S& s ) {
-    return findFirst( x, s );
+    return std::find( begin(s), end(s), x ) != end(s);
 }
 
 template< class X, class S >

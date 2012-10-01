@@ -729,7 +729,7 @@ void problem21() {
 void problem22() {
     std::ifstream fin( "e22" );
 
-    cout << "The sum total score of all names : " << flush;
+    cout << "The sum total score " << flush; 
 
     auto cutEnds = [](const std::string& s) {
         return std::string( next(begin(s)),
@@ -745,7 +745,8 @@ void problem22() {
         )
     );
 
-    // 
+    cout << "of all names : " << flush;
+
     auto avalue = []( char c ) { return c - 'A' + 1; };
     unsigned long long sum = 0;
     for( auto i : enumerate(ss) ) {
@@ -753,6 +754,34 @@ void problem22() {
     }
 
     cout << sum << endl;
+}
+
+bool abundant( unsigned int x ) {
+    //TODO Why does this not work?
+    //return sum( factors(x) ) - x > x;
+    unsigned int sum = 0;
+    for( auto n : enumerate(1,x/2) )
+        if( x % n == 0 )
+            sum += n;
+    return sum > x;
+}
+
+void problem23() {
+    constexpr auto LARGEST = 28123u;
+
+    cout << "The sum of all integers " << flush; 
+
+    auto as = filter( abundant, enumerate(12,LARGEST+1) );
+
+    decltype(as) aSums;
+    for( auto i : enumerate(as) )
+        for( auto j : enumerate(i,length(as)-1) ) 
+            aSums.push_back( as[i] + as[j] );
+    aSums = filter( lessEqualTo(LARGEST), nub(move(aSums)) );
+
+    cout << "not the sum of two abundants : " << flush;
+
+    cout << sum(enumerateTo(LARGEST)) - sum(aSums) << endl;
 }
 
 int main() {
@@ -779,5 +808,5 @@ int main() {
     problem20();
     problem21();
     problem22();
-
+    problem23();
 }
