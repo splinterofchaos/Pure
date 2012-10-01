@@ -726,7 +726,37 @@ void problem21() {
     cout << sum << endl;
 }
 
+void problem22() {
+    std::ifstream fin( "e22" );
+
+    cout << "The sum total score of all names : " << flush;
+
+    auto cutEnds = [](const std::string& s) {
+        return std::string( next(begin(s)),
+                            prev(end(s)) );
+    };
+
+    std::string s;
+    fin >> s;
+    auto ss = sort (
+        map (
+            cutEnds,
+            splitBy( equalTo(','), s )
+        )
+    );
+
+    // 
+    auto avalue = []( char c ) { return c - 'A' + 1; };
+    unsigned long long sum = 0;
+    for( auto i : enumerate(ss) ) {
+        sum += list::sum( map(avalue,ss[i]) ) * (i+1);
+    }
+
+    cout << sum << endl;
+}
+
 int main() {
+
     problem1();
     problem2();
     problem3();
@@ -748,4 +778,6 @@ int main() {
     problem19();
     problem20();
     problem21();
+    problem22();
+
 }
