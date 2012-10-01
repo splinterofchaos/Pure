@@ -426,6 +426,13 @@ Factors lowFactors( Factor x ) {
     return _lowFactors( primeFactors(x), x );
 }
 
+Factors factors( Factor x ) {
+    auto fs = lowFactors( x );
+    for( auto i = length(fs); i--; ) 
+        fs.push_back( x / fs[i] );
+    return fs;
+}
+
 Factor nFactors( Factor x ) {
     auto fs = lowFactors(x);
     unsigned long long n = length( fs ) * 2;
@@ -705,6 +712,20 @@ void problem20() {
     cout << sum(ds) << endl;
 }
 
+void problem21() {
+    auto d = []( Factor x ) { return sum(factors(x)) - x; };
+
+    cout << "The sum of every amicable number under 10000 : " << flush;
+
+    Factor sum = 0;
+    for( auto x : enumerate(2,10_K-1) )  {
+        if( x < d(x) and d(d(x)) == x )
+            sum += x + d(x);
+    }
+
+    cout << sum << endl;
+}
+
 int main() {
     problem1();
     problem2();
@@ -726,4 +747,5 @@ int main() {
     problem18();
     problem19();
     problem20();
+    problem21();
 }
