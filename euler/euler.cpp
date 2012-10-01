@@ -836,6 +836,82 @@ void problem25() {
     cout << term << endl;
 }
 
+Digits takeDigits( size_t n, float x ) {
+    Digits ds;
+    while( n-- ) {
+        ds.push_back( int(x) % 10 );
+        x *= 10;
+    }
+    return ds;
+}
+
+Digits repeatingDigits( double x ) {
+    Digits ds;
+    for( size_t n=1; true; n++ ) {
+        //x *= 10;
+        int d = int(x*std::pow(10.0,n)) % 10;
+
+        //if( length(ds) > 2 and ds == takeDigits( length(ds), x ) )
+        //    return ds;
+        //else 
+        //    ds.push_back( d );
+        //continue;
+
+        auto is = elemIndecies( d, ds );
+        if( length(is) >= 3 and is[1]-is[0] == is[2]-is[1] )
+            return Digits (
+                next( begin(ds), 0 ),
+                next( begin(ds), is[0] )
+            );
+
+        //auto it = begin( ds );
+        //while( length(ds) > 2 and it != end(ds) ) {
+        //    it = std::find( it, end(ds), d );
+        //    if( std::search( it, end(ds), begin(ds), it ) != end(ds) )
+        //        return ds;
+        //}
+        ds.push_back( d );
+    }
+}
+
+
+void problem26() {
+    cout << "The unit faction with the largest number of repeating digits : " << flush;
+
+    //unsigned int d = 3;
+    //unsigned int size = 1;
+
+    //for( auto n : enumerate(3,1_K) ) {
+    //    auto s = length( repeatingDigits(1.f/n) );
+    //    if( s > size ) {
+    //        d = n;
+    //        size = s;
+    //    }
+    //}
+
+    //cout << d << " (with " << size << " digits)" << endl;
+    
+    cout << "TODO!" << endl;
+}
+
+void problem28() {
+    cout << "The sum of the diagonals : " << flush;
+
+    unsigned long long total = 1;
+    unsigned int n = 2;
+    for(unsigned int width=3; width <= 1001; width += 2 ) {
+        // The length of this layer, straightened out.
+        for( auto i : enumerate( 1, (width-1) * 4 ) ) {
+            if( i % (width-1) == 0 ) {
+                total += n;
+            }
+            n++;
+        }
+    }
+
+    cout << total << endl;
+}
+
 int main() {
 
     problem1();
@@ -864,4 +940,8 @@ int main() {
     problem24();
     problem25();
 
+    //problem26();
+    // 27
+
+    problem28();
 }
