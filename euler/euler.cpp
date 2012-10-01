@@ -87,11 +87,13 @@ constexpr unsigned long long operator "" _M ( unsigned long long x ) {
     return x * 1000000;
 }
 
+auto fibs = biIterate( Add(), 1ull, 2ull );
+
 void problem2() {
     cout << "The sum of every even Fibonacci number below 4-million: "
          << flush << 
          ( sum ^ filter(even) ^ takeWhile(lessThan(4_M)) ) (
-             biIterate( Add(), 1u, 2u )
+             fibs
          ) << endl;
 }
 
@@ -167,6 +169,22 @@ Digits operator+ ( Digits ds, unsigned long long x ) {
 
     return x ? append( reverse(digits(x)), ds )
         : ds;
+}
+
+Digits operator+ ( Digits a, const Digits& b ) {
+    if( length(b) > length(a) )
+        return move(b) + move(a);
+
+    unsigned long carry = 0;
+    for( size_t i = 0; i < length(a); i++ ) {
+        auto& ai = last( a, i );
+        auto& bi = last( b, i );
+        auto r = ai + bi + carry;
+        ai = r % 10;
+        carry = r / 10;
+    }
+
+    return carry ? append( reverse(digits(carry)), a ) : a;
 }
 
 bool _palindrome( const vector<unsigned int>& v ) {
@@ -790,6 +808,34 @@ void problem24() {
     cout << permutations(ds)[1_M-1] << endl;
 }
 
+struct Fib {
+    Digits i, j, r;
+    Fib() : i{3}, j{5}, r{2} { }
+};
+
+Fib nextFib( Fib f ) {
+    auto tmp = f.j;
+    f.j = f.i + f.j;
+    f.i = tmp;
+    return f;
+}
+
+std::string toString( const Digits& ds ) {
+    return mapExactly<std::string> (
+        []( int x ) { return x + '0'; },
+        ds
+    );
+}
+
+void problem25() {
+    cout << "The first Fibonacci number with 1000 digits : " << flush;
+    Fib fib;
+    unsigned long long term = 5; // F5 = 5 and Fib starts on 5.
+    for( ; length(fib.j) != 1000; term++ )
+        fib = nextFib( fib );
+    cout << term << endl;
+}
+
 int main() {
 
     problem1();
@@ -816,5 +862,6 @@ int main() {
     problem22();
     problem23();
     problem24();
+    problem25();
 
 }
