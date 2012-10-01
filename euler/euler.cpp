@@ -784,6 +784,12 @@ void problem23() {
     cout << sum(enumerateTo(LARGEST)) - sum(aSums) << endl;
 }
 
+void problem24() {
+    Digits ds = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    cout << "The millionth permutation of " << ds << " : " << flush;
+    cout << permutations(ds)[1_M-1] << endl;
+}
+
 int main() {
 
     problem1();
@@ -809,4 +815,6 @@ int main() {
     problem21();
     problem22();
     problem23();
+    problem24();
+
 }
