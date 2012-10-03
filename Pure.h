@@ -1097,33 +1097,64 @@ constexpr auto min( const Container& cont ) -> decltype( begin(cont) ) {
 
 template< class M, class F > struct StateT { F f; };
 
-template< class F > using State = StateT<Id,F>;
+template< class X > struct Identity {
+    X x;
 
-template< class F > State<F> state( F f ) { return {move(f)}; }
-template< class M, class F > 
-StateT<M,F> state( F f ) { 
-    return { move(f) };
+    constexpr const X& get() { return x; }
+};
+
+template< class _X > struct Monad< Identity<_X> > {
+    template< class _, class X >
+    constexpr static Identity<X> mreturn( X x ) {
+        return { move(x) };
+    }
+
+    template< class X, class F >
+    static Identity<Result<F,X>> mbind( Identity<X> i, F&& f ) {
+        return { forward<F>(f)( i.x ) };
+    }
+};
+
+template< class X, class F > using State = StateT<Identity<X>,F>;
+
+template< class X, class F >
+State<X,F> state( F f ) {
+    return { move(f) }; 
 }
 
 template< class M, class F, class X > 
 auto runState( const StateT<M,F>& s, X&& x ) 
-    -> decltype( s.f(declval<X>()) )
+    -> decltype( mreturn<M>(s.f(declval<X>())) )
 {
-    return s.f( forward<X>(x) );
+    return mreturn<M>( s.f( forward<X>(x) ) );
 }
+
+struct Fst {
+    template< class T >
+    auto operator() ( T&& t ) -> decltype( get<0>(declval<T>()) ) {
+        return get<0>( forward<T>(t) );
+    }
+} fst;
+
+struct Snd {
+    template< class T >
+    auto operator() ( T&& t ) -> decltype( get<1>(declval<T>()) ) {
+        return get<1>( forward<T>(t) );
+    }
+} snd;
 
 template< class M, class F, class X >
 auto evalState( const StateT<M,F>& s, X&& x ) 
-    -> Decay<decltype( get<0>( runState(s,declval<X>()) ) )>
+    -> decltype( runState(s,declval<X>()) >>= fst )
 {
-    return get<0>( runState( s, forward<X>(x) ) );
+    return runState(s,forward<X>(x)) >>= fst;
 }
 
 template< class M, class F, class X >
 auto execState( const StateT<M,F>& s, X&& x ) 
-    -> Decay<decltype( get<1>( runState(s,declval<X>()) ) )>
+    -> decltype( runState(s,declval<X>()) >>= snd )
 {
-    return get<1>( runState( s, forward<X>(x) ) );
+    return runState(s,forward<X>(x)) >>= snd;
 }
 
 } // namespace pure
