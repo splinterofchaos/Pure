@@ -12,6 +12,7 @@ using std::begin;
 using std::end;
 using std::next;
 using std::prev;
+using std::get;
 
 namespace cata {
     /*

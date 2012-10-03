@@ -20,8 +20,6 @@
 
 namespace pure {
 
-using namespace std;
-
 namespace cata {
 
 /* 
@@ -52,7 +50,7 @@ struct maybe {};
 // If we want to return a pointer that defines ownership, we want a smart
 // pointer. Consider any non-raw pointer good 'nuff.
 template< class Ptr > struct SmartPtr { using type = Ptr; };
-template< class X > struct SmartPtr<X*> { using type = unique_ptr<X>; };
+template< class X > struct SmartPtr<X*> { using type = std::unique_ptr<X>; };
 
 template< class Ptr > struct maybe_traits {
     using pointer    = Ptr;
@@ -209,7 +207,7 @@ template< class Func > struct Arrow<Func> {
     }
 
     struct Splitter {
-        template< class X, class P = pair<X,X> > 
+        template< class X, class P = std::pair<X,X> > 
             constexpr P operator() ( const X& x ) {
                 return P( x, x );
             }
@@ -254,7 +252,7 @@ constexpr M Just( T t ) {
 
 struct ReturnJust {
     template< class X >
-    unique_ptr<Decay<X>> operator() ( X&& x ) {
+    std::unique_ptr<Decay<X>> operator() ( X&& x ) {
         return Just( forward<X>(x) );
     }
 };
@@ -302,8 +300,8 @@ struct Either
     typedef L left_type;
     typedef R right_type;
 
-    unique_ptr<left_type> left;
-    unique_ptr<right_type> right;
+    std::unique_ptr<left_type> left;
+    std::unique_ptr<right_type> right;
 
     // TODO: Make these type constructors, not types.
     struct Left { 
@@ -432,7 +430,7 @@ struct Functor<Function> {
 
 /* fmap f Pair(x,y) = Pair( f x, f y ) */
 template< class X, class Y >
-struct Functor< pair<X,Y> > {
+struct Functor< std::pair<X,Y> > {
     template< unsigned N, class P >
     using Nth = decltype( get<N>( declval<P>() ) );
 
@@ -444,11 +442,11 @@ struct Functor< pair<X,Y> > {
     template< class F, class ...P >
     static constexpr auto fmap( F&& f, P&& ...p ) 
         -> decltype (
-            make_pair( declval<PX<F,P...>>(), declval<PY<F,P...>>() )
+            std::make_pair( declval<PX<F,P...>>(), declval<PY<F,P...>>() )
         )
     {
-        return make_pair( forward<F>(f)(forward<P>(p).first...),
-                  forward<F>(f)(forward<P>(p).second...) );
+        return std::make_pair( forward<F>(f)(forward<P>(p).first...),
+                               forward<F>(f)(forward<P>(p).second...) );
     }
 };
 
@@ -498,18 +496,18 @@ struct Functor< Either<L,R> > {
 
 template< class C > struct IsSeqImpl {
     // Can only be supported on STL-like sequence types, not pointers.
-    template< class _C > static true_type f(typename _C::iterator*);
-    template< class _C > static false_type f(...);
+    template< class _C > static std::true_type f(typename _C::iterator*);
+    template< class _C > static std::false_type f(...);
     typedef decltype( f<C>(0) ) type;
 };
 
 template< class C > struct IsSeq : public IsSeqImpl<C>::type { };
 
 /* Enable if is an STL-like sequence. */
-template< class C, class R > struct ESeq : enable_if<IsSeq<C>::value,R> { };
+template< class C, class R > struct ESeq : std::enable_if<IsSeq<C>::value,R> { };
 
 /* Disable if is sequence. */
-template< class C, class R > struct XSeq : enable_if<not IsSeq<C>::value,R> { };
+template< class C, class R > struct XSeq : std::enable_if<not IsSeq<C>::value,R> { };
 
 /* f <$> m */
 template< class F, class M >
@@ -617,8 +615,8 @@ template<> struct Monoid< cata::maybe > {
 };
 
 /* Monoid (Pair X X) */
-template< class X, class Y > struct Monoid< pair<X,Y> > {
-    typedef pair<X,Y> P;
+template< class X, class Y > struct Monoid< std::pair<X,Y> > {
+    typedef std::pair<X,Y> P;
 
     static P mempty() { return P( fwd_mempty<X>(), fwd_mempty<Y>() ); }
 
@@ -1047,7 +1045,7 @@ constexpr Join<F,L,R> join( F&& f, L&& l, R&& r ) {
  */
 template< typename X, typename F, typename ... Fs,
           typename R = decltype( declval<F>()(declval<X>()) ) >
-constexpr array<R,sizeof...(Fs)+1> cleave( X&& x, F&& f, Fs&& ... fs ) 
+constexpr std::array<R,sizeof...(Fs)+1> cleave( X&& x, F&& f, Fs&& ... fs ) 
 {
     return {{ forward<F> (f )( forward<X>(x) ), 
               forward<Fs>(fs)( forward<X>(x) )... }};
@@ -1056,21 +1054,21 @@ constexpr array<R,sizeof...(Fs)+1> cleave( X&& x, F&& f, Fs&& ... fs )
 /* cleave_with f x y z =  { f(x), f(y), f(z) } */
 template< class F, class A, class ...B >
 constexpr auto cleave_with( F&& f, A&& a, B&& ...b )
-    -> array< decltype( declval<F>()(declval<A>()) ), sizeof...(B)+1 > 
+    -> std::array< decltype( declval<F>()(declval<A>()) ), sizeof...(B)+1 > 
 {
     return {{ f(forward<A>(a)), f(forward<B>(b))... }};
 }
 
 template< class T, unsigned int N, class F >
-array<T,N> generate( F&& f ) {
-    array<T,N> cont;
+std::array<T,N> generate( F&& f ) {
+    std::array<T,N> cont;
     generate( begin(cont), end(cont), forward<F>(f) );
     return cont;
 }
 
 template< class T, class F >
-vector<T> generate( F&& f, unsigned int n ) {
-    vector<T> c; 
+std::vector<T> generate( F&& f, unsigned int n ) {
+    std::vector<T> c; 
     c.reserve(n);
     while( n-- )
         c.push_back( forward<F>(f)() );
