@@ -1122,40 +1122,52 @@ State<X,F> state( F f ) {
     return { move(f) }; 
 }
 
-template< class M, class F, class X > 
-auto runState( const StateT<M,F>& s, X&& x ) 
-    -> decltype( mreturn<M>(s.f(declval<X>())) )
-{
-    return mreturn<M>( s.f( forward<X>(x) ) );
-}
+struct RunState {
+    template< class M, class F, class X > 
+    constexpr auto operator () ( const StateT<M,F>& s, X&& x ) 
+        -> decltype( mreturn<M>(s.f(declval<X>())) )
+    {
+        return mreturn<M>( s.f( forward<X>(x) ) );
+    }
+} runState;
 
 struct Fst {
     template< class T >
-    auto operator() ( T&& t ) -> decltype( get<0>(declval<T>()) ) {
+    constexpr auto operator() ( T&& t ) -> decltype( get<0>(declval<T>()) ) {
         return get<0>( forward<T>(t) );
     }
 } fst;
 
 struct Snd {
     template< class T >
-    auto operator() ( T&& t ) -> decltype( get<1>(declval<T>()) ) {
+    constexpr auto operator() ( T&& t ) -> decltype( get<1>(declval<T>()) ) {
         return get<1>( forward<T>(t) );
     }
 } snd;
 
-template< class M, class F, class X >
-auto evalState( const StateT<M,F>& s, X&& x ) 
-    -> decltype( runState(s,declval<X>()) >>= fst )
-{
-    return runState(s,forward<X>(x)) >>= fst;
+template< class G, class F > struct  MCompose {
+    G g;
+    F f;
+
+    constexpr MCompose( G g, F f ) : g(move(g)), f(move(f)) { }
+
+    template< class ...X >
+    constexpr auto operator () ( X&& ...x )
+        -> decltype( g( declval<X>()... ) >>= f )
+    {
+        return g( forward<X>(x)... ) >>= f;
+    }
+};
+
+template< class G, class F >
+constexpr MCompose<G,F> mcompose( G g, F f ) {
+    return { move(g), move(f) };
 }
 
-template< class M, class F, class X >
-auto execState( const StateT<M,F>& s, X&& x ) 
-    -> decltype( runState(s,declval<X>()) >>= snd )
-{
-    return runState(s,forward<X>(x)) >>= snd;
-}
+constexpr auto evalState = mcompose( RunState(), Fst() );
+constexpr auto execState = mcompose( RunState(), Snd() );
+
+
 
 } // namespace pure
 
