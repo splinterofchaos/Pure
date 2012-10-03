@@ -1095,5 +1095,36 @@ constexpr auto min( const Container& cont ) -> decltype( begin(cont) ) {
     return min_element( begin(cont), end(cont) );
 }
 
+template< class M, class F > struct StateT { F f; };
+
+template< class F > using State = StateT<Id,F>;
+
+template< class F > State<F> state( F f ) { return {move(f)}; }
+template< class M, class F > 
+StateT<M,F> state( F f ) { 
+    return { move(f) };
+}
+
+template< class M, class F, class X > 
+auto runState( const StateT<M,F>& s, X&& x ) 
+    -> decltype( s.f(declval<X>()) )
+{
+    return s.f( forward<X>(x) );
+}
+
+template< class M, class F, class X >
+auto evalState( const StateT<M,F>& s, X&& x ) 
+    -> Decay<decltype( get<0>( runState(s,declval<X>()) ) )>
+{
+    return get<0>( runState( s, forward<X>(x) ) );
+}
+
+template< class M, class F, class X >
+auto execState( const StateT<M,F>& s, X&& x ) 
+    -> Decay<decltype( get<1>( runState(s,declval<X>()) ) )>
+{
+    return get<1>( runState( s, forward<X>(x) ) );
+}
+
 } // namespace pure
 
