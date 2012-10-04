@@ -418,7 +418,7 @@ int main()
             show( fan( showInt, plus_two )( 5 ) ).c_str() );
 
     puts("");
-    auto s = state<std::pair<int,int>> (
+    auto s = state<int,int> (
         [](int x){ return std::pair<int,int>{x+1,x-1}; } 
     );
     puts("let s = state (\\x -> (x+1,x-1))");
@@ -426,5 +426,5 @@ int main()
     printf( "evalState s 5 = %s\n", show( evalState(s,5) ).c_str() );
     printf( "execState s 5 = %s\n", show( execState(s,5) ).c_str() );
     printf( "runState (fmap (\\x->x*2) s) 10 = %s\n",
-            show( fmap(times_two, s).runState(10) ).c_str() );
+            show( fmap(times_two, s).runState(10).get() ).c_str() );
 }

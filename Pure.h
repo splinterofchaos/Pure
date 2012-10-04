@@ -1101,9 +1101,9 @@ constexpr auto min( const Container& cont ) -> decltype( begin(cont) ) {
 }
 
 template< class X > struct Identity {
-    using value_type = X;
-    using reference  = X&;
-    using const_reference = const X&;
+    using value_type = Decay<X>;
+    using reference  = value_type&;
+    using const_reference = const value_type&;
 
     value_type x;
 
@@ -1111,13 +1111,16 @@ template< class X > struct Identity {
     reference get() { return x; }
 };
 
+template< class X > 
+constexpr Identity<X> identity( X x ) { return {move(x)}; }
+
 template< class I >
 using IdentGet = decltype( declval<I>().get() );
 
 template< class _X > struct Monad< Identity<_X> > {
     template< class _, class X >
-    constexpr static Identity< Decay<X> > mreturn( X&& x ) {
-        return { forward<X>(x) };
+    constexpr static Identity< X > mreturn( X x ) {
+        return { move(x) };
     }
 
     template< class I, class F, class X = IdentGet<I> >
@@ -1128,35 +1131,54 @@ template< class _X > struct Monad< Identity<_X> > {
     }
 };
 
-template< class M, class F > struct StateT { 
-    using monad_type = M;
+template< class _X > struct Functor< Identity<_X> > {
+    template< class F > 
+    static constexpr auto fmap( F&& f, Identity<_X> i )
+        -> Identity < 
+            decltype( declval<F>()(i.get()) )
+        >
+    {
+        return identity( forward<F>(f)( move(i.get()) ) );
+    }
+};
+
+template< class S, class A, template<class...>class M, class F > 
+struct StateT { 
     using function_type = F;
+    using pair_type = std::pair<A,S>;
+    using monad_type = M< pair_type >;
     function_type f; 
 
     template< class X >
     using Result = Result< F, X >; // Should be of Monad type.
 
     template< class X >
-    constexpr Result<X> runState( X&& x ) {
+    constexpr monad_type runState( X&& x ) {
         return f( forward<X>(x) );
     }
 };
 
-template< class X, class F > using State = StateT< Identity<X>, F >;
+template< class S, class A >
+using StateIdent = Identity< std::pair<A,S> >;
 
-template< class X, class F, class I = Identity<X> >
+template< class S, class A, class F > 
+using State = StateT< S, A, Identity, F >;
+
+template< class S, class A, class F, 
+          class I = StateIdent< S, A >,
+          class ST = State< S, A, Composition<Return<I>,F> > >
 auto state( F f ) 
-    -> State< X, NCompoposition<Return<I>,F> >
+    -> ST
 {
-    return { ncompose( Return<I>(), move(f) ) }; 
+    return { compose( Return<I>(), move(f) ) }; 
 }
 
 constexpr struct RunState {
-    template< class M, class F, class X > 
-    constexpr auto operator () ( const StateT<M,F>& s, X&& x ) 
-        -> decltype( s.runState(declval<X>()) )
+    template< class ST, class X > 
+    constexpr auto operator () ( ST&& s, X&& x ) 
+        -> decltype( declval<ST>().runState(declval<X>()) )
     {
-        return s.runState( forward<X>(x) );
+        return forward<ST>(s).runState( forward<X>(x) );
     }
 } runState{};
 
@@ -1197,22 +1219,41 @@ constexpr MCompose<G,F> mcompose( G g, F f ) {
     return { move(g), move(f) };
 }
 
+template< class F, class G > struct  FCompose {
+    F f;
+    G g;
+
+    constexpr FCompose( F f, G g ) : f(move(f)), g(move(g)) { }
+
+    template< class ...X >
+    constexpr auto operator () ( X&& ...x )
+        -> decltype( fmap(f,g(declval<X>()...)) )
+    {
+        return fmap( f, g(forward<X>(x)...) );
+    }
+};
+
+template< class F, class G >
+constexpr FCompose<F,G> fcompose( F f, G g ) {
+    return { move(f), move(g) };
+}
+
 constexpr auto evalState = mcompose( runState, fst );
 constexpr auto execState = mcompose( runState, snd );
 
-template< class _M, class _F > struct Functor< StateT<_M,_F> > {
+template< class S, class A, template<class...>class M, class F > 
+struct Functor< StateT<S,A,M,F> > {
     /* 
      * fmap g (State f) =
-     *      StateT $ \x -> (f x) >>= \(a,s) -> (g a, s)
+     *      StateT $ \x -> (f x) >>= \(a,s) -> return (g a, s)
      */
-    template< class G, class M, class F, class ST = StateT<M,F> > static
-    auto fmap( G g, StateT<M,F> s ) 
-        -> StateT< M, MCompose<F,First::template type<G>> >
+    template< class G > static
+    auto fmap( G g, StateT<S,A,M,F> s ) 
+        -> StateT< S, A, M, FCompose<First::template type<G>,F> >
     {
-        return { mcompose( move(s.f), first(move(g)) ) };
+        return { fcompose( first(move(g)), move(s.f) ) };
     }
 };
-        
 
 } // namespace pure
 
