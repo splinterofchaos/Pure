@@ -1235,8 +1235,8 @@ constexpr auto fcompose( F f, G g ) -> NCompoposition<FM,G> {
 template< class F, class G >
 using FCompose = decltype( fcompose(declval<F>(),declval<G>()) );
 
-constexpr auto evalState = mcompose( runState, fst );
-constexpr auto execState = mcompose( runState, snd );
+constexpr auto evalState = fcompose( fst, runState );
+constexpr auto execState = fcompose( snd, runState );
 
 template< class S, class A, template<class...>class M, class F > 
 struct Functor< StateT<S,A,M,F> > {
