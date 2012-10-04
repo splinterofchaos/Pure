@@ -1219,24 +1219,14 @@ constexpr MCompose<G,F> mcompose( G g, F f ) {
     return { move(g), move(f) };
 }
 
-template< class F, class G > struct  FCompose {
-    F f;
-    G g;
-
-    constexpr FCompose( F f, G g ) : f(move(f)), g(move(g)) { }
-
-    template< class ...X >
-    constexpr auto operator () ( X&& ...x )
-        -> decltype( fmap(f,g(declval<X>()...)) )
-    {
-        return fmap( f, g(forward<X>(x)...) );
-    }
-};
+template< class F, class G, 
+          class FM = decltype( fmap(declval<F>()) ) >
+constexpr auto fcompose( F f, G g ) -> NCompoposition<FM,G> {
+    return { fmap( move(f) ), move(g) };
+}
 
 template< class F, class G >
-constexpr FCompose<F,G> fcompose( F f, G g ) {
-    return { move(f), move(g) };
-}
+using FCompose = decltype( fcompose(declval<F>(),declval<G>()) );
 
 constexpr auto evalState = mcompose( runState, fst );
 constexpr auto execState = mcompose( runState, snd );
