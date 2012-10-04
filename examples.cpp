@@ -425,4 +425,6 @@ int main()
     printf( "execState s 5 = %s\n", show( execState(s,5).get() ).c_str() );
     printf( "runState (fmap (\\x->x*2) s) 10 = %s\n",
             show( fmap(times_two, s).runState(10).get() ).c_str() );
+    printf( "runState (s >>= (\\x->return x)) 10 = %s\n",
+            show( (s >>= ReturnState<int,int>()).runState(10).get() ).c_str() );
 }

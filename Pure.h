@@ -227,6 +227,24 @@ template< class Func > struct Arrow<Func> {
     }
 };
 
+template< class Binary > struct Unsplit {
+    Binary b;
+
+    template< class P >
+    constexpr auto operator () ( P&& p )
+        -> decltype( b( get<0>(declval<P>()), get<1>(declval<P>()) ) )
+    {
+        return b( get<0>(forward<P>(p)), get<1>(forward<P>(p)) );
+    }
+};
+
+constexpr struct ReturnUnsplit {
+    template< class B > 
+    constexpr Unsplit<B> operator () ( B b ) {
+        return { move(b) };
+    }
+} unsplit{};
+
 template< typename Container, typename F >
 void for_each( F&& f, const Container& cont ) {
     for_each( begin(cont), end(cont), forward<F>(f) );
@@ -1207,11 +1225,11 @@ constexpr struct Snd {
     }
 } snd{};
 
-template< class G, class F > struct  MCompose {
-    G g;
+template< class F, class G > struct  MCompose {
     F f;
+    G g;
 
-    constexpr MCompose( G g, F f ) : g(move(g)), f(move(f)) { }
+    constexpr MCompose( F f, G g ) : f(move(f)), g(move(g)) { }
 
     template< class ...X >
     constexpr auto operator () ( X&& ...x )
@@ -1268,6 +1286,19 @@ struct Monad< StateT<S,A,M,F> > {
     static constexpr Closet<decltype(_return),X> mreturn( X x ) {
         return closet( _return, move(x) );
     }
+
+    template< class K >
+    static constexpr auto mbind( State m, K k ) 
+        -> StateT< S, A, M, decltype (
+            mcompose( compose(unsplit(runState),first(move(k))), 
+                      closet(runState,m) )
+        ) >
+    {
+        return { mcompose ( 
+            compose( unsplit(runState), first(move(k)) ),
+            closet( runState, move(m) ) 
+        ) };
+    }
 };
 
 constexpr struct ReturnPair {
@@ -1278,13 +1309,27 @@ constexpr struct ReturnPair {
 } returnPair{};
 
 /* returnState a = State (\s -> itentity . (\s'->(a,s)) ) */
-template< class S, class A, 
-          class P = std::pair<A,S>, class R = ReturnPair >
+template< class S, class A = S >
+struct ReturnState {
+    using pair_type = std::pair<A,S>;
+
+    using state_type = State < 
+            S, A, 
+            Composition< ReturnIdentity, 
+                         Closet<ReturnPair,A> >
+    >;
+
+    constexpr state_type operator () ( A a ) {
+        return { compose( identity, 
+                          closet( returnPair, move(a) ) ) };
+    }
+};
+
+template< class S, class A = S >
 constexpr auto returnState( A a ) 
-    -> State< S, A, Composition<ReturnIdentity,Closet<R,A>> > 
+    -> typename ReturnState<S,A>::state_type 
 {
-    return { compose( identity, 
-                      closet( R(), move(a) ) ) };
+    return ReturnState<S,A>()( move(a) );
 }
 
 } // namespace pure
