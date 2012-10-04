@@ -423,6 +423,8 @@ int main()
     );
     puts("let s = state (\\x -> (x+1,x-1))");
     printf( "runState  s 5 = %s\n", show( runState( s,5).get() ).c_str() );
-    printf( "evalState s 5 = %s\n", show( evalState(s,5).get() ).c_str() );
-    printf( "execState s 5 = %s\n", show( execState(s,5).get() ).c_str() );
+    printf( "evalState s 5 = %s\n", show( evalState(s,5) ).c_str() );
+    printf( "execState s 5 = %s\n", show( execState(s,5) ).c_str() );
+    printf( "runState (fmap (\\x->x*2) s) 10 = %s\n",
+            show( fmap(times_two, s).runState(10) ).c_str() );
 }

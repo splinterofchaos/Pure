@@ -161,16 +161,21 @@ fan( F&& f, G&& g ) {
 }
 
 /* (first f) (x,y) = (f x, y) */
-template< class F, class A = Arrow<F> >
-decltype( A::first(declval<F>()) )
-first( F&& f ) {
-    return A::first( forward<F>(f) );
-}
+constexpr struct First {
+    template< class F, class A = Arrow<F> >
+    constexpr auto operator () ( F&& f ) 
+        -> decltype( A::first(declval<F>()) ) 
+    {
+        return A::first( forward<F>(f) );
+    }
+
+    template< class F >
+    using type = decltype( First()( declval<F>() ) );
+} first{};
 
 /* (second f) (x,y) = (x, f y) */
 template< class F, class A = Arrow<F> >
-decltype( A::second(declval<F>()) )
-second( F&& f ) {
+auto second( F&& f ) -> decltype( A::second(declval<F>()) ) {
     return A::second( forward<F>(f) );
 }
 
@@ -1095,55 +1100,83 @@ constexpr auto min( const Container& cont ) -> decltype( begin(cont) ) {
     return min_element( begin(cont), end(cont) );
 }
 
-template< class M, class F > struct StateT { F f; };
-
 template< class X > struct Identity {
-    X x;
+    using value_type = X;
+    using reference  = X&;
+    using const_reference = const X&;
 
-    constexpr const X& get() { return x; }
+    value_type x;
+
+    const_reference get() const { return x; }
+    reference get() { return x; }
 };
+
+template< class I >
+using IdentGet = decltype( declval<I>().get() );
 
 template< class _X > struct Monad< Identity<_X> > {
     template< class _, class X >
-    constexpr static Identity<X> mreturn( X x ) {
-        return { move(x) };
+    constexpr static Identity< Decay<X> > mreturn( X&& x ) {
+        return { forward<X>(x) };
     }
 
-    template< class X, class F >
-    static Identity<Result<F,X>> mbind( Identity<X> i, F&& f ) {
-        return { forward<F>(f)( i.x ) };
+    template< class I, class F, class X = IdentGet<I> >
+    static auto mbind( I&& i, F&& f ) 
+        -> decltype( declval<F>()( declval<X>() ) )
+    {
+        return forward<F>(f)( forward<I>(i).get() );
     }
 };
 
-template< class X, class F > using State = StateT<Identity<X>,F>;
+template< class M, class F > struct StateT { 
+    using monad_type = M;
+    using function_type = F;
+    function_type f; 
 
-template< class X, class F >
-State<X,F> state( F f ) {
-    return { move(f) }; 
+    template< class X >
+    using Result = Result< F, X >; // Should be of Monad type.
+
+    template< class X >
+    constexpr Result<X> runState( X&& x ) {
+        return f( forward<X>(x) );
+    }
+};
+
+template< class X, class F > using State = StateT< Identity<X>, F >;
+
+template< class X, class F, class I = Identity<X> >
+auto state( F f ) 
+    -> State< X, NCompoposition<Return<I>,F> >
+{
+    return { ncompose( Return<I>(), move(f) ) }; 
 }
 
-struct RunState {
+constexpr struct RunState {
     template< class M, class F, class X > 
     constexpr auto operator () ( const StateT<M,F>& s, X&& x ) 
-        -> decltype( mreturn<M>(s.f(declval<X>())) )
+        -> decltype( s.runState(declval<X>()) )
     {
-        return mreturn<M>( s.f( forward<X>(x) ) );
+        return s.runState( forward<X>(x) );
     }
-} runState;
+} runState{};
 
-struct Fst {
+constexpr struct Fst {
     template< class T >
-    constexpr auto operator() ( T&& t ) -> decltype( get<0>(declval<T>()) ) {
+    constexpr auto operator() ( T&& t ) 
+        -> Decay<decltype( get<0>(declval<T>()) )>
+    {
         return get<0>( forward<T>(t) );
     }
-} fst;
+} fst{};
 
-struct Snd {
+constexpr struct Snd {
     template< class T >
-    constexpr auto operator() ( T&& t ) -> decltype( get<1>(declval<T>()) ) {
+    constexpr auto operator() ( T&& t ) 
+        -> Decay<decltype( get<1>(declval<T>()) )>
+    {
         return get<1>( forward<T>(t) );
     }
-} snd;
+} snd{};
 
 template< class G, class F > struct  MCompose {
     G g;
@@ -1164,10 +1197,22 @@ constexpr MCompose<G,F> mcompose( G g, F f ) {
     return { move(g), move(f) };
 }
 
-constexpr auto evalState = mcompose( RunState(), Fst() );
-constexpr auto execState = mcompose( RunState(), Snd() );
+constexpr auto evalState = mcompose( runState, fst );
+constexpr auto execState = mcompose( runState, snd );
 
-
+template< class _M, class _F > struct Functor< StateT<_M,_F> > {
+    /* 
+     * fmap g (State f) =
+     *      StateT $ \x -> (f x) >>= \(a,s) -> (g a, s)
+     */
+    template< class G, class M, class F, class ST = StateT<M,F> > static
+    auto fmap( G g, StateT<M,F> s ) 
+        -> StateT< M, MCompose<F,First::template type<G>> >
+    {
+        return { mcompose( move(s.f), first(move(g)) ) };
+    }
+};
+        
 
 } // namespace pure
 
