@@ -1111,8 +1111,12 @@ template< class X > struct Identity {
     reference get() { return x; }
 };
 
-template< class X > 
-constexpr Identity<X> identity( X x ) { return {move(x)}; }
+constexpr struct ReturnIdentity {
+    template< class X > 
+    constexpr Identity<X> operator () ( X x ) { 
+        return {move(x)};
+    }
+} identity{};
 
 template< class I >
 using IdentGet = decltype( declval<I>().get() );
@@ -1146,14 +1150,17 @@ template< class S, class A, template<class...>class M, class F >
 struct StateT { 
     using function_type = F;
     using pair_type = std::pair<A,S>;
-    using monad_type = M< pair_type >;
+
+    template< class P >
+    using monad_type = M<P>;
+
     function_type f; 
 
     template< class X >
     using Result = Result< F, X >; // Should be of Monad type.
 
     template< class X >
-    constexpr monad_type runState( X&& x ) {
+    constexpr monad_type<pair_type> runState( X&& x ) {
         return f( forward<X>(x) );
     }
 };
@@ -1244,6 +1251,41 @@ struct Functor< StateT<S,A,M,F> > {
         return { fcompose( first(move(g)), move(s.f) ) };
     }
 };
+
+template< class S, class A, template<class...>class M, class F >
+struct Monad< StateT<S,A,M,F> > {
+    using State = StateT<S,A,M,F>;
+    using P = typename State::pair_type;
+
+    template< class Pair >
+    using Mon = typename State::template monad_type<Pair>;
+
+    static constexpr P _return( A a, S s ) {
+        return { move(a), move(s) }; 
+    }
+
+    template< class ST, class X >
+    static constexpr Closet<decltype(_return),X> mreturn( X x ) {
+        return closet( _return, move(x) );
+    }
+};
+
+constexpr struct ReturnPair {
+    template< class X, class Y >
+    constexpr std::pair<X,Y> operator () ( X x, Y y ) {
+        return { move(x), move(y) };
+    }
+} returnPair{};
+
+/* returnState a = State (\s -> itentity . (\s'->(a,s)) ) */
+template< class S, class A, 
+          class P = std::pair<A,S>, class R = ReturnPair >
+constexpr auto returnState( A a ) 
+    -> State< S, A, Composition<ReturnIdentity,Closet<R,A>> > 
+{
+    return { compose( identity, 
+                      closet( R(), move(a) ) ) };
+}
 
 } // namespace pure
 
