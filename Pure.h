@@ -1386,22 +1386,22 @@ constexpr auto sget() -> decltype( MS::sget() ) {
 
 template< template<class...>class M = Identity, class S, 
           class MS = MonadState< StateT<S,S,M,Id> > >
-constexpr auto sset( S s ) -> decltype( MS::sset(move(s)) ) {
-    return MS::sset( move(s) );
+constexpr auto sput( S s ) -> decltype( MS::sput(move(s)) ) {
+    return MS::sput( move(s) );
 }
 
 template< class S, template<class...>class M = Identity >
-struct SSet {
+struct SPut {
     using MS = MonadState< StateT<S,S,M,Id> >;
-    using type = decltype( sset( declval<S>() ) );
-    constexpr type operator () ( S s ) { return sset( move(s) ); }
+    using type = decltype( sput( declval<S>() ) );
+    constexpr type operator () ( S s ) { return sput( move(s) ); }
 };
 
 template< class S, template<class...>class M = Identity, class F >
 constexpr auto modify( F f ) 
-    -> decltype( sget<S,M>() >>= compose( SSet<S,M>(), f ) )
+    -> decltype( sget<S,M>() >>= compose( SPut<S,M>(), f ) )
 {
-    return sget<S,M>() >>= compose( SSet<S,M>(), f );
+    return sget<S,M>() >>= compose( SPut<S,M>(), f );
 }
 
 template< class S, template<class...>class M = Identity, class F,
@@ -1433,7 +1433,7 @@ struct MonadState< StateT<S,S,M,_F> > {
 
     static constexpr State<GetF> sget() { return stateT<S,M>( splitter ); }
 
-    static constexpr State<SetF> sset( S s ) {
+    static constexpr State<SetF> sput( S s ) {
         return stateT<S,M>( rcloset(returnPair,move(s)) );
     }
 

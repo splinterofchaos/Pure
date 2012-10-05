@@ -429,9 +429,9 @@ int main()
             show( (s >>= ReturnState<int>()).runState(10).get() ).c_str() );
 
     auto tick = sget<int>() >>= []( int x ){
-        return sset( x+1 ) >>= ReturnState<int>();
+        return sput( x+1 ) >>= ReturnState<int>();
     };
-    puts("tick = do\n\tn <- get\n\tset (n+1)\n\treturn n");
+    puts("tick = do\n\tn <- get\n\tput (n+1)\n\treturn n");
     printf( "execState tick 5 = %s\n",
             show( execState( tick, 5 ).get() ).c_str() );
 
