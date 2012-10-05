@@ -416,4 +416,31 @@ int main()
 
     printf( "show &&& (+2) $ 5 = %s\n",
             show( fan( showInt, plus_two )( 5 ) ).c_str() );
+
+    puts("");
+    auto s = returnState<int>(10);
+    puts("let s = return 10 :: State Int Int");
+    printf( "runState  s 5 = %s\n", show( runState( s,5).get() ).c_str() );
+    printf( "evalState s 5 = %s\n", show( evalState(s,5).get() ).c_str() );
+    printf( "execState s 5 = %s\n", show( execState(s,5).get() ).c_str() );
+    printf( "runState (fmap (\\x->x*2) s) 10 = %s\n",
+            show( fmap(times_two, s).runState(10).get() ).c_str() );
+    printf( "runState (s >>= (\\x->return x)) 10 = %s\n",
+            show( (s >>= ReturnState<int>()).runState(10).get() ).c_str() );
+
+    auto tick = sget<int>() >>= []( int x ){
+        return sput( x+1 ) >>= ReturnState<int>();
+    };
+    puts("tick = do\n\tn <- get\n\tput (n+1)\n\treturn n");
+    printf( "execState tick 5 = %s\n",
+            show( execState( tick, 5 ).get() ).c_str() );
+
+    puts("tick2 = modify (+2) >> get");
+    auto tick2 = modify<int>( plus_two ) >> sget<int>();
+    printf( "execState tick2 5 = %s\n",
+            show( execState( tick2, 5 ).get() ).c_str() );
+    
+    printf( "runState (gets (+2)) 5 = %s\n",
+            show( sgets<int>(plus_two).runState(5).get() ).c_str() );
 }
+
