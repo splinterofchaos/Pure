@@ -427,4 +427,13 @@ int main()
             show( fmap(times_two, s).runState(10).get() ).c_str() );
     printf( "runState (s >>= (\\x->return x)) 10 = %s\n",
             show( (s >>= ReturnState<int,int>()).runState(10).get() ).c_str() );
+    printf( "runState get 1 = %s\n", show( stateGet<int>().runState(1).get() ).c_str() );
+
+    auto tick = stateGet<int>() >>= []( int x ){
+        return stateSet( x+1 ) >>= ReturnState<int>();
+    };
+
+    printf( "execState tick 5 = %s\n",
+            show( execState( tick, 5 ).get() ).c_str() );
 }
+

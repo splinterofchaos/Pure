@@ -179,6 +179,13 @@ auto second( F&& f ) -> decltype( A::second(declval<F>()) ) {
     return A::second( forward<F>(f) );
 }
 
+constexpr struct Splitter {
+    template< class X, class P = std::pair<X,X> > 
+        constexpr P operator() ( const X& x ) {
+            return P( x, x );
+        }
+} splitter{};
+
 template< class Func > struct Arrow<Func> {
     static constexpr Id arr = Id();
 
@@ -210,13 +217,6 @@ template< class Func > struct Arrow<Func> {
     {
         return pairCompose( Id(), forward<F>(f) );
     }
-
-    struct Splitter {
-        template< class X, class P = std::pair<X,X> > 
-            constexpr P operator() ( const X& x ) {
-                return P( x, x );
-            }
-    };
 
     template< class F, class G > static 
     constexpr auto fan( F&& f, G&& g ) 
@@ -401,6 +401,20 @@ template< class X >
 constexpr Pure<X> pure( X&& x )
 {
     return Pure<X>( forward<X>(x) );
+}
+
+template< class F > struct PureFunction {
+    F f;
+
+    template< class ...X >
+    constexpr auto operator () ( X&& ... ) -> decltype( f() ) {
+        return f();
+    }
+};
+
+template< class F > 
+constexpr PureFunction<F> pureFunction( F f ) {
+    return { move(f) };
 }
 
 /* 
@@ -1192,7 +1206,7 @@ using State = StateT< S, A, Identity, F >;
 template< class S, class A, class F, 
           class I = StateIdent< S, A >,
           class ST = State< S, A, Composition<Return<I>,F> > >
-auto state( F f ) 
+constexpr auto state( F f ) 
     -> ST
 {
     return { compose( Return<I>(), move(f) ) }; 
@@ -1331,6 +1345,45 @@ constexpr auto returnState( A a )
 {
     return ReturnState<S,A>()( move(a) );
 }
+
+template< class ... > struct MonadState;
+
+template< class S, template<class...>class M = Identity,
+          class MS = MonadState< StateT<S,S,M,Id> > >
+constexpr auto stateGet() -> decltype( MS::sget() ) {
+    return MS::sget();
+}
+
+template< template<class...>class M = Identity, class S, 
+          class MS = MonadState< StateT<S,S,M,Id> > >
+constexpr auto stateSet( S s ) -> decltype( MS::sset(move(s)) ) {
+    return MS::sset( move(s) );
+}
+
+template< class S, template<class...>class M, class _F >
+struct MonadState< StateT<S,S,M,_F> > {
+    template< class F >
+    using State = StateT<S,S,M,F>;
+
+    using P = std::pair<S,S>;
+
+    using Monad = M<P>;
+
+    using RetM  = Return< Monad >;
+
+    using GetF = Composition< RetM, Splitter >;
+    using SetF = Composition< RetM, RCloset<ReturnPair,S> >;
+
+
+    static constexpr State<GetF> getter = state<S,S>( splitter );
+
+    static constexpr State<GetF> sget() { return getter; }
+
+    static constexpr State<SetF> sset( S s ) {
+        return state<S,S>( rcloset(returnPair,move(s)) );
+    }
+
+};
 
 } // namespace pure
 
