@@ -1203,13 +1203,20 @@ using StateIdent = Identity< std::pair<A,S> >;
 template< class S, class A, class F > 
 using State = StateT< S, A, Identity, F >;
 
-template< class S, class A, class F, 
-          class I = StateIdent< S, A >,
-          class ST = State< S, A, Composition<Return<I>,F> > >
+template< class S, class A=S, class F, 
+          class I = StateIdent< S, A > >
 constexpr auto state( F f ) 
-    -> ST
+    -> State< S, A, Composition<Return<I>,F> >
 {
     return { compose( Return<I>(), move(f) ) }; 
+}
+
+template< class S, template<class...>class M, class A=S, class F,
+          class R = Return<M< std::pair<A,S> >> >
+constexpr auto stateT( F f ) 
+    -> StateT< S, A, M, Composition<R,F> >
+{
+    return { compose( R(), move(f) ) };
 }
 
 constexpr struct RunState {
@@ -1323,27 +1330,43 @@ constexpr struct ReturnPair {
 } returnPair{};
 
 /* returnState a = State (\s -> itentity . (\s'->(a,s)) ) */
-template< class S, class A = S >
-struct ReturnState {
+template< class S, template<class...>class M=Identity, class A = S >
+struct ReturnStateT {
     using pair_type = std::pair<A,S>;
+    using monad_type = M< pair_type >;
 
-    using state_type = State < 
-            S, A, 
-            Composition< ReturnIdentity, 
+    using state_type = StateT < 
+            S, A, M,
+            Composition< Return<monad_type>, 
                          Closet<ReturnPair,A> >
     >;
 
+    static constexpr Closet<ReturnPair,A> ret( A a ) {
+        return { returnPair, move(a) };
+    }
+
     constexpr state_type operator () ( A a ) {
-        return { compose( identity, 
-                          closet( returnPair, move(a) ) ) };
+        return stateT<S,M,A>( ret(move(a)) );
     }
 };
 
-template< class S, class A = S >
+template< class S, class A=S > struct ReturnState 
+    : public ReturnStateT<S,Identity,A> 
+{
+};
+
+template< class S, class A >
 constexpr auto returnState( A a ) 
     -> typename ReturnState<S,A>::state_type 
 {
     return ReturnState<S,A>()( move(a) );
+}
+
+template< class S, template<class...>class M=Identity, class A >
+constexpr auto returnStateT( A a ) 
+    -> typename ReturnStateT<S,M,A>::state_type 
+{
+    return ReturnStateT<S,M,A>()( move(a) );
 }
 
 template< class ... > struct MonadState;
@@ -1375,12 +1398,12 @@ struct MonadState< StateT<S,S,M,_F> > {
     using SetF = Composition< RetM, RCloset<ReturnPair,S> >;
 
 
-    static constexpr State<GetF> getter = state<S,S>( splitter );
+    //static constexpr State<GetF> getter = state<S,S>( splitter );
 
-    static constexpr State<GetF> sget() { return getter; }
+    static constexpr State<GetF> sget() { return stateT<S,M>( splitter ); }
 
     static constexpr State<SetF> sset( S s ) {
-        return state<S,S>( rcloset(returnPair,move(s)) );
+        return stateT<S,M>( rcloset(returnPair,move(s)) );
     }
 
 };
