@@ -432,8 +432,15 @@ int main()
         return sset( x+1 ) >>= ReturnState<int>();
     };
     puts("tick = do\n\tn <- get\n\tset (n+1)\n\treturn n");
-
     printf( "execState tick 5 = %s\n",
             show( execState( tick, 5 ).get() ).c_str() );
+
+    puts("tick2 = modify (+2) >> get");
+    auto tick2 = modify<int>( plus_two ) >> sget<int>();
+    printf( "execState tick2 5 = %s\n",
+            show( execState( tick2, 5 ).get() ).c_str() );
+    
+    printf( "runState (gets (+2)) 5 = %s\n",
+            show( sgets<int>(plus_two).runState(5).get() ).c_str() );
 }
 

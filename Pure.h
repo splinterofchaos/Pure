@@ -1320,6 +1320,13 @@ struct Monad< StateT<S,A,M,F> > {
             closet( runState, move(m) ) 
         ) };
     }
+
+    template< class SA, class SB >
+    static constexpr auto mdo( SA&& sa, SB&& sb ) 
+        -> decltype( mbind( forward<SA>(sa), pure(forward<SB>(sb)) ) )
+    {
+        return mbind( forward<SA>(sa), pure(forward<SB>(sb)) );
+    }
 };
 
 constexpr struct ReturnPair {
@@ -1381,6 +1388,30 @@ template< template<class...>class M = Identity, class S,
           class MS = MonadState< StateT<S,S,M,Id> > >
 constexpr auto sset( S s ) -> decltype( MS::sset(move(s)) ) {
     return MS::sset( move(s) );
+}
+
+template< class S, template<class...>class M = Identity >
+struct SSet {
+    using MS = MonadState< StateT<S,S,M,Id> >;
+    using type = decltype( sset( declval<S>() ) );
+    constexpr type operator () ( S s ) { return sset( move(s) ); }
+};
+
+template< class S, template<class...>class M = Identity, class F >
+constexpr auto modify( F f ) 
+    -> decltype( sget<S,M>() >>= compose( SSet<S,M>(), f ) )
+{
+    return sget<S,M>() >>= compose( SSet<S,M>(), f );
+}
+
+template< class S, template<class...>class M = Identity, class F,
+          class Fst = typename First::template type<F>,
+          class G = Composition< Fst, Splitter > >
+constexpr auto sgets( F f ) 
+    //-> decltype( sget<S,M>() >>= compose( R(), move(f) ) )
+    -> decltype( stateT<S,M>( declval<G>() ) )
+{
+    return stateT<S,M>( compose( first(move(f)), splitter ) );
 }
 
 template< class S, template<class...>class M, class _F >
