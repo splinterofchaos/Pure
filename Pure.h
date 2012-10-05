@@ -1373,13 +1373,13 @@ template< class ... > struct MonadState;
 
 template< class S, template<class...>class M = Identity,
           class MS = MonadState< StateT<S,S,M,Id> > >
-constexpr auto stateGet() -> decltype( MS::sget() ) {
+constexpr auto sget() -> decltype( MS::sget() ) {
     return MS::sget();
 }
 
 template< template<class...>class M = Identity, class S, 
           class MS = MonadState< StateT<S,S,M,Id> > >
-constexpr auto stateSet( S s ) -> decltype( MS::sset(move(s)) ) {
+constexpr auto sset( S s ) -> decltype( MS::sset(move(s)) ) {
     return MS::sset( move(s) );
 }
 
