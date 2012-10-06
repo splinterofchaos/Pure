@@ -33,6 +33,9 @@ using XSame = typename std::enable_if< !std::is_same<A,B>::value, R >::type;
 template< class F, class ...X >
 using Result = Decay<decltype( declval<F>()( declval<X>()... ) )>;
 
+template< class F, class ...X >
+using DResult = Decay<decltype( declval<F>()( declval<Decay<X>>()... ) )>;
+
 struct Id {
     template< class X >
     constexpr X operator() ( X&& x ) { return forward<X>(x); }

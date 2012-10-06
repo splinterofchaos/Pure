@@ -6,12 +6,15 @@
 #include <vector>
 #include <array>
 #include <list>
+#include <set>
 #include <cctype>
 
 #include <iostream>
+#include <fstream>
 
 using namespace std;
 using namespace pure;
+using namespace pure::list;
 
 template< typename Container >
 void print( const char* const msg, const Container& v )
@@ -32,12 +35,10 @@ Vec operator + ( const Vec& a, const Vec& b )
 }
 
 
-Vec operator * ( Vec&& a, float x )
+Vec operator * ( Vec a, float x )
 {
-    return map( closure(Mult(),x), move(a) ); 
+    return map( closure(Mult(),x), a ); 
 }
-Vec operator * ( float x, Vec&& a )      { return move(a) * x; }
-Vec operator * ( const Vec& a, float x ) { return Vec(a) * x; }
 Vec operator * ( float x, const Vec& a ) { return Vec(a) * x; }
 
 Vec operator / ( const Vec& v, float x ) { return v * (1/x); }
@@ -76,6 +77,12 @@ string show( bool b ) {
 string show( int x ) {
     char digits[20];
     sprintf( digits, "%d", x );
+    return digits;
+}
+
+string show( unsigned int x ) {
+    char digits[20];
+    sprintf( digits, "%u", x );
     return digits;
 }
 
@@ -182,7 +189,7 @@ int main()
 {
     rcloset( print_xyz, 2, 3 )( 1 );
 
-    vector<int> evens = filter( even, {1,2,3,4,5,6,7,8,9,10,11,12} );
+    auto evens = ( DupTo<std::set>() ^ filter(even) )( enumerate(1,12) );
     printf( "es = filter even [1..12] = %s\n", show(evens).c_str() );
     printf( "\tnull es = %s\n", show( null(evens) ).c_str() );
     printf( "\tlength es = %lu\n", length(evens) );
@@ -198,7 +205,9 @@ int main()
     printf( "\tdeleteFirstBy (==) es [2,6] = %s\n", 
             show( eraseFirst( equal_to<int>(),evens,vector<int>{1,2,6} ) ).c_str() );
     printf( "\tpermutations (take 3 es) = %s\n", 
-            show( permutations( take(3,evens) ) ).c_str() );
+            show ( 
+                ( permutations ^ DupTo<std::vector>() ^ take(3) )( evens ) 
+            ).c_str() );
     printf( "\tscanl (+) %s = %s\n", 
             show( evens ).c_str(), show( scanl( Add(), evens ) ).c_str() );
     printf( "\tscanr (+) %s = %s\n", 
@@ -250,11 +259,11 @@ int main()
 
     printf (
         "sum of (1,2,3,4) = %d\n", // = 10
-        foldl( std::plus<int>(), {1,2,3,4} )
+        foldl( Add(), {1,2,3,4} )
     );
     printf(
         "sum of (4,3,2,1) = %d\n", // = 10
-        foldr( std::plus<int>(), {1,2,3,4} )
+        foldr( Add(), {1,2,3,4} )
     );
 
     Vec fiveTwo = {{5,2}}, twoFive = {{2,5}};
@@ -279,10 +288,10 @@ int main()
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", rsqrDoublePlus2(3) );
 
     puts( "\naddM a b = do\n\tx <- a\n\ty <- b\n\tx + y" );
-    printf( "addM 2 4 = %s\n", 
+    printf( "addM (Just 2) (Just 4) = %s\n", 
             show( addM(Just(2), Just(4)) ).c_str() );
     puts( "addM2 a b = (+) <$> a <*> b" );
-    printf( "addM2 2 4 = %s\n\n",
+    printf( "addM2 (Just 2) (Just 4) = %s\n\n",
             show( addM2(Just(2), Just(4)) ).c_str() );
 
     printf( "5 * 2 = %d\n", closet(Mult(),5)(2) );
@@ -293,7 +302,7 @@ int main()
     auto plus_twoM = fmap( plus_two );
     printf( "\tp2M (1,2) = %s\n\tp2M [1,2] = %s\n",
             show( plus_twoM(make_pair(1,2)) ).c_str(),
-            show( plus_twoM(list<int>{1,2}) ).c_str() );
+            show( plus_twoM(std::list<int>{1,2}) ).c_str() );
     puts("");
 
     printf( "(+2) <$> (pure 1) (100) = %d\n", fmap(plus_two, pure::pure(1))(100) );
@@ -333,7 +342,7 @@ int main()
     printf( "\tzip_with add3 [1,2] [3,4] [5,6] = %s\n",
             show( zipWith(add3,V{1,2},V{3,4},V{5,6}) ).c_str() );
     printf( "\tfold add3 10 [1,2] [3,4] = %s\n",
-            show( foldl(add3,10,V{1,2},V{3,4}) ).c_str() );
+            show( pure::foldl(add3,10,V{1,2},V{3,4}) ).c_str() );
     puts("");
 
     vector<int> N = {1,2,3,4,5,6,7,8};
