@@ -75,7 +75,7 @@ Vec findZero( const Board& b ) {
     for( auto x : enumerateTo(3) )
         for( auto y : enumerateTo(3) )
             if( at(x,y,b) == 0 )
-                return {x,y};
+                return {(int)x,(int)y};
     throw "WTF";
 }
 
@@ -96,6 +96,9 @@ struct Successor {
     }
 };
 
+using Action  = Vec;
+using Actions = std::vector< Action >;
+
 Board succeed( Action a, Board b ) {
     return Successor( a, move(b) ).b;
 }
@@ -112,9 +115,6 @@ std::pair<Successors,Board> successors( const Board& b ) {
     }
     return { move(ss), b };
 }
-
-using Action  = Vec;
-using Actions = std::vector< Action >;
 
 auto succState = pure::state<Board,Successors>( successors );
 
@@ -196,11 +196,60 @@ Actions breadthFirst( const Board& b ) {
     }
     throw "No solution";
 }
-        
+
+Vec place( unsigned int n ) {
+    return { (int)n%3, (int)n/3 };
+}
+
+unsigned int slideManhattanHeuristic( const Board& b ) {
+    using pure::list::enumerateTo;
+
+    unsigned int sum;
+    for( auto x : enumerateTo(2) )
+        for( auto y : enumerateTo(2) )
+            sum += manhattan( place(at(x,y,b)), {(int)x,(int)y} );
+    return sum;
+}
+
+Actions astar( const Board& b ) {
+    using State = std::pair<Actions,Board>;
+    std::list< State > fringe{ {{},move(b)} };
+    std::vector< Board > past;
+    while( fringe.size() ) {
+        std::pair<Actions,Board> s = fringe.back();
+        fringe.pop_back();
+
+        if( pure::list::elem(s.second,past) )
+            continue;
+
+        past.push_back( s.second );
+
+        if( goalState(s.second) )
+            return s.first;
+
+        pure::list::vmap (
+            [&]( Successor suc ) {
+                auto path = s.first;
+                path.push_back( suc.action );
+                fringe = pure::list::insert (
+                    [&]( const State& a, const State& b ) {
+                        return a.first.size() + slideManhattanHeuristic(a.second) 
+                             > b.first.size() + slideManhattanHeuristic(b.second);
+                    },
+                    State{ move(path), move(suc.b) },
+                    move( fringe )
+                );
+
+//                fringe.emplace_front( move(path), move(suc.b) );
+            }, successors( s.second ).first
+        );
+    }
+    throw "No solution";
+}
     
 int main() {
-    //Board s = randomSwapState(1);
-    Board s = randomOffState(20);
+    //Board s = randomSwapState();
+    Board s = randomOffState(40);
 
 
     using std::cout;
@@ -215,9 +264,11 @@ int main() {
 //
 //    cout << "Game won? " << goalState(s) << endl;
 
-    auto solution = breadthFirst( s );
+    auto solution = astar( s );
 
     for( auto a : solution ) 
         cout << "Move: (" << a.x << ',' << a.y << ")\n" << (s=succeed(a,s)) << endl;
+
+    cout << "Moves : " << solution.size() << endl;
 
 }
