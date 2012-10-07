@@ -3,9 +3,11 @@
 #include "../List.h"
 
 #include <array>
+#include <list>
 #include <algorithm>
 #include <utility>
 #include <cmath>
+#include <ctime>
 #include <iostream>
 
 using Row = std::array<unsigned int,3>;
@@ -77,33 +79,49 @@ Vec findZero( const Board& b ) {
     throw "WTF";
 }
 
-Board successor( Vec toMove, Board b ) {
-    Vec zeroPos = findZero( b );
+struct Successor {
+    Board b;
+    Vec   action;
+    unsigned int cost = 1;
 
-    if( manhattan(toMove,zeroPos) != 1 )
-        throw "Bad move!";
+    Successor( Vec toMove, Board b )
+        : b( move(b) ), action( toMove )
+    {
+        Vec zeroPos = findZero( b );
 
-    std::swap( at(zeroPos,b), at(toMove,b) );
-    return b;
+        if( manhattan(toMove,zeroPos) != 1 )
+            throw "Bad move!";
+
+        std::swap( at(zeroPos,this->b), at(toMove,this->b) );
+    }
+};
+
+Board succeed( Action a, Board b ) {
+    return Successor( a, move(b) ).b;
 }
 
-using Successors = std::vector<Board>;
+using Successors = std::vector<Successor>;
 
-Successors successors( const Board& b ) {
-    using pure::list::enumerate;
+std::pair<Successors,Board> successors( const Board& b ) {
     Successors ss;
     auto z = findZero( b );
     for( auto d : dirs ) {
         auto p = z + d;
         if( inBounds(p) )
-            ss.emplace_back( successor(p,b) );
+            ss.emplace_back( Successor(p,b) );
     }
-    return ss;
+    return { move(ss), b };
 }
+
+using Action  = Vec;
+using Actions = std::vector< Action >;
+
+auto succState = pure::state<Board,Successors>( successors );
+
+std::mt19937 engine( std::time(0) ); 
 
 Board randomSwapState( unsigned int n=5 ) {
     static std::uniform_int_distribution<int> d(0,2);
-    static std::mt19937 engine; 
     static auto rnd = pure::closure( d, engine );
 
     Board s = GOAL;
@@ -117,31 +135,89 @@ Board randomSwapState( unsigned int n=5 ) {
     return s;
 }
 
-using Actions = std::vector< Vec >;
+Board randomOffState( unsigned int n=3 ) {
+    static std::uniform_int_distribution<int> d(0,1);
+    static auto rnd = pure::closure( d, engine );
 
-Board play( const Actions& as, Board b ) {
-    for( auto a : as ) 
-        b = successor( a, move(b) );
+    auto toAdd = [&]{ return rnd() ? 1 : -1; };
+
+    Board b = GOAL;
+    while( n-- ) {
+        auto z = findZero( b );
+        if( rnd() ) 
+            z.x += toAdd();
+        else
+            z.y += toAdd();
+
+        if( inBounds(z) )
+            b = succeed( z, move(b) );
+        else
+            n++;
+    }
+
     return b;
 }
 
-struct Path {
-    Actions actions;
-    Board s;
-};
+
+//auto tick = sget<int>() >>= []( int x ){
+//    return sput( x+1 ) >>= ReturnState<int>();
+//};
+
+//auto play = sget<Board,Actions>() >>= 
+
+Board play( const Actions& as, Board b ) {
+    for( auto a : as ) 
+        b = succeed( a, move(b) );
+    return b;
+}
+
+Actions breadthFirst( const Board& b ) {
+    std::list< std::pair<Actions,Board> > fringe{ {{},move(b)} };
+    std::vector< Board > past;
+    while( fringe.size() ) {
+        std::pair<Actions,Board> s = fringe.back();
+        fringe.pop_back();
+
+        if( pure::list::elem(s.second,past) )
+            continue;
+
+        past.push_back( s.second );
+
+        if( goalState(s.second) )
+            return s.first;
+
+        pure::list::vmap (
+            [&]( Successor suc ) {
+                auto path = s.first;
+                path.push_back( suc.action );
+                fringe.emplace_front( move(path), move(suc.b) );
+            }, successors( s.second ).first
+        );
+    }
+    throw "No solution";
+}
+        
     
 int main() {
-    Board s = randomSwapState();
+    //Board s = randomSwapState(1);
+    Board s = randomOffState(20);
+
 
     using std::cout;
     using std::endl;
 
     cout << "State = \n" << s << endl;
+//    auto ss = succState.runState( s ).get().first;
+////    auto ss = successors( s );
+//
+//    for( auto x : ss ) 
+//        cout << "successor :\n" << x.b << endl;
+//
+//    cout << "Game won? " << goalState(s) << endl;
 
-    auto ss = successors( s );
+    auto solution = breadthFirst( s );
 
-    for( auto x : ss ) 
-        cout << "successor :\n" << x << endl;
+    for( auto a : solution ) 
+        cout << "Move: (" << a.x << ',' << a.y << ")\n" << (s=succeed(a,s)) << endl;
 
-    cout << "Game won? " << goalState(s) << endl;
 }
