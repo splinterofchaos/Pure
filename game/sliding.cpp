@@ -9,6 +9,7 @@
 #include <cmath>
 #include <ctime>
 #include <iostream>
+#include <chrono>
 
 using Row = std::array<unsigned int,3>;
 using Board = std::array< Row, 3>;
@@ -97,7 +98,7 @@ struct Successor {
 };
 
 using Action  = Vec;
-using Actions = std::vector< Action >;
+using Path = std::vector< Action >;
 
 Board succeed( Action a, Board b ) {
     return Successor( a, move(b) ).b;
@@ -163,19 +164,23 @@ Board randomOffState( unsigned int n=3 ) {
 //    return sput( x+1 ) >>= ReturnState<int>();
 //};
 
-//auto play = sget<Board,Actions>() >>= 
+//auto play = sget<Board,Path>() >>= 
 
-Board play( const Actions& as, Board b ) {
+Board play( const Path& as, Board b ) {
     for( auto a : as ) 
         b = succeed( a, move(b) );
     return b;
 }
 
-Actions breadthFirst( const Board& b ) {
-    std::list< std::pair<Actions,Board> > fringe{ {{},move(b)} };
+#include <memory>
+
+using MaybePath = std::unique_ptr<Path>;
+
+MaybePath breadthFirst( const Board& b ) {
+    std::list< std::pair<Path,Board> > fringe{ {{},move(b)} };
     std::vector< Board > past;
     while( fringe.size() ) {
-        std::pair<Actions,Board> s = fringe.back();
+        std::pair<Path,Board> s = fringe.back();
         fringe.pop_back();
 
         if( pure::list::elem(s.second,past) )
@@ -184,7 +189,7 @@ Actions breadthFirst( const Board& b ) {
         past.push_back( s.second );
 
         if( goalState(s.second) )
-            return s.first;
+            return MaybePath( new Path(move(s.first)) );
 
         pure::list::vmap (
             [&]( Successor suc ) {
@@ -194,14 +199,14 @@ Actions breadthFirst( const Board& b ) {
             }, successors( s.second ).first
         );
     }
-    throw "No solution";
+    return nullptr;
 }
 
 Vec place( unsigned int n ) {
     return { (int)n%3, (int)n/3 };
 }
 
-unsigned int slideManhattanHeuristic( const Board& b ) {
+unsigned int manhattanPriority( const Board& b ) {
     using pure::list::enumerateTo;
 
     unsigned int sum;
@@ -211,16 +216,33 @@ unsigned int slideManhattanHeuristic( const Board& b ) {
     return sum;
 }
 
-unsigned int forwardCost( const Actions& as ) {
+unsigned int hammingPriority( const Board& b ) {
+    using pure::list::enumerateTo;
+
+    unsigned int sum;
+    for( auto x : enumerateTo(2) )
+        for( auto y : enumerateTo(2) )
+            sum += at(x,y,b) == (x + 3*y);
+    return sum;
+}
+
+unsigned int forwardCost( const Path& as ) {
     return as.size();
 }
 
-Actions astar( const Board& b ) {
-    using State = std::pair<Actions,Board>;
+unsigned long long astarExpanded = 0;
+
+using Heuristic = unsigned int(*)(const Board&);
+
+MaybePath astar( const Board& b, Heuristic h ) {
+    using State = std::pair<Path,Board>;
     std::list< State > fringe{ {{},move(b)} };
     std::vector< Board > past;
+
+    astarExpanded = 1;
+
     while( fringe.size() ) {
-        std::pair<Actions,Board> s = fringe.front();
+        std::pair<Path,Board> s = fringe.front();
         fringe.pop_front();
 
         if( pure::list::elem(s.second,past) )
@@ -229,22 +251,48 @@ Actions astar( const Board& b ) {
         past.push_back( s.second );
 
         if( goalState(s.second) )
-            return s.first;
+            return MaybePath( new Path(move(s.first)) );
 
+        using pure::list::cons;
+        using pure::list::insert;
         for( auto suc : successors( s.second ).first ) {
-            auto path = s.first;
-            path.push_back( suc.action );
-            fringe = pure::list::insert (
+            astarExpanded++;
+
+            auto path = cons( s.first, suc.action );
+            fringe = insert (
                 [&]( const State& a, const State& b ) {
-                return forwardCost(a.first) + slideManhattanHeuristic(a.second) 
-                     < forwardCost(b.first) + slideManhattanHeuristic(b.second);
+                return forwardCost(a.first) + h(a.second) 
+                     < forwardCost(b.first) + h(b.second);
                 },
                 State{ move(path), move(suc.b) },
                 move( fringe )
             );
         }
     }
-    throw "No solution";
+    return nullptr;
+}
+
+void results( const Board& b, Heuristic h ) {
+    using std::cout;
+    using std::endl;
+    using Clock = std::chrono::high_resolution_clock;
+    using ms    = std::chrono::milliseconds;
+
+    auto start = Clock::now();
+    auto solutionPtr = astar( b, h );
+
+    cout << "\nmanhattan!\n";
+
+    if( not solutionPtr ) {
+        cout << "No solution\n";
+        return;
+    }
+
+    auto solution = *solutionPtr;
+
+    cout << "Moves : " << solution.size() << endl;
+    cout << "Expanded " << astarExpanded << " nodes.\n";
+    cout << "Time : " << std::chrono::duration_cast<ms>( Clock::now() - start ).count() << endl;
 }
     
 int main() {
@@ -256,19 +304,7 @@ int main() {
     using std::endl;
 
     cout << "State = \n" << s << endl;
-//    auto ss = succState.runState( s ).get().first;
-////    auto ss = successors( s );
-//
-//    for( auto x : ss ) 
-//        cout << "successor :\n" << x.b << endl;
-//
-//    cout << "Game won? " << goalState(s) << endl;
 
-    auto solution = astar( s );
-
-    for( auto a : solution ) 
-        cout << "Move: (" << a.x << ',' << a.y << ")\n" << (s=succeed(a,s)) << endl;
-
-    cout << "Moves : " << solution.size() << endl;
-
+    results( s, manhattanPriority );
+    results( s, hammingPriority   );
 }
