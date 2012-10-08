@@ -49,7 +49,7 @@ Board GOAL = {{ {{0, 1, 2}},
                 {{3, 4, 5}},
                 {{6, 7, 8}} }};
 
-bool goalState( const Board& b ) {
+bool slideGoal( const Board& b ) {
     return b == GOAL;
 }
 
@@ -102,6 +102,83 @@ S succession( M m, A a, unsigned int cost=1 ) {
     return S( move(m), move(a), cost );
 }
 
+template< class Path >
+unsigned int forwardCost( const Path& as ) {
+    return as.size();
+}
+
+unsigned long long astarExpanded = 0;
+
+struct {
+    template< class Heuristic, class Path, class Model >
+    unsigned int operator () ( Heuristic h, const std::pair<Path,Model>& s ) {
+        return forwardCost(s.first) + h(s.second);
+    }
+} astarCost{};
+
+#include <memory>
+#include <utility>
+#include <algorithm>
+
+template< class Model, class Succeed, class Goal, class Heuristic,
+          class A = typename pure::Decay <
+              decltype (
+                  std::declval<Succeed>()(std::declval<Model>())[0]
+              ) 
+          > :: action_type,
+          class Path = std::vector<A>,
+          class MaybePath = std::unique_ptr<Path> >
+MaybePath astar( const Model& b, Succeed succeed, Goal goal, Heuristic h ) {
+
+    // Maintain a fringe ordered from cheapest to most expensive states based
+    // on the backward cost (number of steps required) and heuristic (forward)
+    // cost.
+    using State = std::pair<Path,Model>;
+    std::list< State > fringe{ {{},move(b)} };
+
+    std::vector< Model > past;
+
+    astarExpanded = 1;
+
+    auto cost = pure::closure(astarCost,h);
+    auto compare = [cost]( const State& a, const State& b ) {
+        return cost(a) < cost(b);
+    };
+
+    while( fringe.size() ) {
+        Path ps;
+        Model m;
+
+        // Pick the lowest hanging fruit.
+        std::tie(ps,m) = fringe.front();
+        fringe.pop_front();
+
+        if( pure::list::elem(m,past) )
+            continue;
+
+        past.push_back( m );
+
+        if( goal(m) )
+            return MaybePath( new Path(move(ps)) );
+
+        using pure::list::cons;
+        using pure::list::insert;
+        for( auto suc : succeed(m) ) {
+            astarExpanded++;
+
+            auto path = cons( ps, suc.a );
+
+            // Keep order on insertion.
+            fringe = insert (
+                compare,
+                State{ move(path), move(suc.m) },
+                move( fringe )
+            );
+        }
+    }
+    return nullptr;
+}
+
 Succession<Board,Vec> slideSuccession( Vec toMove, Board b ) {
         Vec zeroPos = findZero( b );
 
@@ -143,7 +220,7 @@ Vec place( unsigned int n ) {
     return { (int)n%3, (int)n/3 };
 }
 
-unsigned int manhattanPriority( const Board& b ) {
+unsigned int slideHeuristic( const Board& b ) {
     using pure::list::enumerateTo;
 
     unsigned int sum = 0;
@@ -151,93 +228,6 @@ unsigned int manhattanPriority( const Board& b ) {
         for( auto y : enumerateTo(2) )
             sum += manhattan( place(at(x,y,b)), {(int)x,(int)y} );
     return sum;
-}
-
-unsigned int hammingPriority( const Board& b ) {
-    using pure::list::enumerateTo;
-
-    unsigned int sum = 0;
-    for( auto x : enumerateTo(2) )
-        for( auto y : enumerateTo(2) )
-            sum += at(x,y,b) == (x + 3*y);
-    return sum;
-}
-
-template< class Path >
-unsigned int forwardCost( const Path& as ) {
-    return as.size();
-}
-
-unsigned long long astarExpanded = 0;
-
-struct {
-    template< class Heuristic, class Path, class Model >
-    unsigned int operator () ( Heuristic h, const std::pair<Path,Model>& s ) {
-        return forwardCost(s.first) + h(s.second);
-    }
-} astarCost{};
-
-#include <memory>
-#include <utility>
-#include <algorithm>
-
-template< class Model, class Succeed, class Heuristic,
-          class A = typename pure::Decay <
-              decltype (
-                  std::declval<Succeed>()(std::declval<Model>())[0]
-              ) 
-          > :: action_type,
-          class Path = std::vector<A>,
-          class MaybePath = std::unique_ptr<Path> >
-MaybePath astar( const Model& b, Succeed succeed, Heuristic h ) {
-
-    // Maintain a fringe ordered from cheapest to most expensive states based
-    // on the backward cost (number of steps required) and heuristic (forward)
-    // cost.
-    using State = std::pair<Path,Model>;
-    std::list< State > fringe{ {{},move(b)} };
-
-    std::vector< Model > past;
-
-    astarExpanded = 1;
-
-    auto cost = pure::closure(astarCost,h);
-    auto compare = [&]( const State& a, const State& b ) {
-        return cost(a) < cost(b);
-    };
-
-    while( fringe.size() ) {
-        Path ps;
-        Model m;
-
-        // Pick the lowest hanging fruit.
-        std::tie(ps,m) = fringe.front();
-        fringe.pop_front();
-
-        if( pure::list::elem(m,past) )
-            continue;
-
-        past.push_back( m );
-
-        if( goalState(m) )
-            return MaybePath( new Path(move(ps)) );
-
-        using pure::list::cons;
-        using pure::list::insert;
-        for( auto suc : succeed(m) ) {
-            astarExpanded++;
-
-            auto path = cons( ps, suc.a );
-
-            // Keep order on insertion.
-            fringe = insert (
-                compare,
-                State{ move(path), move(suc.m) },
-                move( fringe )
-            );
-        }
-    }
-    return nullptr;
 }
 
 Board randomSwapState( unsigned int n=5 ) {
@@ -288,7 +278,7 @@ void results( const Board& b, H h, const char* const name ) {
     using ms    = std::chrono::milliseconds;
 
     auto start = Clock::now();
-    auto solutionPtr = astar( b, slideSuccessors, h );
+    auto solutionPtr = astar( b, slideSuccessors, slideGoal, h );
 
     cout << endl << name << endl;
 
@@ -316,7 +306,6 @@ int main() {
 
     cout << "State = \n" << s << endl;
 
-    results( s, manhattanPriority, "Manhattan" );
-    //results( s, hammingPriority,   "Hamming"   );
-    results( s, pure::pure(0), "null heuristic" );
+    results( s, slideHeuristic, "Manhattan" );
+    //results( s, pure::pure(0), "null heuristic" );
 }
