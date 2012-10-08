@@ -111,7 +111,7 @@ std::pair<Successors,Board> successors( const Board& b ) {
     for( auto d : dirs ) {
         auto p = z + d;
         if( inBounds(p) )
-            ss.emplace_back( Successor(p,b) );
+            ss.emplace_back( p, b );
     }
     return { move(ss), b };
 }
@@ -211,13 +211,17 @@ unsigned int slideManhattanHeuristic( const Board& b ) {
     return sum;
 }
 
+unsigned int forwardCost( const Actions& as ) {
+    return as.size();
+}
+
 Actions astar( const Board& b ) {
     using State = std::pair<Actions,Board>;
     std::list< State > fringe{ {{},move(b)} };
     std::vector< Board > past;
     while( fringe.size() ) {
-        std::pair<Actions,Board> s = fringe.back();
-        fringe.pop_back();
+        std::pair<Actions,Board> s = fringe.front();
+        fringe.pop_front();
 
         if( pure::list::elem(s.second,past) )
             continue;
@@ -227,22 +231,18 @@ Actions astar( const Board& b ) {
         if( goalState(s.second) )
             return s.first;
 
-        pure::list::vmap (
-            [&]( Successor suc ) {
-                auto path = s.first;
-                path.push_back( suc.action );
-                fringe = pure::list::insert (
-                    [&]( const State& a, const State& b ) {
-                        return a.first.size() + slideManhattanHeuristic(a.second) 
-                             > b.first.size() + slideManhattanHeuristic(b.second);
-                    },
-                    State{ move(path), move(suc.b) },
-                    move( fringe )
-                );
-
-//                fringe.emplace_front( move(path), move(suc.b) );
-            }, successors( s.second ).first
-        );
+        for( auto suc : successors( s.second ).first ) {
+            auto path = s.first;
+            path.push_back( suc.action );
+            fringe = pure::list::insert (
+                [&]( const State& a, const State& b ) {
+                return forwardCost(a.first) + slideManhattanHeuristic(a.second) 
+                     < forwardCost(b.first) + slideManhattanHeuristic(b.second);
+                },
+                State{ move(path), move(suc.b) },
+                move( fringe )
+            );
+        }
     }
     throw "No solution";
 }
