@@ -117,7 +117,9 @@ unsigned long long astarExpanded = 0;
 
 struct {
     template< class ForwardCost, class Heuristic, class Path, class Model >
-    unsigned int operator () ( ForwardCost f, Heuristic h, const std::pair<Path,Model>& s ) {
+    constexpr unsigned int operator () ( ForwardCost f, Heuristic h, 
+                                         const std::pair<Path,Model>& s ) 
+    {
         return f(s.first) + h(s.second);
     }
 } astarCost{};
@@ -137,13 +139,12 @@ using Path = std::vector <
 
 template< class Succeed, class Model >
 using MaybePath = std::unique_ptr< Path<Succeed,Model> >;
-        
 
 template< class Model, class Succeed, class Goal, class ForwardCost,
           class Heuristic, 
           class Path = Path<Succeed,Model>, 
           class MaybePath = MaybePath<Succeed,Model> >
-MaybePath astar( const Model& b, Succeed succeed, Goal goal, ForwardCost f, Heuristic h ) {
+MaybePath astar( Model b, Succeed succeed, Goal goal, ForwardCost f, Heuristic h ) {
 
     // Maintain a fringe ordered from cheapest to most expensive states based
     // on the backward cost (number of steps required) and heuristic (forward)
@@ -174,7 +175,7 @@ MaybePath astar( const Model& b, Succeed succeed, Goal goal, ForwardCost f, Heur
         past.push_back( m );
 
         if( goal(m) )
-            return MaybePath( new Path(move(ps)) );
+            return pure::Just(move(ps));
 
         using pure::list::cons;
         using pure::list::insert;
@@ -194,16 +195,18 @@ MaybePath astar( const Model& b, Succeed succeed, Goal goal, ForwardCost f, Heur
     return nullptr;
 }
 
-template< class Model, class Succeed, class Goal, class ForwardCost >
-MaybePath<Succeed,Model> uniformCostSearch( const Model& b, Succeed s, Goal g, ForwardCost f ) 
+template< class M, class S, class G, class F >
+MaybePath<S,M> uniformCostSearch( M&& m, S&& s, G&& g, F&& f ) 
 {
-    return astar( b, s, g, f, pure::pure(0) );
+    return astar( std::forward<M>(m), std::forward<S>(s), std::forward<G>(g),
+                  std::forward<F>(f), pure::pure(0) );
 }
 
-template< class Model, class Succeed, class Goal >
-MaybePath<Succeed,Model> breadthFirstSearch( const Model& b, Succeed s, Goal g ) 
+template< class M, class S, class G >
+MaybePath<S,M> breadthFirstSearch( M&& m, S&& s, G&& g ) 
 {
-    return uniformCostSearch( b, s, g, pure::pure(0) );
+    return uniformCostSearch( std::forward<M>(m), std::forward<S>(s), 
+                              std::forward<G>(g), pure::pure(0) );
 }
 
 Succession<Board,Vec> slideSuccession( Vec toMove, Board b ) {
@@ -323,13 +326,13 @@ using Maze = std::vector<std::string>;
 
 Maze maze = { 
     "###########",
-    "# #      ##",
-    "#   # ##  #",
-    "#####   # #",
-    "#   ####  #",
-    "###      ##",
+    "# #       #",
+    "#   #######",
+    "##       ##",
+    "# # ####  #",
+    "#     #  ##",
     "###########"
-}; // NOTE: Takes 23 moves to get from (1,1) to (1,4).
+}; // NOTE: Takes 9 moves to get from (1,1) to (1,4).
 
 const Vec MAZE_BEGIN = { 1, 1 };
 const Vec MAZE_END   = { 1, 4 };
@@ -367,17 +370,39 @@ bool pathGoal( Vec p ) {
     return pathHeuristic(p) == 0;
 }
 
-template< class H >
-void mazeResults( Vec p, H h, const char* const name ) {
+enum Search {
+    BFS,
+    UCS,
+    ASTAR
+};
+
+const char* const searchName[] = {
+    "Breadth-First Search",
+    "Uniform Cost Search",
+    "A*"
+};
+
+void mazeResults( Search s, Vec p ) {
     using std::cout;
     using std::endl;
     using Clock = std::chrono::high_resolution_clock;
     using ms    = std::chrono::milliseconds;
 
     auto start = Clock::now();
-    auto solutionPtr = astar( p, mazeSuccessors, pathGoal, uniformCost, h );
 
-    cout << endl << name << endl;
+    cout << searchName[s] << " search." << endl;
+
+    MaybePath< decltype(mazeSuccessors), decltype(p) > solutionPtr;
+
+    switch( s ) {
+      case BFS: solutionPtr = breadthFirstSearch( p, mazeSuccessors, pathGoal );
+                break;
+      case UCS: solutionPtr = uniformCostSearch( p, mazeSuccessors, 
+                                                 pathGoal, uniformCost );
+                break;
+      case ASTAR: solutionPtr = astar( p, mazeSuccessors, pathGoal, 
+                                       uniformCost, pathHeuristic );
+    }
 
     if( not solutionPtr ) {
         cout << "No solution\n";
@@ -390,7 +415,7 @@ void mazeResults( Vec p, H h, const char* const name ) {
     cout << "Expanded " << astarExpanded << " nodes.\n";
     cout << "Time : " << 
         std::chrono::duration_cast<ms>( Clock::now() - start ).count()/1000.f 
-        << " seconds "<< endl;
+        << " seconds "<< endl << endl;
 }
     
 int main() {
@@ -400,7 +425,9 @@ int main() {
     using std::endl;
 
 
-    mazeResults( {1,1}, pathHeuristic, "Path finding" );
+    mazeResults( ASTAR, {1,1} );
+    mazeResults( UCS, {1,1} );
+    mazeResults( BFS, {1,1} );
    
     //Board s = randomSwapState();
     Board s = randomOffState(999);
