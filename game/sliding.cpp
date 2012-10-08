@@ -106,17 +106,19 @@ S succession( M m, A a, unsigned int cost=1 ) {
     return S( move(m), move(a), cost );
 }
 
-template< class Path >
-unsigned int forwardCost( const Path& as ) {
-    return as.size();
-}
+struct {
+    template< class Path >
+    unsigned int operator () ( const Path& as ) {
+        return as.size();
+    }
+} uniformCost;
 
 unsigned long long astarExpanded = 0;
 
 struct {
-    template< class Heuristic, class Path, class Model >
-    unsigned int operator () ( Heuristic h, const std::pair<Path,Model>& s ) {
-        return forwardCost(s.first) + h(s.second);
+    template< class ForwardCost, class Heuristic, class Path, class Model >
+    unsigned int operator () ( ForwardCost f, Heuristic h, const std::pair<Path,Model>& s ) {
+        return f(s.first) + h(s.second);
     }
 } astarCost{};
 
@@ -124,7 +126,8 @@ struct {
 #include <utility>
 #include <algorithm>
 
-template< class Model, class Succeed, class Goal, class Heuristic,
+template< class Model, class Succeed, class Goal, class ForwardCost,
+          class Heuristic,
           class A = typename pure::Decay <
               decltype (
                   std::declval<Succeed>()(std::declval<Model>())[0]
@@ -132,7 +135,7 @@ template< class Model, class Succeed, class Goal, class Heuristic,
           > :: action_type,
           class Path = std::vector<A>,
           class MaybePath = std::unique_ptr<Path> >
-MaybePath astar( const Model& b, Succeed succeed, Goal goal, Heuristic h ) {
+MaybePath astar( const Model& b, Succeed succeed, Goal goal, ForwardCost f, Heuristic h ) {
 
     // Maintain a fringe ordered from cheapest to most expensive states based
     // on the backward cost (number of steps required) and heuristic (forward)
@@ -144,7 +147,7 @@ MaybePath astar( const Model& b, Succeed succeed, Goal goal, Heuristic h ) {
 
     astarExpanded = 1;
 
-    auto cost = pure::closure(astarCost,h);
+    auto cost = pure::closure(astarCost,f,h);
     auto compare = [cost]( const State& a, const State& b ) {
         return cost(a) < cost(b);
     };
@@ -278,7 +281,7 @@ void slideResults( const Board& b, H h, const char* const name ) {
     using ms    = std::chrono::milliseconds;
 
     auto start = Clock::now();
-    auto solutionPtr = astar( b, slideSuccessors, slideGoal, h );
+    auto solutionPtr = astar( b, slideSuccessors, slideGoal, uniformCost, h );
 
     cout << endl << name << endl;
 
@@ -302,7 +305,7 @@ Maze maze = {
     "###########",
     "# #      ##",
     "#   # ##  #",
-    "#####  ## #",
+    "#####   # #",
     "#   ####  #",
     "###      ##",
     "###########"
@@ -352,7 +355,7 @@ void mazeResults( Vec p, H h, const char* const name ) {
     using ms    = std::chrono::milliseconds;
 
     auto start = Clock::now();
-    auto solutionPtr = astar( p, mazeSuccessors, pathGoal, h );
+    auto solutionPtr = astar( p, mazeSuccessors, pathGoal, uniformCost, h );
 
     cout << endl << name << endl;
 
