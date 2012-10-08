@@ -146,7 +146,7 @@ Vec place( unsigned int n ) {
 unsigned int manhattanPriority( const Board& b ) {
     using pure::list::enumerateTo;
 
-    unsigned int sum;
+    unsigned int sum = 0;
     for( auto x : enumerateTo(2) )
         for( auto y : enumerateTo(2) )
             sum += manhattan( place(at(x,y,b)), {(int)x,(int)y} );
@@ -156,7 +156,7 @@ unsigned int manhattanPriority( const Board& b ) {
 unsigned int hammingPriority( const Board& b ) {
     using pure::list::enumerateTo;
 
-    unsigned int sum;
+    unsigned int sum = 0;
     for( auto x : enumerateTo(2) )
         for( auto y : enumerateTo(2) )
             sum += at(x,y,b) == (x + 3*y);
@@ -190,8 +190,13 @@ template< class Model, class Succeed, class Heuristic,
           class Path = std::vector<A>,
           class MaybePath = std::unique_ptr<Path> >
 MaybePath astar( const Model& b, Succeed succeed, Heuristic h ) {
+
+    // Maintain a fringe ordered from cheapest to most expensive states based
+    // on the backward cost (number of steps required) and heuristic (forward)
+    // cost.
     using State = std::pair<Path,Model>;
     std::list< State > fringe{ {{},move(b)} };
+
     std::vector< Model > past;
 
     astarExpanded = 1;
@@ -205,15 +210,9 @@ MaybePath astar( const Model& b, Succeed succeed, Heuristic h ) {
         Path ps;
         Model m;
 
-        // TODO: The fringe should be ordered so finding the minimum element
-        // should not be required. (It should be the front or back.)
-        auto it = std::min_element( fringe.begin(), fringe.end(),
-                                    compare );
-        std::tie(ps,m) = *it;
-        fringe.erase(it);
-
-        //std::tie(ps,m) = fringe.front();
-        //fringe.pop_front();
+        // Pick the lowest hanging fruit.
+        std::tie(ps,m) = fringe.front();
+        fringe.pop_front();
 
         if( pure::list::elem(m,past) )
             continue;
@@ -229,12 +228,13 @@ MaybePath astar( const Model& b, Succeed succeed, Heuristic h ) {
             astarExpanded++;
 
             auto path = cons( ps, suc.a );
-            fringe.emplace_back( move(path), move(suc.m) );
-            //fringe = insert (
-            //    compare,
-            //    State{ move(path), move(suc.m) },
-            //    move( fringe )
-            //);
+
+            // Keep order on insertion.
+            fringe = insert (
+                compare,
+                State{ move(path), move(suc.m) },
+                move( fringe )
+            );
         }
     }
     return nullptr;
@@ -301,12 +301,14 @@ void results( const Board& b, H h, const char* const name ) {
 
     cout << "Moves : " << solution.size() << endl;
     cout << "Expanded " << astarExpanded << " nodes.\n";
-    cout << "Time : " << std::chrono::duration_cast<ms>( Clock::now() - start ).count() << endl;
+    cout << "Time : " << 
+        std::chrono::duration_cast<ms>( Clock::now() - start ).count()/1000.f 
+        << " seconds "<< endl;
 }
     
 int main() {
     //Board s = randomSwapState();
-    Board s = randomOffState(40);
+    Board s = randomOffState(999);
 
 
     using std::cout;
@@ -315,6 +317,6 @@ int main() {
     cout << "State = \n" << s << endl;
 
     results( s, manhattanPriority, "Manhattan" );
-    results( s, hammingPriority,   "Hamming"   );
-    results( s, pure::pure(0),   "null heuristic"   );
+    //results( s, hammingPriority,   "Hamming"   );
+    results( s, pure::pure(0), "null heuristic" );
 }
