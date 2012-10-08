@@ -126,15 +126,23 @@ struct {
 #include <utility>
 #include <algorithm>
 
+template< class Succeed, class Model >
+using Path = std::vector < 
+    typename pure::Decay <
+        decltype (
+            std::declval<Succeed>()(std::declval<Model>())[0]
+        ) 
+    > :: action_type
+>;
+
+template< class Succeed, class Model >
+using MaybePath = std::unique_ptr< Path<Succeed,Model> >;
+        
+
 template< class Model, class Succeed, class Goal, class ForwardCost,
-          class Heuristic,
-          class A = typename pure::Decay <
-              decltype (
-                  std::declval<Succeed>()(std::declval<Model>())[0]
-              ) 
-          > :: action_type,
-          class Path = std::vector<A>,
-          class MaybePath = std::unique_ptr<Path> >
+          class Heuristic, 
+          class Path = Path<Succeed,Model>, 
+          class MaybePath = MaybePath<Succeed,Model> >
 MaybePath astar( const Model& b, Succeed succeed, Goal goal, ForwardCost f, Heuristic h ) {
 
     // Maintain a fringe ordered from cheapest to most expensive states based
@@ -184,6 +192,18 @@ MaybePath astar( const Model& b, Succeed succeed, Goal goal, ForwardCost f, Heur
         }
     }
     return nullptr;
+}
+
+template< class Model, class Succeed, class Goal, class ForwardCost >
+MaybePath<Succeed,Model> uniformCostSearch( const Model& b, Succeed s, Goal g, ForwardCost f ) 
+{
+    return astar( b, s, g, f, pure::pure(0) );
+}
+
+template< class Model, class Succeed, class Goal >
+MaybePath<Succeed,Model> breadthFirstSearch( const Model& b, Succeed s, Goal g ) 
+{
+    return uniformCostSearch( b, s, g, pure::pure(0) );
 }
 
 Succession<Board,Vec> slideSuccession( Vec toMove, Board b ) {
