@@ -205,8 +205,15 @@ MaybePath astar( const Model& b, Succeed succeed, Heuristic h ) {
         Path ps;
         Model m;
 
-        std::tie(ps,m) = fringe.front();
-        fringe.pop_front();
+        // TODO: The fringe should be ordered so finding the minimum element
+        // should not be required. (It should be the front or back.)
+        auto it = std::min_element( fringe.begin(), fringe.end(),
+                                    compare );
+        std::tie(ps,m) = *it;
+        fringe.erase(it);
+
+        //std::tie(ps,m) = fringe.front();
+        //fringe.pop_front();
 
         if( pure::list::elem(m,past) )
             continue;
@@ -222,11 +229,12 @@ MaybePath astar( const Model& b, Succeed succeed, Heuristic h ) {
             astarExpanded++;
 
             auto path = cons( ps, suc.a );
-            fringe = insert (
-                compare,
-                State{ move(path), move(suc.m) },
-                move( fringe )
-            );
+            fringe.emplace_back( move(path), move(suc.m) );
+            //fringe = insert (
+            //    compare,
+            //    State{ move(path), move(suc.m) },
+            //    move( fringe )
+            //);
         }
     }
     return nullptr;
