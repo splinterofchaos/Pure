@@ -26,6 +26,10 @@ const unsigned int& at( size_t x, size_t y, const Board& b ) {
 
 struct Vec { int x, y; };
 
+bool operator == ( const Vec& a, const Vec& b ) {
+    return a.x == b.x and a.y == b.y;
+}
+
 unsigned int& at( const Vec& v, Board& b ) {
     return at( v.x, v.y, b );
 }
@@ -190,9 +194,6 @@ Succession<Board,Vec> slideSuccession( Vec toMove, Board b ) {
         return succession( b, toMove );
 }
 
-using Action  = Vec;
-using Path = std::vector< Action >;
-
 Board slideSucceed( Vec a, Board b ) {
     return slideSuccession( a, move(b) ).m;
 }
@@ -269,9 +270,8 @@ Board randomOffState( unsigned int n=3 ) {
 }
 
 
-
 template< class H >
-void results( const Board& b, H h, const char* const name ) {
+void slideResults( const Board& b, H h, const char* const name ) {
     using std::cout;
     using std::endl;
     using Clock = std::chrono::high_resolution_clock;
@@ -295,17 +295,94 @@ void results( const Board& b, H h, const char* const name ) {
         std::chrono::duration_cast<ms>( Clock::now() - start ).count()/1000.f 
         << " seconds "<< endl;
 }
+
+using Maze = std::vector<std::string>;
+
+Maze maze = { 
+    "###########",
+    "# #      ##",
+    "#   # ##  #",
+    "#####  ## #",
+    "#   ####  #",
+    "###      ##",
+    "###########"
+}; // NOTE: Takes 23 moves to get from (1,1) to (1,4).
+
+const Vec MAZE_BEGIN = { 1, 1 };
+const Vec MAZE_END   = { 1, 4 };
+
+Succession<Vec,Vec> mazeSuccession( Vec dir, Vec pos ) {
+    if( dir.x + dir.y != 1 or maze[dir.y][dir.x] != ' ' )
+        throw "Bad move!";
+
+    return succession( pos+dir, dir );
+}
+
+Vec mazeSucceed( Vec dir, Vec pos ) {
+    return mazeSuccession( dir, pos ).m;
+}
+
+using PathSuccessors = std::vector< Succession<Vec,Vec> >;
+
+PathSuccessors mazeSuccessors( Vec pos ) {
+    PathSuccessors ss;
+
+    for( auto d : dirs ) {
+        auto p = d + pos;
+        if( maze[p.y][p.x] == ' ' )
+            ss.emplace_back( p, d );
+    }
+
+    return ss;
+}
+
+unsigned int pathHeuristic( Vec pos ) {
+    return manhattan( pos, MAZE_END );
+}
+
+bool pathGoal( Vec p ) {
+    return pathHeuristic(p) == 0;
+}
+
+template< class H >
+void mazeResults( Vec p, H h, const char* const name ) {
+    using std::cout;
+    using std::endl;
+    using Clock = std::chrono::high_resolution_clock;
+    using ms    = std::chrono::milliseconds;
+
+    auto start = Clock::now();
+    auto solutionPtr = astar( p, mazeSuccessors, pathGoal, h );
+
+    cout << endl << name << endl;
+
+    if( not solutionPtr ) {
+        cout << "No solution\n";
+        return;
+    }
+
+    auto solution = *solutionPtr;
+
+    cout << "Moves : " << solution.size() << endl;
+    cout << "Expanded " << astarExpanded << " nodes.\n";
+    cout << "Time : " << 
+        std::chrono::duration_cast<ms>( Clock::now() - start ).count()/1000.f 
+        << " seconds "<< endl;
+}
     
 int main() {
-    //Board s = randomSwapState();
-    Board s = randomOffState(999);
 
 
     using std::cout;
     using std::endl;
 
-    cout << "State = \n" << s << endl;
 
-    results( s, slideHeuristic, "Manhattan" );
-    //results( s, pure::pure(0), "null heuristic" );
+    mazeResults( {1,1}, pathHeuristic, "Path finding" );
+   
+    //Board s = randomSwapState();
+    Board s = randomOffState(999);
+    cout << "\nSlide puzzle\n" << s << endl;
+
+    slideResults( s, slideHeuristic, "Manhattan" );
+    //slideResults( s, pure::pure(0), "null heuristic" );
 }
