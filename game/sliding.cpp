@@ -14,6 +14,8 @@
 using Row = std::array<unsigned int,3>;
 using Board = std::array< Row, 3>;
 
+using std::move;
+
 unsigned int& at( size_t x, size_t y, Board& b ) {
     return b[y][x];
 }
@@ -80,46 +82,155 @@ Vec findZero( const Board& b ) {
     throw "WTF";
 }
 
-struct Successor {
-    Board b;
-    Vec   action;
+template< class Model, class Action >
+struct Succession {
+    using model_type  = Model;
+    using action_type = Action;
+
+    model_type  m;
+    action_type a;
     unsigned int cost = 1;
 
-    Successor( Vec toMove, Board b )
-        : b( move(b) ), action( toMove )
+    constexpr Succession( model_type m, action_type a, unsigned int cost=1 )
+        : m(move(m)), a(move(a)), cost(cost)
     {
+    }
+};
+
+template< class M, class A, class S = Succession<M,A> >
+S succession( M m, A a, unsigned int cost=1 ) {
+    return S( move(m), move(a), cost );
+}
+
+Succession<Board,Vec> slideSuccession( Vec toMove, Board b ) {
         Vec zeroPos = findZero( b );
 
         if( manhattan(toMove,zeroPos) != 1 )
             throw "Bad move!";
 
-        std::swap( at(zeroPos,this->b), at(toMove,this->b) );
-    }
-};
+        std::swap( at(zeroPos,b), at(toMove,b) );
+
+        return succession( b, toMove );
+}
 
 using Action  = Vec;
 using Path = std::vector< Action >;
 
-Board succeed( Action a, Board b ) {
-    return Successor( a, move(b) ).b;
+Board slideSucceed( Vec a, Board b ) {
+    return slideSuccession( a, move(b) ).m;
 }
 
-using Successors = std::vector<Successor>;
+template< class M, class A >
+using SuccessionList = std::vector<Succession<M,A>>;
 
-std::pair<Successors,Board> successors( const Board& b ) {
-    Successors ss;
+using SlideSuccessors = SuccessionList<Board,Vec>;
+
+SlideSuccessors slideSuccessors( const Board& b ) {
+    SlideSuccessors ss;
+
     auto z = findZero( b );
     for( auto d : dirs ) {
         auto p = z + d;
         if( inBounds(p) )
-            ss.emplace_back( p, b );
+            ss.emplace_back( slideSuccession(p,b) );
     }
-    return { move(ss), b };
+    return ss;
 }
 
-auto succState = pure::state<Board,Successors>( successors );
-
 std::mt19937 engine( std::time(0) ); 
+
+Vec place( unsigned int n ) {
+    return { (int)n%3, (int)n/3 };
+}
+
+unsigned int manhattanPriority( const Board& b ) {
+    using pure::list::enumerateTo;
+
+    unsigned int sum;
+    for( auto x : enumerateTo(2) )
+        for( auto y : enumerateTo(2) )
+            sum += manhattan( place(at(x,y,b)), {(int)x,(int)y} );
+    return sum;
+}
+
+unsigned int hammingPriority( const Board& b ) {
+    using pure::list::enumerateTo;
+
+    unsigned int sum;
+    for( auto x : enumerateTo(2) )
+        for( auto y : enumerateTo(2) )
+            sum += at(x,y,b) == (x + 3*y);
+    return sum;
+}
+
+template< class Path >
+unsigned int forwardCost( const Path& as ) {
+    return as.size();
+}
+
+unsigned long long astarExpanded = 0;
+
+struct {
+    template< class Heuristic, class Path, class Model >
+    unsigned int operator () ( Heuristic h, const std::pair<Path,Model>& s ) {
+        return forwardCost(s.first) + h(s.second);
+    }
+} astarCost{};
+
+#include <memory>
+#include <utility>
+#include <algorithm>
+
+template< class Model, class Succeed, class Heuristic,
+          class A = typename pure::Decay <
+              decltype (
+                  std::declval<Succeed>()(std::declval<Model>())[0]
+              ) 
+          > :: action_type,
+          class Path = std::vector<A>,
+          class MaybePath = std::unique_ptr<Path> >
+MaybePath astar( const Model& b, Succeed succeed, Heuristic h ) {
+    using State = std::pair<Path,Model>;
+    std::list< State > fringe{ {{},move(b)} };
+    std::vector< Model > past;
+
+    astarExpanded = 1;
+
+    auto cost = pure::closure(astarCost,h);
+    auto compare = [&]( const State& a, const State& b ) {
+        return cost(a) < cost(b);
+    };
+
+    while( fringe.size() ) {
+        Path ps;
+        Model m;
+
+        std::tie(ps,m) = fringe.front();
+        fringe.pop_front();
+
+        if( pure::list::elem(m,past) )
+            continue;
+
+        past.push_back( m );
+
+        if( goalState(m) )
+            return MaybePath( new Path(move(ps)) );
+
+        using pure::list::cons;
+        using pure::list::insert;
+        for( auto suc : succeed(m) ) {
+            astarExpanded++;
+
+            auto path = cons( ps, suc.a );
+            fringe = insert (
+                compare,
+                State{ move(path), move(suc.m) },
+                move( fringe )
+            );
+        }
+    }
+    return nullptr;
+}
 
 Board randomSwapState( unsigned int n=5 ) {
     static std::uniform_int_distribution<int> d(0,2);
@@ -151,7 +262,7 @@ Board randomOffState( unsigned int n=3 ) {
             z.y += toAdd();
 
         if( inBounds(z) )
-            b = succeed( z, move(b) );
+            b = slideSucceed( z, move(b) );
         else
             n++;
     }
@@ -160,128 +271,18 @@ Board randomOffState( unsigned int n=3 ) {
 }
 
 
-//auto tick = sget<int>() >>= []( int x ){
-//    return sput( x+1 ) >>= ReturnState<int>();
-//};
 
-//auto play = sget<Board,Path>() >>= 
-
-Board play( const Path& as, Board b ) {
-    for( auto a : as ) 
-        b = succeed( a, move(b) );
-    return b;
-}
-
-#include <memory>
-
-using MaybePath = std::unique_ptr<Path>;
-
-MaybePath breadthFirst( const Board& b ) {
-    std::list< std::pair<Path,Board> > fringe{ {{},move(b)} };
-    std::vector< Board > past;
-    while( fringe.size() ) {
-        std::pair<Path,Board> s = fringe.back();
-        fringe.pop_back();
-
-        if( pure::list::elem(s.second,past) )
-            continue;
-
-        past.push_back( s.second );
-
-        if( goalState(s.second) )
-            return MaybePath( new Path(move(s.first)) );
-
-        pure::list::vmap (
-            [&]( Successor suc ) {
-                auto path = s.first;
-                path.push_back( suc.action );
-                fringe.emplace_front( move(path), move(suc.b) );
-            }, successors( s.second ).first
-        );
-    }
-    return nullptr;
-}
-
-Vec place( unsigned int n ) {
-    return { (int)n%3, (int)n/3 };
-}
-
-unsigned int manhattanPriority( const Board& b ) {
-    using pure::list::enumerateTo;
-
-    unsigned int sum;
-    for( auto x : enumerateTo(2) )
-        for( auto y : enumerateTo(2) )
-            sum += manhattan( place(at(x,y,b)), {(int)x,(int)y} );
-    return sum;
-}
-
-unsigned int hammingPriority( const Board& b ) {
-    using pure::list::enumerateTo;
-
-    unsigned int sum;
-    for( auto x : enumerateTo(2) )
-        for( auto y : enumerateTo(2) )
-            sum += at(x,y,b) == (x + 3*y);
-    return sum;
-}
-
-unsigned int forwardCost( const Path& as ) {
-    return as.size();
-}
-
-unsigned long long astarExpanded = 0;
-
-using Heuristic = unsigned int(*)(const Board&);
-
-MaybePath astar( const Board& b, Heuristic h ) {
-    using State = std::pair<Path,Board>;
-    std::list< State > fringe{ {{},move(b)} };
-    std::vector< Board > past;
-
-    astarExpanded = 1;
-
-    while( fringe.size() ) {
-        std::pair<Path,Board> s = fringe.front();
-        fringe.pop_front();
-
-        if( pure::list::elem(s.second,past) )
-            continue;
-
-        past.push_back( s.second );
-
-        if( goalState(s.second) )
-            return MaybePath( new Path(move(s.first)) );
-
-        using pure::list::cons;
-        using pure::list::insert;
-        for( auto suc : successors( s.second ).first ) {
-            astarExpanded++;
-
-            auto path = cons( s.first, suc.action );
-            fringe = insert (
-                [&]( const State& a, const State& b ) {
-                return forwardCost(a.first) + h(a.second) 
-                     < forwardCost(b.first) + h(b.second);
-                },
-                State{ move(path), move(suc.b) },
-                move( fringe )
-            );
-        }
-    }
-    return nullptr;
-}
-
-void results( const Board& b, Heuristic h ) {
+template< class H >
+void results( const Board& b, H h, const char* const name ) {
     using std::cout;
     using std::endl;
     using Clock = std::chrono::high_resolution_clock;
     using ms    = std::chrono::milliseconds;
 
     auto start = Clock::now();
-    auto solutionPtr = astar( b, h );
+    auto solutionPtr = astar( b, slideSuccessors, h );
 
-    cout << "\nmanhattan!\n";
+    cout << endl << name << endl;
 
     if( not solutionPtr ) {
         cout << "No solution\n";
@@ -305,6 +306,7 @@ int main() {
 
     cout << "State = \n" << s << endl;
 
-    results( s, manhattanPriority );
-    results( s, hammingPriority   );
+    results( s, manhattanPriority, "Manhattan" );
+    results( s, hammingPriority,   "Hamming"   );
+    results( s, pure::pure(0),   "null heuristic"   );
 }

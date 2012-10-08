@@ -392,7 +392,7 @@ struct Pure
     X x;
 
     explicit constexpr Pure( X x ) : x( x ) { }
-    constexpr Pure( Pure&& ) = default;
+    constexpr Pure( const Pure& ) = default;
 
     template< class ...Args >
     constexpr X operator() ( Args ... ) { return x; }
