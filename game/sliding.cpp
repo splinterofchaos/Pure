@@ -102,11 +102,11 @@ struct Succession {
 };
 
 template< class M, class A, class S = Succession<M,A> >
-S succession( M m, A a, unsigned int cost=1 ) {
+constexpr S succession( M m, A a, unsigned int cost=1 ) {
     return S( move(m), move(a), cost );
 }
 
-struct {
+constexpr struct {
     template< class Path >
     unsigned int operator () ( const Path& as ) {
         return as.size();
@@ -114,15 +114,6 @@ struct {
 } uniformCost;
 
 unsigned long long astarExpanded = 0;
-
-struct {
-    template< class ForwardCost, class Heuristic, class Path, class Model >
-    constexpr unsigned int operator () ( ForwardCost f, Heuristic h, 
-                                         const std::pair<Path,Model>& s ) 
-    {
-        return f(s.first) + h(s.second);
-    }
-} astarCost{};
 
 #include <memory>
 #include <utility>
@@ -132,7 +123,7 @@ template< class Succeed, class Model >
 using Path = std::vector < 
     typename pure::Decay <
         decltype (
-            std::declval<Succeed>()(std::declval<Model>())[0]
+            std::declval<Succeed>()(std::declval<Model>()).front()
         ) 
     > :: action_type
 >;
@@ -156,10 +147,11 @@ MaybePath astar( Model b, Succeed succeed, Goal goal, ForwardCost f, Heuristic h
 
     astarExpanded = 1;
 
-    auto cost = pure::closure(astarCost,f,h);
-    auto compare = [cost]( const State& a, const State& b ) {
-        return cost(a) < cost(b);
-    };
+    // Compare states by the sum of their forwards and backwards costs.
+    auto compare = pure::on ( 
+        pure::Less(),
+        [&]( const State& s ) { return f(s.first) + h(s.second); }
+    );
 
     while( fringe.size() ) {
         Path ps;

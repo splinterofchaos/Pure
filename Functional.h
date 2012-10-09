@@ -378,13 +378,12 @@ constexpr P pairCompose( F f, G g ) {
     return P( move(f), move(g) );
 }
 
-template< class Binary, class Unary >
-struct On {
+template< class Binary, class Unary > struct On {
     Binary b;
     Unary  u;
 
     template< class X, class Y >
-    auto operator () ( X&& x, Y&& y )
+    constexpr auto operator () ( X&& x, Y&& y )
         -> decltype( b( u(declval<X>()), u(declval<Y>()) ) )
     {
         return b( u(std::forward<X>(x)), u(std::forward<Y>(y)) );
@@ -393,7 +392,7 @@ struct On {
 
 template< class B, class U >
 constexpr On<B,U> on( B b, U u ) {
-    return { move(b), move(u) }
+    return { move(b), move(u) };
 }
 
 template< class X > constexpr X inc( X x ) { return ++x; }
