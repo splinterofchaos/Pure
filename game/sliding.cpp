@@ -101,6 +101,14 @@ struct Succession {
     }
 };
 
+template< class Model, class Action, class F >
+using SearchState = pure::StateT<Model,Action,std::vector,F>;
+
+template< class M, class A, class F >
+SearchState<M,A,F> stateSuccession( F f ) {
+    return { move(f) };
+}
+
 template< class M, class A, class S = Succession<M,A> >
 constexpr S succession( M m, A a, unsigned int cost=1 ) {
     return S( move(m), move(a), cost );
@@ -130,6 +138,67 @@ using Path = std::vector <
 
 template< class Succeed, class Model >
 using MaybePath = std::unique_ptr< Path<Succeed,Model> >;
+
+template< class Model, class SucceedST, class Goal,
+          class ForwardCost, class Heuristic, 
+          class A = typename SucceedST::accumulator_type,
+          class Path  = std::vector<A>,
+          class MPath = std::unique_ptr<Path> >
+MPath astar_( Model b, SucceedST succeed, Goal goal, ForwardCost f, Heuristic h ) 
+{
+    // Maintain a fringe ordered from cheapest to most expensive states based
+    // on the backward cost (number of steps required) and heuristic (forward)
+    // cost.
+    using State = std::pair<Path,Model>;
+    std::list< State > fringe{ {{},move(b)} };
+
+    std::vector< Model > past;
+
+    astarExpanded = 1;
+
+    // Compare states by the sum of their forwards and backwards costs.
+    auto compare = pure::on ( 
+        pure::Less(),
+        [&]( const State& s ) { return f(s.first) + h(s.second); }
+    );
+
+    while( fringe.size() ) {
+        Path ps;
+        Model m;
+
+        // Pick the lowest hanging fruit.
+        std::tie(ps,m) = fringe.front();
+        fringe.pop_front();
+
+        if( pure::list::elem(m,past) )
+            continue;
+
+        past.push_back( m );
+
+        if( goal(m) )
+            return pure::Just(move(ps));
+
+        using pure::list::cons;
+        using pure::list::insert;
+        for( auto suc : pure::runState( succeed, m ) ) {
+            A a;
+            Model next;
+            std::tie(a,next) = suc;
+
+            astarExpanded++;
+
+            auto path = cons( ps, a );
+
+            // Keep order on insertion.
+            fringe = insert (
+                compare,
+                State{ move(path), move(next) },
+                move( fringe )
+            );
+        }
+    }
+    return nullptr;
+}
 
 template< class Model, class Succeed, class Goal, class ForwardCost,
           class Heuristic, 
@@ -187,6 +256,47 @@ MaybePath astar( Model b, Succeed succeed, Goal goal, ForwardCost f, Heuristic h
     return nullptr;
 }
 
+constexpr struct SuccessionPair {
+    template< class Suc, class Model, class Action >
+    constexpr std::pair< Action, Model > operator () ( Suc s, Model m,
+                                                       Action a ) 
+    {
+        return { a, s( a, m ) };
+    }
+} successionPair{};
+
+constexpr struct Successions {
+    template< class Suc, class Moves, class Model, 
+              class Action = pure::list::SeqVal < 
+                  decltype(std::declval<Moves>()(std::declval<Model>())) 
+            > >
+    std::vector<std::pair<Action,Model>> operator () ( Suc s, Moves moves, Model m ) const
+    {
+        return pure::list::mapTo< std::vector > (
+            pure::closure( successionPair, s, m ),
+            moves( m )
+        );
+    }
+} successions{};
+
+
+constexpr struct SuccessionsFunction {
+    template< class Suc, class Moves >
+    constexpr auto operator () ( Suc s, Moves m ) -> pure::Closet<Successions,Suc,Moves> {
+        return pure::closet( successions, move(s), move(m) );
+    }
+
+    template< class Suc, class Moves >
+    using type = pure::Closet<Successions,Suc,Moves>; 
+} successionsFunction{};
+
+template< class Model, class Action, class Suc, class Moves >
+auto successionsT( Suc s, Moves m ) 
+    -> decltype( pure::stateT<Model,std::vector,Action>( successionsFunction(move(s),move(m)) ))
+{
+    return pure::stateT<Model,std::vector,Action>( successionsFunction(move(s),move(m)) );
+}
+
 template< class M, class S, class G, class F >
 MaybePath<S,M> uniformCostSearch( M&& m, S&& s, G&& g, F&& f ) 
 {
@@ -232,6 +342,20 @@ SlideSuccessors slideSuccessors( const Board& b ) {
     }
     return ss;
 }
+
+std::vector<Vec> slideMoves( const Board& b ) {
+    std::vector<Vec> moves;
+
+    auto z = findZero( b );
+    for( auto d : dirs ) {
+        auto p = z + d;
+        if( inBounds(p) )
+            moves.emplace_back( p );
+    }
+    return moves;
+}
+
+auto slideStateSuccessors = successionsT<Board,Vec>( slideSucceed, slideMoves );
 
 std::mt19937 engine( std::time(0) ); 
 
@@ -296,7 +420,8 @@ void slideResults( const Board& b, H h, const char* const name ) {
     using ms    = std::chrono::milliseconds;
 
     auto start = Clock::now();
-    auto solutionPtr = astar( b, slideSuccessors, slideGoal, uniformCost, h );
+    //auto solutionPtr = astar( b, slideSuccessors, slideGoal, uniformCost, h );
+    auto solutionPtr = astar_( b, slideStateSuccessors, slideGoal, uniformCost, h );
 
     cout << endl << name << endl;
 

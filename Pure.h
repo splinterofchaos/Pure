@@ -1296,56 +1296,6 @@ template< class _X > struct Functor< Identity<_X> > {
     }
 };
 
-template< class S, class A, template<class...>class M, class F > 
-struct StateT { 
-    using function_type = F;
-    using pair_type = std::pair<A,S>;
-
-    template< class P >
-    using monad_type = M<P>;
-
-    function_type f; 
-
-    template< class X >
-    using Result = Result< F, X >; // Should be of Monad type.
-
-    template< class X >
-    constexpr monad_type<pair_type> runState( X&& x ) {
-        return f( forward<X>(x) );
-    }
-};
-
-template< class S, class A >
-using StateIdent = Identity< std::pair<A,S> >;
-
-template< class S, class A, class F > 
-using State = StateT< S, A, Identity, F >;
-
-template< class S, class A=S, class F, 
-          class I = StateIdent< S, A > >
-constexpr auto state( F f ) 
-    -> State< S, A, Composition<Return<I>,F> >
-{
-    return { compose( Return<I>(), move(f) ) }; 
-}
-
-template< class S, template<class...>class M, class A=S, class F,
-          class R = Return<M< std::pair<A,S> >> >
-constexpr auto stateT( F f ) 
-    -> StateT< S, A, M, Composition<R,F> >
-{
-    return { compose( R(), move(f) ) };
-}
-
-constexpr struct RunState {
-    template< class ST, class X > 
-    constexpr auto operator () ( ST&& s, X&& x ) 
-        -> decltype( declval<ST>().runState(declval<X>()) )
-    {
-        return forward<ST>(s).runState( forward<X>(x) );
-    }
-} runState{};
-
 constexpr struct Fst {
     template< class T >
     constexpr auto operator() ( T&& t ) 
@@ -1392,8 +1342,70 @@ constexpr auto fcompose( F f, G g ) -> NCompoposition<FM,G> {
 template< class F, class G >
 using FCompose = decltype( fcompose(declval<F>(),declval<G>()) );
 
+template< class S, class A, template<class...>class M, class F > 
+struct StateT { 
+    using state_type = S;
+    using accumulator_type = A;
+    using function_type = F;
+    using pair_type = std::pair<A,S>;
+
+    template< class P >
+    using monad_type = M<P>;
+
+    function_type f; 
+
+    template< class X >
+    using Result = Result< F, X >; // Should be of Monad type.
+
+    template< class X >
+    constexpr auto runState( X&& x ) -> decltype( f( declval<X>() ) ) {
+        return f( forward<X>(x) );
+    }
+};
+
+template< class S, template<class...>class M, class A, class F > 
+static constexpr StateT<S,A,M,F> makeState( F f ) {
+    return { move(f) };
+}
+
+template< class S, class A >
+using StateIdent = Identity< std::pair<A,S> >;
+
+template< class S, class A, class F > 
+using State = StateT< S, A, Identity, F >;
+
+template< class S, class A=S, class F, 
+          class I = StateIdent< S, A > >
+constexpr auto state( F f ) 
+    -> State< S, A, Composition<Return<I>,F> >
+{
+    return { compose( Return<I>(), move(f) ) }; 
+}
+
+template< class S, template<class...>class M, class A=S, class F,
+          class R = Return<M< std::pair<A,S> >> >
+constexpr auto stateT( F f ) 
+    -> StateT< S, A, M, Composition<R,F> >
+{
+    return { compose( R(), move(f) ) };
+}
+
+constexpr struct RunState {
+    template< class ST, class X > 
+    constexpr auto operator () ( ST&& s, X&& x ) 
+        -> decltype( declval<ST>().runState(declval<X>()) )
+    {
+        return forward<ST>(s).runState( forward<X>(x) );
+    }
+} runState{};
+
 constexpr auto evalState = fcompose( fst, runState );
 constexpr auto execState = fcompose( snd, runState );
+
+template< class X >
+constexpr RCloset<RunState,X> runStateWith( X x ) {
+    return rcloset( runState, move(x) );
+}
 
 template< class S, class A, template<class...>class M, class F > 
 struct Functor< StateT<S,A,M,F> > {
@@ -1496,8 +1508,8 @@ constexpr auto returnStateT( A a )
 
 template< class ... > struct MonadState;
 
-template< class S, template<class...>class M = Identity,
-          class MS = MonadState< StateT<S,S,M,Id> > >
+template< class S, class A, template<class...>class M = Identity,
+          class MS = MonadState< StateT<S,A,M,Id> > >
 constexpr auto sget() -> decltype( MS::sget() ) {
     return MS::sget();
 }
@@ -1532,12 +1544,12 @@ constexpr auto sgets( F f )
     return stateT<S,M>( compose( first(move(f)), splitter ) );
 }
 
-template< class S, template<class...>class M, class _F >
-struct MonadState< StateT<S,S,M,_F> > {
+template< class S, template<class...>class M, class A, class _F >
+struct MonadState< StateT<S,A,M,_F> > {
     template< class F >
-    using State = StateT<S,S,M,F>;
+    using State = StateT<S,A,M,F>;
 
-    using P = std::pair<S,S>;
+    using P = std::pair<A,S>;
 
     using Monad = M<P>;
 
@@ -1549,10 +1561,10 @@ struct MonadState< StateT<S,S,M,_F> > {
 
     //static constexpr State<GetF> getter = state<S,S>( splitter );
 
-    static constexpr State<GetF> sget() { return stateT<S,M>( splitter ); }
+    static constexpr State<GetF> sget() { return stateT<S,M,A>( splitter ); }
 
     static constexpr State<SetF> sput( S s ) {
-        return stateT<S,M>( rcloset(returnPair,move(s)) );
+        return stateT<S,M,A>( rcloset(returnPair,move(s)) );
     }
 
 };
