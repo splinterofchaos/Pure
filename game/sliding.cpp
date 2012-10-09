@@ -291,7 +291,7 @@ constexpr struct SuccessionsFunction {
 } successionsFunction{};
 
 template< class Model, class Action, class Suc, class Moves >
-auto successionsT( Suc s, Moves m ) 
+auto successionsState( Suc s, Moves m ) 
     -> decltype( pure::stateT<Model,std::vector,Action>( successionsFunction(move(s),move(m)) ))
 {
     return pure::stateT<Model,std::vector,Action>( successionsFunction(move(s),move(m)) );
@@ -355,7 +355,7 @@ std::vector<Vec> slideMoves( const Board& b ) {
     return moves;
 }
 
-auto slideStateSuccessors = successionsT<Board,Vec>( slideSucceed, slideMoves );
+auto slideStateSuccessors = successionsState<Board,Vec>( slideSucceed, slideMoves );
 
 std::mt19937 engine( std::time(0) ); 
 
@@ -465,6 +465,20 @@ Vec mazeSucceed( Vec dir, Vec pos ) {
     return mazeSuccession( dir, pos ).m;
 }
 
+std::vector<Vec> mazeMoves( Vec pos ) {
+    std::vector<Vec> moves;
+
+    for( auto d : dirs ) {
+        auto p = d + pos;
+        if( maze[p.y][p.x] == ' ' )
+            moves.push_back( d );
+    }
+
+    return moves;
+}
+
+auto mazeState = successionsState<Vec,Vec>( pure::Add(), mazeMoves );
+
 using PathSuccessors = std::vector< Succession<Vec,Vec> >;
 
 PathSuccessors mazeSuccessors( Vec pos ) {
@@ -517,8 +531,8 @@ void mazeResults( Search s, Vec p ) {
       case UCS: solutionPtr = uniformCostSearch( p, mazeSuccessors, 
                                                  pathGoal, uniformCost );
                 break;
-      case ASTAR: solutionPtr = astar( p, mazeSuccessors, pathGoal, 
-                                       uniformCost, pathHeuristic );
+      case ASTAR: solutionPtr = astar_( p, mazeState, pathGoal, 
+                                        uniformCost, pathHeuristic );
     }
 
     if( not solutionPtr ) {
