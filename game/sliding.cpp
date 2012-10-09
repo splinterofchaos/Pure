@@ -69,7 +69,7 @@ constexpr unsigned int manhattan( const Vec& a, const Vec& b ) {
     return std::abs(a.x-b.x) + std::abs(a.y-b.y);
 }
 
-Vec dirs[] = { {0,1}, {1,0}, {0,-1}, {-1,0} };
+const std::vector<Vec> dirs = { {0,1}, {1,0}, {0,-1}, {-1,0} };
 
 bool inBounds( int x ) { return x >= 0 and x < 3; }
 
@@ -127,24 +127,18 @@ unsigned long long astarExpanded = 0;
 #include <utility>
 #include <algorithm>
 
-template< class Succeed, class Model >
-using Path = std::vector < 
-    typename pure::Decay <
-        decltype (
-            std::declval<Succeed>()(std::declval<Model>()).front()
-        ) 
-    > :: action_type
->;
+template< class SucceedState >
+using Path = std::vector< typename SucceedState::accumulator_type >; 
 
-template< class Succeed, class Model >
-using MaybePath = std::unique_ptr< Path<Succeed,Model> >;
+template< class Succeed >
+using MaybePath = std::unique_ptr< Path<pure::Decay<Succeed>> >;
 
 template< class Model, class SucceedST, class Goal,
           class ForwardCost, class Heuristic, 
           class A = typename SucceedST::accumulator_type,
           class Path  = std::vector<A>,
           class MPath = std::unique_ptr<Path> >
-MPath astar_( Model b, SucceedST succeed, Goal goal, ForwardCost f, Heuristic h ) 
+MPath astar( Model b, SucceedST succeed, Goal goal, ForwardCost f, Heuristic h ) 
 {
     // Maintain a fringe ordered from cheapest to most expensive states based
     // on the backward cost (number of steps required) and heuristic (forward)
@@ -180,7 +174,7 @@ MPath astar_( Model b, SucceedST succeed, Goal goal, ForwardCost f, Heuristic h 
 
         using pure::list::cons;
         using pure::list::insert;
-        for( auto suc : pure::runState( succeed, m ) ) {
+        for( auto suc : succeed.runState(m) ) {
             A a;
             Model next;
             std::tie(a,next) = suc;
@@ -200,60 +194,18 @@ MPath astar_( Model b, SucceedST succeed, Goal goal, ForwardCost f, Heuristic h 
     return nullptr;
 }
 
-template< class Model, class Succeed, class Goal, class ForwardCost,
-          class Heuristic, 
-          class Path = Path<Succeed,Model>, 
-          class MaybePath = MaybePath<Succeed,Model> >
-MaybePath astar( Model b, Succeed succeed, Goal goal, ForwardCost f, Heuristic h ) {
+template< class M, class S, class G, class F >
+MaybePath<S> uniformCostSearch( M&& m, S&& s, G&& g, F&& f ) 
+{
+    return astar( std::forward<M>(m), std::forward<S>(s), std::forward<G>(g),
+                  std::forward<F>(f), pure::pure(0) );
+}
 
-    // Maintain a fringe ordered from cheapest to most expensive states based
-    // on the backward cost (number of steps required) and heuristic (forward)
-    // cost.
-    using State = std::pair<Path,Model>;
-    std::list< State > fringe{ {{},move(b)} };
-
-    std::vector< Model > past;
-
-    astarExpanded = 1;
-
-    // Compare states by the sum of their forwards and backwards costs.
-    auto compare = pure::on ( 
-        pure::Less(),
-        [&]( const State& s ) { return f(s.first) + h(s.second); }
-    );
-
-    while( fringe.size() ) {
-        Path ps;
-        Model m;
-
-        // Pick the lowest hanging fruit.
-        std::tie(ps,m) = fringe.front();
-        fringe.pop_front();
-
-        if( pure::list::elem(m,past) )
-            continue;
-
-        past.push_back( m );
-
-        if( goal(m) )
-            return pure::Just(move(ps));
-
-        using pure::list::cons;
-        using pure::list::insert;
-        for( auto suc : succeed(m) ) {
-            astarExpanded++;
-
-            auto path = cons( ps, suc.a );
-
-            // Keep order on insertion.
-            fringe = insert (
-                compare,
-                State{ move(path), move(suc.m) },
-                move( fringe )
-            );
-        }
-    }
-    return nullptr;
+template< class M, class S, class G >
+MaybePath<S> breadthFirstSearch( M&& m, S&& s, G&& g ) 
+{
+    return uniformCostSearch( std::forward<M>(m), std::forward<S>(s), 
+                              std::forward<G>(g), pure::pure(0) );
 }
 
 constexpr struct SuccessionPair {
@@ -282,77 +234,43 @@ constexpr struct Successions {
 
 constexpr struct SuccessionsFunction {
     template< class Suc, class Moves >
-    constexpr auto operator () ( Suc s, Moves m ) -> pure::Closet<Successions,Suc,Moves> {
-        return pure::closet( successions, move(s), move(m) );
-    }
+    using Result = pure::Closet< Successions, Suc, Moves >;
 
     template< class Suc, class Moves >
-    using type = pure::Closet<Successions,Suc,Moves>; 
+    constexpr auto operator () ( Suc s, Moves m ) -> Result<Suc,Moves> {
+        return pure::closet( successions, move(s), move(m) );
+    }
 } successionsFunction{};
+
+template< class M, class A, class S, class Moves >
+using SuccessionState = pure::StateT < 
+    M, A, std::vector, 
+    typename SuccessionsFunction::Result<S,Moves>
+>;
 
 template< class Model, class Action, class Suc, class Moves >
 auto successionsState( Suc s, Moves m ) 
-    -> decltype( pure::stateT<Model,std::vector,Action>( successionsFunction(move(s),move(m)) ))
+    -> SuccessionState<Model,Action,Suc,Moves>
 {
-    return pure::stateT<Model,std::vector,Action>( successionsFunction(move(s),move(m)) );
-}
-
-template< class M, class S, class G, class F >
-MaybePath<S,M> uniformCostSearch( M&& m, S&& s, G&& g, F&& f ) 
-{
-    return astar( std::forward<M>(m), std::forward<S>(s), std::forward<G>(g),
-                  std::forward<F>(f), pure::pure(0) );
-}
-
-template< class M, class S, class G >
-MaybePath<S,M> breadthFirstSearch( M&& m, S&& s, G&& g ) 
-{
-    return uniformCostSearch( std::forward<M>(m), std::forward<S>(s), 
-                              std::forward<G>(g), pure::pure(0) );
-}
-
-Succession<Board,Vec> slideSuccession( Vec toMove, Board b ) {
-        Vec zeroPos = findZero( b );
-
-        if( manhattan(toMove,zeroPos) != 1 )
-            throw "Bad move!";
-
-        std::swap( at(zeroPos,b), at(toMove,b) );
-
-        return succession( b, toMove );
+    return { successionsFunction( move(s), move(m) ) };
 }
 
 Board slideSucceed( Vec a, Board b ) {
-    return slideSuccession( a, move(b) ).m;
-}
+    Vec zeroPos = findZero( b );
 
-template< class M, class A >
-using SuccessionList = std::vector<Succession<M,A>>;
+    if( manhattan(a,zeroPos) != 1 )
+        throw "Bad move!";
 
-using SlideSuccessors = SuccessionList<Board,Vec>;
-
-SlideSuccessors slideSuccessors( const Board& b ) {
-    SlideSuccessors ss;
-
-    auto z = findZero( b );
-    for( auto d : dirs ) {
-        auto p = z + d;
-        if( inBounds(p) )
-            ss.emplace_back( slideSuccession(p,b) );
-    }
-    return ss;
+    std::swap( at(zeroPos,b), at(a,b) );
+    return b;
 }
 
 std::vector<Vec> slideMoves( const Board& b ) {
-    std::vector<Vec> moves;
+    using Pred = bool(*)(const Vec&);
+    constexpr Pred pred = inBounds;
 
-    auto z = findZero( b );
-    for( auto d : dirs ) {
-        auto p = z + d;
-        if( inBounds(p) )
-            moves.emplace_back( p );
-    }
-    return moves;
+    return pure::list::filtrate( pure::plus( findZero(b) ),
+                                 pred, dirs );
 }
 
 auto slideStateSuccessors = successionsState<Board,Vec>( slideSucceed, slideMoves );
@@ -421,7 +339,7 @@ void slideResults( const Board& b, H h, const char* const name ) {
 
     auto start = Clock::now();
     //auto solutionPtr = astar( b, slideSuccessors, slideGoal, uniformCost, h );
-    auto solutionPtr = astar_( b, slideStateSuccessors, slideGoal, uniformCost, h );
+    auto solutionPtr = astar( b, slideStateSuccessors, slideGoal, uniformCost, h );
 
     cout << endl << name << endl;
 
@@ -454,17 +372,6 @@ Maze maze = {
 const Vec MAZE_BEGIN = { 1, 1 };
 const Vec MAZE_END   = { 1, 4 };
 
-Succession<Vec,Vec> mazeSuccession( Vec dir, Vec pos ) {
-    if( dir.x + dir.y != 1 or maze[dir.y][dir.x] != ' ' )
-        throw "Bad move!";
-
-    return succession( pos+dir, dir );
-}
-
-Vec mazeSucceed( Vec dir, Vec pos ) {
-    return mazeSuccession( dir, pos ).m;
-}
-
 std::vector<Vec> mazeMoves( Vec pos ) {
     std::vector<Vec> moves;
 
@@ -478,20 +385,6 @@ std::vector<Vec> mazeMoves( Vec pos ) {
 }
 
 auto mazeState = successionsState<Vec,Vec>( pure::Add(), mazeMoves );
-
-using PathSuccessors = std::vector< Succession<Vec,Vec> >;
-
-PathSuccessors mazeSuccessors( Vec pos ) {
-    PathSuccessors ss;
-
-    for( auto d : dirs ) {
-        auto p = d + pos;
-        if( maze[p.y][p.x] == ' ' )
-            ss.emplace_back( p, d );
-    }
-
-    return ss;
-}
 
 unsigned int pathHeuristic( Vec pos ) {
     return manhattan( pos, MAZE_END );
@@ -523,15 +416,15 @@ void mazeResults( Search s, Vec p ) {
 
     cout << searchName[s] << " search." << endl;
 
-    MaybePath< decltype(mazeSuccessors), decltype(p) > solutionPtr;
+    MaybePath< decltype(mazeState) > solutionPtr;
 
     switch( s ) {
-      case BFS: solutionPtr = breadthFirstSearch( p, mazeSuccessors, pathGoal );
+      case BFS: solutionPtr = breadthFirstSearch( p, mazeState, pathGoal );
                 break;
-      case UCS: solutionPtr = uniformCostSearch( p, mazeSuccessors, 
+      case UCS: solutionPtr = uniformCostSearch( p, mazeState, 
                                                  pathGoal, uniformCost );
                 break;
-      case ASTAR: solutionPtr = astar_( p, mazeState, pathGoal, 
+      case ASTAR: solutionPtr = astar( p, mazeState, pathGoal, 
                                         uniformCost, pathHeuristic );
     }
 
