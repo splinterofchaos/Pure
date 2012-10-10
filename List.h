@@ -648,6 +648,11 @@ struct Cons {
     }
 };
 
+template< class S >
+Closet<Cons,S> cons( S s ) {
+    return closet( Cons(), move(s) );
+}
+
 struct RCons {
     template< class S, class ...X >
     S operator() ( S s, X&& ...x ) const {
@@ -1298,6 +1303,11 @@ bool equal( const XS& xs, const YS& ys ) {
 template< class X, class S >
 bool elem( const X& x, const S& s ) {
     return findFirst( x, s );
+}
+
+template< class X, class S >
+bool elemOrd( const X& x, const S& s ) {
+    return std::lower_bound( begin(s), end(s), x ) != end(s);
 }
 
 template< class X, class S >

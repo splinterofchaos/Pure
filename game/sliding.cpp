@@ -49,9 +49,9 @@ std::ostream& operator << ( std::ostream& os, const Board& b ) {
     return os;
 }
 
-Board GOAL = {{ {{0, 1, 2}},
-                {{3, 4, 5}},
-                {{6, 7, 8}} }};
+constexpr Board GOAL = {{ {{0, 1, 2}},
+                          {{3, 4, 5}},
+                          {{6, 7, 8}} }};
 
 bool slideGoal( const Board& b ) {
     return b == GOAL;
@@ -86,40 +86,12 @@ Vec findZero( const Board& b ) {
     throw "WTF";
 }
 
-template< class Model, class Action >
-struct Succession {
-    using model_type  = Model;
-    using action_type = Action;
-
-    model_type  m;
-    action_type a;
-    unsigned int cost = 1;
-
-    constexpr Succession( model_type m, action_type a, unsigned int cost=1 )
-        : m(move(m)), a(move(a)), cost(cost)
-    {
-    }
-};
-
-template< class Model, class Action, class F >
-using SearchState = pure::StateT<Model,Action,std::vector,F>;
-
-template< class M, class A, class F >
-SearchState<M,A,F> stateSuccession( F f ) {
-    return { move(f) };
-}
-
-template< class M, class A, class S = Succession<M,A> >
-constexpr S succession( M m, A a, unsigned int cost=1 ) {
-    return S( move(m), move(a), cost );
-}
-
 constexpr struct {
     template< class Path >
-    unsigned int operator () ( const Path& as ) {
+    unsigned int operator () ( const Path& as ) const {
         return as.size();
     }
-} uniformCost;
+} uniformCost{};
 
 unsigned long long astarExpanded = 0;
 
@@ -140,29 +112,34 @@ using Path = std::vector< ActionType<SucceedState,Model> >;
 template< class Succeed, class Model >
 using MaybePath = std::unique_ptr< Path<Succeed,Model> >;
 
+
+#include <deque>
 template< class Model, class SucceedST, class Goal,
           class ForwardCost, class Heuristic, 
           class A = ActionType<SucceedST,Model>,
           class P = Path<SucceedST,Model>,
           class MPath = MaybePath<SucceedST,Model> >
-MPath astar( Model b, SucceedST succeed, Goal goal, ForwardCost f, Heuristic h ) 
+MPath astar( Model b, const SucceedST& succeed, const Goal& goal, 
+             const ForwardCost& f, const Heuristic& h ) 
 {
     // Maintain a fringe ordered from cheapest to most expensive states based
     // on the backward cost (number of steps required) and heuristic (forward)
     // cost.
     using State = std::pair<P,Model>;
-    std::list< State > fringe{ {{},move(b)} };
+    std::deque< State > fringe{ {{},move(b)} };
 
     std::vector< Model > past;
 
     astarExpanded = 1;
 
-    // Compare states by the sum of their forwards and backwards costs.
-    auto compare = pure::on ( 
-        pure::Less(),
-        [&]( const State& s ) { return f(s.first) + h(s.second); }
-    );
+    const auto cost = [&]( const State& s ) { 
+        return f(s.first) + h(s.second); 
+    };
 
+    // Compare states by the sum of their forwards and backwards costs.
+    const auto compare = pure::on( pure::Less(), cost );
+
+    using pure::list::elem;
     while( fringe.size() ) {
         P ps;
         Model m;
@@ -171,29 +148,41 @@ MPath astar( Model b, SucceedST succeed, Goal goal, ForwardCost f, Heuristic h )
         std::tie(ps,m) = fringe.front();
         fringe.pop_front();
 
-        if( pure::list::elem(m,past) )
+        // If this state is in the past, we already expanded on a quicker way
+        // to get here, so skip it.
+        if( elem(m,past) )
             continue;
-
-        past.push_back( m );
 
         if( goal(m) )
             return pure::Just(move(ps));
 
-        using pure::list::cons;
-        using pure::list::insert;
-        for( auto suc : succeed(m) ) {
-            A a;
-            Model next;
-            std::tie(a,next) = suc;
+        auto successions = succeed( m );
+        past.emplace_back( move(m) );
+
+        // We don't want to expand backwards, so it makes sense to check if a
+        // state is in the past before inserting to the fringe. Unfortunately,
+        // that is very slow as the past grows. Instead, compare against the
+        // most recent past states.
+        // TODO: Is this a good optimization?
+        auto recent = pure::list::tail_wrap(
+            std::max( 0ul, past.size() - successions.size()*2 ),
+            past
+        );
+
+        for( auto suc : move(successions) ) {
+            if( elem(suc.second, recent) )
+                continue;
 
             astarExpanded++;
 
-            auto path = cons( ps, a );
+            using pure::list::cons;
+            using pure::first;
 
             // Keep order on insertion.
-            fringe = insert (
+            fringe = pure::list::insert (
                 compare,
-                State{ move(path), move(next) },
+                // nextState = { cons(ps,suc.first), suc.second }
+                first( cons(ps) )( suc ),
                 move( fringe )
             );
         }
