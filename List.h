@@ -1469,6 +1469,11 @@ SeqRef<S> maximum( S&& s ) {
     return *std::max_element( begin(forward<S>(s)), end(forward<S>(s)) );
 }
 
+template< class S >
+SeqRef<S> minimum( S&& s ) {
+    return *std::min_element( begin(forward<S>(s)), end(forward<S>(s)) );
+}
+
 template< class F, class S >
 bool all( F&& f, const S& s ) {
     return std::all_of( begin(s), end(s), forward<F>(f) );

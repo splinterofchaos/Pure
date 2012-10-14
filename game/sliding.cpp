@@ -38,6 +38,11 @@ const unsigned int& at( const Vec& v, const Board& b ) {
     return at( v.x, v.y, b );
 }
 
+std::ostream& operator << ( std::ostream& os, Vec v ) {
+    os << '<' << v.x << ',' << v.y << '>';
+    return os;
+}
+
 std::ostream& operator << ( std::ostream& os, const Board& b ) {
     os << "+---+\n";
     pure::list::vmap (
@@ -49,6 +54,17 @@ std::ostream& operator << ( std::ostream& os, const Board& b ) {
     return os;
 }
 
+template< class X >
+std::ostream& operator << ( std::ostream& os, const std::vector<X>& v ) {
+    os << "{ ";
+    pure::list::vmap (
+        [&]( const X& x ) { os << x << ' '; },
+        v
+    );
+    os << '}';
+    return os;
+}
+        
 constexpr Board GOAL = {{ {{0, 1, 2}},
                           {{3, 4, 5}},
                           {{6, 7, 8}} }};
@@ -350,6 +366,40 @@ bool pathGoal( Vec p ) {
     return pathHeuristic(p) == 0;
 }
 
+const std::vector<Vec> dots = { {1,2}, {6,1}, {7,5}, MAZE_END };
+
+struct DotState {
+    Vec pos = MAZE_BEGIN;
+    std::vector<Vec> dots = ::dots;
+};
+
+bool operator == ( const DotState& a, const DotState& b ) {
+    return a.pos == b.pos and a.dots == b.dots;
+}
+
+std::vector<Vec> dotMoves( const DotState& s ) {
+    return mazeMoves( s.pos );
+}
+
+DotState dotSucceed( Vec dir, DotState s ) {
+    s.pos = dir + s.pos;
+    s.dots = pure::list::erase( s.pos, move(s.dots) );
+    return s;
+}
+
+auto dotState = successionsFunction( dotSucceed, dotMoves );
+
+unsigned int dotHeuristic( const DotState& s ) {
+    unsigned int max = 0;
+    for( const auto& d : s.dots )
+        max = std::max( max, manhattan(s.pos,d) );
+    return max;
+}
+
+bool dotGoal( const DotState& s ) {
+    return s.dots.size() == 0;
+}
+
 enum Search {
     BFS,
     UCS,
@@ -404,10 +454,14 @@ int main() {
     results( ASTAR, Vec{1,1}, mazeState, pathGoal, pathHeuristic );
     results( UCS,   Vec{1,1}, mazeState, pathGoal, pathHeuristic );
     results( BFS,   Vec{1,1}, mazeState, pathGoal, pathHeuristic );
+
+    cout << "\nDots\n" << endl;
+    results( ASTAR, DotState(), dotState, dotGoal, dotHeuristic );
+    results( UCS,   DotState(), dotState, dotGoal, dotHeuristic );
+    results( BFS,   DotState(), dotState, dotGoal, dotHeuristic );
    
     //Board s = randomSwapState();
     Board s = randomOffState(999);
     cout << "\nSlide puzzle\n" << s << endl << endl;
     results( ASTAR, s, slideStateSuccessors, slideGoal, slideHeuristic );
-    results( UCS,   s, slideStateSuccessors, slideGoal, slideHeuristic );
 }
