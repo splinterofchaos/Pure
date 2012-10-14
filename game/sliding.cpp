@@ -163,9 +163,8 @@ MPath astar( Model b, const SucceedST& succeed, const Goal& goal,
         // state is in the past before inserting to the fringe. Unfortunately,
         // that is very slow as the past grows. Instead, compare against the
         // most recent past states.
-        // TODO: Is this a good optimization?
         auto recent = pure::list::tail_wrap(
-            std::max( 0ul, past.size() - successions.size()*2 ),
+            std::max( 0ul, past.size() - successions.size()*3 - 1 ),
             past
         );
 
@@ -314,34 +313,6 @@ Board randomOffState( unsigned int n=3 ) {
     return b;
 }
 
-
-template< class H >
-void slideResults( const Board& b, H h, const char* const name ) {
-    using std::cout;
-    using std::endl;
-    using Clock = std::chrono::high_resolution_clock;
-    using ms    = std::chrono::milliseconds;
-
-    auto start = Clock::now();
-    //auto solutionPtr = astar( b, slideSuccessors, slideGoal, uniformCost, h );
-    auto solutionPtr = astar( b, slideStateSuccessors, slideGoal, uniformCost, h );
-
-    cout << endl << name << endl;
-
-    if( not solutionPtr ) {
-        cout << "No solution\n";
-        return;
-    }
-
-    auto solution = *solutionPtr;
-
-    cout << "Moves : " << solution.size() << endl;
-    cout << "Expanded " << astarExpanded << " nodes.\n";
-    cout << "Time : " << 
-        std::chrono::duration_cast<ms>( Clock::now() - start ).count()/1000.f 
-        << " seconds "<< endl;
-}
-
 using Maze = std::vector<std::string>;
 
 Maze maze = { 
@@ -391,7 +362,8 @@ const char* const searchName[] = {
     "A*"
 };
 
-void mazeResults( Search s, Vec p ) {
+template< class Model, class Suc, class Goal, class H >
+void results( Search sType, Model m, Suc s, Goal g, H h ) {
     using std::cout;
     using std::endl;
     using Clock = std::chrono::high_resolution_clock;
@@ -399,18 +371,16 @@ void mazeResults( Search s, Vec p ) {
 
     auto start = Clock::now();
 
-    cout << searchName[s] << " search." << endl;
+    cout << searchName[sType] << " search." << endl;
 
-    decltype(breadthFirstSearch(p,mazeState,pathGoal)) solutionPtr;
+    decltype(breadthFirstSearch(m,s,g)) solutionPtr;
 
-    switch( s ) {
-      case BFS: solutionPtr = breadthFirstSearch( p, mazeState, pathGoal );
+    switch( sType ) {
+      case BFS: solutionPtr = breadthFirstSearch( m, s, g );
                 break;
-      case UCS: solutionPtr = uniformCostSearch( p, mazeState, 
-                                                 pathGoal, uniformCost );
+      case UCS: solutionPtr = uniformCostSearch( m, s, g, uniformCost );
                 break;
-      case ASTAR: solutionPtr = astar( p, mazeState, pathGoal, 
-                                        uniformCost, pathHeuristic );
+      case ASTAR: solutionPtr = astar( m, s, g, uniformCost, h );
     }
 
     if( not solutionPtr ) {
@@ -428,20 +398,16 @@ void mazeResults( Search s, Vec p ) {
 }
     
 int main() {
-
-
     using std::cout;
     using std::endl;
 
-
-    mazeResults( ASTAR, {1,1} );
-    mazeResults( UCS, {1,1} );
-    mazeResults( BFS, {1,1} );
+    results( ASTAR, Vec{1,1}, mazeState, pathGoal, pathHeuristic );
+    results( UCS,   Vec{1,1}, mazeState, pathGoal, pathHeuristic );
+    results( BFS,   Vec{1,1}, mazeState, pathGoal, pathHeuristic );
    
     //Board s = randomSwapState();
     Board s = randomOffState(999);
-    cout << "\nSlide puzzle\n" << s << endl;
-
-    slideResults( s, slideHeuristic, "Manhattan" );
-    //slideResults( s, pure::pure(0), "null heuristic" );
+    cout << "\nSlide puzzle\n" << s << endl << endl;
+    results( ASTAR, s, slideStateSuccessors, slideGoal, slideHeuristic );
+    results( UCS,   s, slideStateSuccessors, slideGoal, slideHeuristic );
 }
