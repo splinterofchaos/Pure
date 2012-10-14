@@ -1508,7 +1508,7 @@ constexpr auto returnStateT( A a )
 
 template< class ... > struct MonadState;
 
-template< class S, class A, template<class...>class M = Identity,
+template< class S, class A=S, template<class...>class M = Identity,
           class MS = MonadState< StateT<S,A,M,Id> > >
 constexpr auto sget() -> decltype( MS::sget() ) {
     return MS::sget();
@@ -1529,9 +1529,9 @@ struct SPut {
 
 template< class S, template<class...>class M = Identity, class F >
 constexpr auto modify( F f ) 
-    -> decltype( sget<S,M>() >>= compose( SPut<S,M>(), f ) )
+    -> decltype( sget<S,S,M>() >>= compose( SPut<S,M>(), declval<F>() ) )
 {
-    return sget<S,M>() >>= compose( SPut<S,M>(), f );
+    return sget<S,S,M>() >>= compose( SPut<S,M>(), move(f) );
 }
 
 template< class S, template<class...>class M = Identity, class F,

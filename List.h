@@ -517,7 +517,7 @@ constexpr Decay<X> accuml( F&& f, X&& x, const XS& ...xs ) {
 // We use && only to let GCC know to prefer this version.
 template< class F, class X, class S >
 constexpr Decay<X> accuml( F&& f, X&& x, S&& s ) {
-    return std::accumulate( begin(s), end(s), 
+    return std::accumulate( begin(forward<S>(s)), end(forward<S>(s)), 
                             forward<X>(x), forward<F>(f) );
 }
 
@@ -546,13 +546,13 @@ constexpr Decay<X> foldl( F&& f, X&& x, std::initializer_list<Y> s ) {
 template< class F, class S, 
           class X = typename cata::sequence_traits<S>::value_type >
 constexpr X foldl( F&& f, S&& s ) {
-    return foldl( forward<F>(f), 
+    return list::foldl( forward<F>(f), 
                   head(forward<S>(s)), tail_wrap(forward<S>(s)) );
 }
 
 template< class F, class X >
 constexpr X foldl( F&& f, std::initializer_list<X> s ) {
-    return foldl( forward<F>(f), head(s), tail_wrap(move(s)) );
+    return list::foldl( forward<F>(f), tail_wrap(move(s)) );
 }
 
 /* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
