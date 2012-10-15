@@ -272,10 +272,15 @@ unsigned int slideHeuristic( const Board& b ) {
     using pure::list::enumerateTo;
 
     unsigned int sum = 0;
+    unsigned int outOfPlace = 0;
     for( auto x : enumerateTo(2) )
-        for( auto y : enumerateTo(2) )
-            sum += manhattan( place(at(x,y,b)), {(int)x,(int)y} );
-    return sum;
+        for( auto y : enumerateTo(2) ) {
+            unsigned int d = manhattan( place(at(x,y,b)), {(int)x,(int)y} );
+            sum += d;
+            if( d )
+                outOfPlace++;
+        }
+    return sum + outOfPlace;
 }
 
 Board randomSwapState( unsigned int n=5 ) {
@@ -380,7 +385,7 @@ unsigned int dotHeuristic( const DotState& s ) {
     unsigned int max = 0;
     for( const auto& d : s.dots )
         max = std::max( max, manhattan(s.pos,d) );
-    return max;
+    return max + 100*s.dots.size();
 }
 
 bool dotGoal( const DotState& s ) {
