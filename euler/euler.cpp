@@ -1,5 +1,6 @@
 
 #include "../Pure.h"
+#include "../Arrow.h"
 
 using namespace pure;
 using namespace list;
