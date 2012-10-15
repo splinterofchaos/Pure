@@ -1,5 +1,6 @@
 
 #include "Pure.h"
+#include "Fold.h"
 
 #include <cstdio>
 #include <cmath>
@@ -342,7 +343,7 @@ int main()
     printf( "\tzip_with add3 [1,2] [3,4] [5,6] = %s\n",
             show( zipWith(add3,V{1,2},V{3,4},V{5,6}) ).c_str() );
     printf( "\tfold add3 10 [1,2] [3,4] = %s\n",
-            show( pure::foldl(add3,10,V{1,2},V{3,4}) ).c_str() );
+            show( foldl(add3,10,V{1,2},V{3,4}) ).c_str() );
     puts("");
 
     vector<int> N = {1,2,3,4,5,6,7,8};

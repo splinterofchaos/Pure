@@ -186,6 +186,8 @@ namespace pure {
     };
 }
 
+#include "../Fold.h"
+using pure::fold::foldMap;
 void problem4() {
     cout << "The largest palindrome product of three digit numbers :"
          << flush;
@@ -214,7 +216,7 @@ int lcm( int x, int y ) {
 }
 
 void problem5() {
-    cout << pure::foldl( lcm, enumerate(2,19) ) 
+    cout << foldl( lcm, enumerate(2,19) ) 
          << " is divisible by all numbers 1 thought 20." << endl;
 }
 
