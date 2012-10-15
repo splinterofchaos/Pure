@@ -643,7 +643,10 @@ void problem18() {
         }
     }
 
-    cout << list::maximum( last(rows) ) << endl;
+    if( rows.size() and last(rows).size() )
+            cout << list::maximum( last(rows) ) << endl;
+    else
+            cout << "No solution." << endl;
 }
 
 void problem20() {

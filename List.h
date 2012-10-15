@@ -371,16 +371,29 @@ void _map( F&& f, RI&& ri,
               forward<YS>(ys), forward<ZS>(zs)... );
 }
 
-template< class R, class F, class ...S >
-R mapExactly( F&& f, S&& ...s ) {
+template< class R, class F, class XS, class ...YS >
+R mapExactly( F&& f, XS&& xs, YS&& ...ys ) {
     R r;
-    _map( forward<F>(f), tailInserter(r), forward<S>(s)... );
+    _map( forward<F>(f), tailInserter(r), forward<XS>(xs), forward<YS>(ys)... );
+    return r;
+}
+
+template< class R, class F, class S >
+auto mapExactly( F&& f, S&& s ) -> XSame<R,Decay<S>,R> {
+    R r;
+    _map( forward<F>(f), tailInserter(r), forward<S>(s) );
+    return r;
+}
+
+template< class R, class F, class S >
+auto mapExactly( F&& f, S r ) -> ESame<R,S,S> {
+    _map( forward<F>(f), begin(r), r );
     return r;
 }
 
 /* mapTo<R> v = R( map(f,v) ) */
 template< template<class...> class _R, class F, class ...S,
-          class R = _R< decltype(declval<F>()(*begin(declval<S>())...)) > >
+          class R = _R< Decay<decltype(declval<F>()(*begin(declval<S>())...))> > >
 R mapTo( F&& f, S&& ...s ) {
     return mapExactly<R>( forward<F>(f), forward<S>(s)... );
 }
@@ -388,20 +401,9 @@ R mapTo( F&& f, S&& ...s ) {
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< class S, class X = SeqVal<S>,
           class F, class FX = Result<F,X>, class R = Remap<S,FX> > 
-auto map( F&& f, const S& xs ) -> R
+R map( F&& f, S&& xs ) 
 {
-    return mapExactly<R>( forward<F>(f), xs );
-}
-
-// When mapping from X to X, we can optimize by not returning a new sequence.
-template< class S, class F >
-auto map( F&& f, S&& xs ) -> ESame< SeqVal<S>, Result<F,SeqRef<S>>, 
-                                // If this type dups to something else, 
-                                // we can't use this version.
-                                ESame<Decay<S>,Dup<S>,S> >
-{
-    _map( forward<F>(f), begin(xs), forward<S>(xs) );
-    return xs;
+    return mapExactly<R>( forward<F>(f), forward<S>(xs) );
 }
 
 template< template<class...> class R, class F, class ...S >
@@ -545,13 +547,13 @@ constexpr Decay<X> foldl( F&& f, X&& x, std::initializer_list<Y> s ) {
 template< class F, class S, 
           class X = typename cata::sequence_traits<S>::value_type >
 constexpr X foldl( F&& f, S&& s ) {
-    return foldl( forward<F>(f), 
+    return list::foldl( forward<F>(f), 
                   head(forward<S>(s)), tail_wrap(forward<S>(s)) );
 }
 
 template< class F, class X >
 constexpr X foldl( F&& f, std::initializer_list<X> s ) {
-    return foldl( forward<F>(f), head(s), tail_wrap(move(s)) );
+    return list::foldl( forward<F>(f), head(s), tail_wrap(move(s)) );
 }
 
 /* foldr f x {1,2,3} -> f(1,f(2,f(3,x))) */
