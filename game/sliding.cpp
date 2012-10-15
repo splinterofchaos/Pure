@@ -16,12 +16,12 @@ using Board = std::array< Row, 3>;
 
 using std::move;
 
-unsigned int& at( size_t x, size_t y, Board& b ) {
-    return b[y][x];
-}
+template< class D2 >
+using At = decltype( std::declval<D2>()[0][0] );
 
-const unsigned int& at( size_t x, size_t y, const Board& b ) {
-    return b[y][x];
+template< class D2 >
+At<D2> at( size_t x, size_t y, D2&& b ) {
+    return std::forward<D2>(b)[y][x];
 }
 
 struct Vec { int x, y; };
@@ -30,12 +30,9 @@ bool operator == ( const Vec& a, const Vec& b ) {
     return a.x == b.x and a.y == b.y;
 }
 
-unsigned int& at( const Vec& v, Board& b ) {
-    return at( v.x, v.y, b );
-}
-
-const unsigned int& at( const Vec& v, const Board& b ) {
-    return at( v.x, v.y, b );
+template< class D2 >
+At<D2> at( const Vec& v, D2&& b ) {
+    return at( v.x, v.y, std::forward<D2>(b) );
 }
 
 std::ostream& operator << ( std::ostream& os, Vec v ) {
@@ -87,9 +84,9 @@ constexpr unsigned int manhattan( const Vec& a, const Vec& b ) {
 
 const std::vector<Vec> dirs = { {0,1}, {1,0}, {0,-1}, {-1,0} };
 
-bool inBounds( int x ) { return x >= 0 and x < 3; }
+constexpr bool inBounds( int x ) { return x >= 0 and x < 3; }
 
-bool inBounds( const Vec& v ) {
+constexpr bool inBounds( const Vec& v ) {
     return inBounds(v.x) and inBounds(v.y);
 }
 
@@ -173,7 +170,7 @@ MPath astar( Model b, const SucceedST& succeed, const Goal& goal,
             return pure::Just(move(ps));
 
         auto successions = succeed( m );
-        past.emplace_back( move(m) );
+        past.push_back( move(m) );
 
         // We don't want to expand backwards, so it makes sense to check if a
         // state is in the past before inserting to the fringe. Unfortunately,
@@ -197,7 +194,7 @@ MPath astar( Model b, const SucceedST& succeed, const Goal& goal,
             fringe = pure::list::insert (
                 compare,
                 // nextState = { cons(ps,suc.first), suc.second }
-                first( cons(ps) )( suc ),
+                first( cons(ps) )( std::move(suc) ),
                 move( fringe )
             );
         }
@@ -220,27 +217,17 @@ MaybePath<S,M> breadthFirstSearch( M&& m, S&& s, G&& g )
 }
 
 using pure::Decay;
-constexpr struct SuccessionPair {
-    template< class Suc, class Model, class Action,
-              class P = std::pair<Decay<Action>,Decay<Model>> >
-    constexpr P operator () ( Suc&& s, Model&& m, Action a ) {
-        return P( a, 
-                  std::forward<Suc>(s)( a, std::forward<Model>(m) ) );
-    }
-} successionPair{};
 
 constexpr struct Successions {
     template< class Suc, class Moves, class Model, 
-              class Action = pure::list::SeqVal< pure::Result<Moves,Model> > >
-    std::vector<std::pair<Action,Model>> operator () ( Suc&& s, Moves&& moves, 
-                                                       Model m ) const
+              class Action = pure::list::SeqVal< pure::Result<Moves,Model> >,
+              class V = std::vector<std::pair<Action,Model>> >
+    V operator () ( Suc&& s, Moves&& moves, const Model& m ) const
     {
-        auto ms = moves( m );
-        return pure::list::mapTo< std::vector > (
-            pure::closure( successionPair, 
-                           std::forward<Suc>(s), std::move(m) ),
-            ms
-        );
+        V v;
+        for( auto& mv : std::forward<Moves>(moves)(m) )
+            v.emplace_back( mv, std::forward<Suc>(s)(mv,m) );
+        return v;
     }
 } successions{};
 
@@ -349,14 +336,14 @@ std::vector<Vec> mazeMoves( Vec pos ) {
 
     for( auto d : dirs ) {
         auto p = d + pos;
-        if( maze[p.y][p.x] == ' ' )
+        if( at(p,maze) == ' ' )
             moves.push_back( d );
     }
 
     return moves;
 }
 
-auto mazeState = successionsFunction( pure::Add(), mazeMoves );
+constexpr auto mazeState = successionsFunction( pure::Add(), mazeMoves );
 
 unsigned int pathHeuristic( Vec pos ) {
     return manhattan( pos, MAZE_END );
@@ -446,19 +433,31 @@ void results( Search sType, Model m, Suc s, Goal g, H h ) {
         std::chrono::duration_cast<ms>( Clock::now() - start ).count()/1000.f 
         << " seconds "<< endl << endl;
 }
+
+struct Results {
+    template< class ...X >
+    void operator () ( X&& ...x ) const {
+        results( std::forward<X>(x)... );
+    }
+};
+
+constexpr auto mazeResults = pure::rcloset( Results(), Vec{1,1}, mazeState, 
+                                            pathGoal, pathHeuristic );
+auto dotResults = pure::rcloset( Results(), DotState(), dotState, 
+                                 dotGoal, dotHeuristic );
     
 int main() {
     using std::cout;
     using std::endl;
 
-    results( ASTAR, Vec{1,1}, mazeState, pathGoal, pathHeuristic );
-    results( UCS,   Vec{1,1}, mazeState, pathGoal, pathHeuristic );
-    results( BFS,   Vec{1,1}, mazeState, pathGoal, pathHeuristic );
+    mazeResults( ASTAR );
+    mazeResults( UCS   );
+    mazeResults( BFS   );
 
     cout << "\nDots\n" << endl;
-    results( ASTAR, DotState(), dotState, dotGoal, dotHeuristic );
-    results( UCS,   DotState(), dotState, dotGoal, dotHeuristic );
-    results( BFS,   DotState(), dotState, dotGoal, dotHeuristic );
+    dotResults( ASTAR );
+    dotResults( UCS   );
+    dotResults( BFS   );
    
     //Board s = randomSwapState();
     Board s = randomOffState(999);
