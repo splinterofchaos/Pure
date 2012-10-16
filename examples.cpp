@@ -361,6 +361,7 @@ int main()
     // Bring in the operator overloads * (ap) and || (alt).
     using namespace pure::ap;
 
+    puts("");
     printf( "Just (+2) <*> Just 2  = %s\n",
             show( Just(plus_two) * Just(2) ).c_str() );
     printf( "Just (+2) <*> Nothing = %s\n",
@@ -377,6 +378,17 @@ int main()
     printf( "Nothing <|> Nothing  = %s\n", 
             show( Nothing<int>() || Nothing<int>() ).c_str() );
 
+    std::vector<Closure<Add,int>> fs = { pure::plus(1), pure::plus(5), pure::plus(3) };
+    puts( "fs = [(+1),(+5),(+3)]" );
+    printf( "\tfs <*> pure 1 = %s\n", 
+            show( fs*pure::ap::pure<std::vector>(1) ).c_str() );
+    printf( "[1,2,3] <|> [4] <|> empty = %s\n",
+            show( std::vector<int>{1,2,3} || std::vector<int>{4} 
+                  || empty<std::vector<int>>() ).c_str() );
+    printf( "pure 5 :: [] = %s\n",
+            show( pure::ap::pure<std::vector>(5) ).c_str() );
+
+    puts("");
     printf( "Just 1 >> Just \"hya!\" = %s\n",
             show( Just(1) >> Just("hya!") ).c_str() );
 

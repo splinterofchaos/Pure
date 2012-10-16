@@ -449,6 +449,15 @@ A map( F&& f, const std::array< X, N >& xs ) {
     return r;
 }
 
+struct Map {
+    template< class ...Args >
+    auto operator () ( Args&& ...args ) 
+        -> decltype( map(declval<Args>()...) ) 
+    {
+        return map( std::forward<Args>(args)... );
+    }
+};
+
 template< class F, class ...S >
 using ResultMap = decltype( map(declval<F>(), declval<S>()...) );
 
