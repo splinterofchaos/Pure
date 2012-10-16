@@ -3,6 +3,7 @@
 #include "Fold.h"
 #include "Arrow.h"
 #include "State.h"
+#include "Applicative.h"
 
 #include <cstdio>
 #include <cmath>
@@ -42,7 +43,7 @@ Vec operator * ( Vec a, float x )
 {
     return map( closure(Mult(),x), a ); 
 }
-Vec operator * ( float x, const Vec& a ) { return Vec(a) * x; }
+Vec operator * ( float x, Vec a ) { return move(a) * x; }
 
 Vec operator / ( const Vec& v, float x ) { return v * (1/x); }
 
@@ -356,6 +357,9 @@ int main()
     n = 9;
     printf( "find (==9) [1,2,3,4,5,6,7,8] = %s\n", 
             show( find(equalsN, N) ).c_str() );
+
+    // Bring in the operator overloads * (ap) and || (alt).
+    using namespace pure::ap;
 
     printf( "Just (+2) <*> Just 2  = %s\n",
             show( Just(plus_two) * Just(2) ).c_str() );
