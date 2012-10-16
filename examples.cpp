@@ -387,6 +387,9 @@ int main()
                   || empty<std::vector<int>>() ).c_str() );
     printf( "pure 5 :: [] = %s\n",
             show( pure::ap::pure<std::vector>(5) ).c_str() );
+    printf( "([1,2],(+2)) <*> ([3,4],5) = %s\n",
+            show( std::make_pair(std::vector<int>{1,2}, plus_two)
+                  * std::make_pair(std::vector<int>{3,4},5) ).c_str() );
 
     puts("");
     printf( "Just 1 >> Just \"hya!\" = %s\n",
