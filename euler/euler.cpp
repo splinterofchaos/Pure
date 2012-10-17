@@ -1,6 +1,7 @@
 
 #include "../Pure.h"
 #include "../Arrow.h"
+#include "../Applicative.h"
 
 using namespace pure;
 using namespace list;
@@ -189,14 +190,20 @@ namespace pure {
 
 #include "../Fold.h"
 using pure::fold::foldMap;
+
 void problem4() {
+    using namespace pure::ap; // for spure(x) = array{x}
+                              // and {x,y} || {u,v} = {x,y,u,v}
     cout << "The largest palindrome product of three digit numbers :"
          << flush;
     cout << foldMap (
             []( const IRange& r ) -> Largest<int> {
-                auto ps = filter( palindrome, 
-                                  map( times(last(r)), init(r) ) );
-                return notNull(ps) ? maximum(ps) : 0;
+                return maximum ( 
+                    filter( palindrome,
+                            map( times(last(r)), init(r) ) )
+                    // Return at least zero if filter returns null list.
+                    || spure(0)
+                );
             },
             // We remove the first three values: {} {100}, and {100,101}.
             drop( 3, inits(enumerate(100,999)) ) 
@@ -360,8 +367,8 @@ void problem11() {
             return take_dir_prod( dir, {{i,j}}, 4, mat ); 
         }, 
         enumerate(mat), enumerate(mat[0]),  
-        std::initializer_list<Vec>{ "-1x0"_v, " 1x1"_v,
-                                    " 0x1"_v, "-1x1"_v }
+        pure::ap::spure<Vec>( "-1x0"_v, " 1x1"_v,
+                              " 0x1"_v, "-1x1"_v )
     ) << endl;
 }
 
@@ -447,7 +454,8 @@ void problem13() {
         )
     );
 
-    cout << append( digits(carry), take(8,sum) ) << endl;
+    using namespace pure::ap;
+    cout << (digits(carry) || take(8,sum)) << endl;
 }
 
 unsigned int e14Iterate( unsigned int x ) {
@@ -555,7 +563,8 @@ Digits operator* ( Digits ds, int x ) {
         reverse(move(ds))
     );
 
-    return reverse( append( move(ds), digits(carry) ) );
+    using namespace pure::ap;
+    return reverse( move(ds) || digits(carry) );
 }
 
 void problem16() {

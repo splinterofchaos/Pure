@@ -4,9 +4,19 @@
 #include "Pure.h"
 #include "Arrow.h"
 
+#include <array>
+
 namespace pure {
 
 namespace ap {
+
+template< class X, class ...Y, class A = std::array<Decay<X>,1+sizeof...(Y)> >
+constexpr A spure( X&& x, Y&& ...y ) {
+    return {{
+        std::forward<X>(x),
+        std::forward<Y>(y)... 
+    }}; 
+}
 
 template< class ... > struct Applicative;
 template< class ... > struct Alternative;
@@ -57,6 +67,13 @@ constexpr auto operator || ( X&& x, Y&& y )
     -> decltype( alt(std::declval<X>(),std::declval<Y>()) )
 {
     return alt( std::forward<X>(x), std::forward<Y>(y) );
+}
+
+template< class X, class Y >
+constexpr auto operator || ( X&& x, std::initializer_list<Y> l ) 
+    -> decltype( alt(std::declval<X>(),std::move(l)) )
+{
+    return alt( std::forward<X>(x), std::move(l) );
 }
 
 template<> struct Applicative< cata::maybe > {
