@@ -656,6 +656,47 @@ struct RCons {
     }
 };
 
+
+template< class F, class Acc, class S >
+std::pair<Acc,S> mapAccumL( F&& f, Acc a, const S& s ) {
+    if( null(s) )
+        return { std::move(a), {} };
+
+    using X = SeqVal<S>;
+    using Y = typename decltype ( 
+        declval<F>()( declval<Acc>(), declval<X>() )
+    )::second_type;
+
+    S r;
+    Y y;
+    for( const auto& x : s ) {
+        std::tie(a,y) = std::forward<F>(f)( std::move(a), x );
+        r.push_back( std::move(y) );
+    }
+
+    return { std::move(a), std::move(r) };
+}
+
+template< class F, class Acc, class S >
+std::pair<Acc,S> mapAccumR( F&& f, Acc a, const S& s ) {
+    if( null(s) )
+        return { std::move(a), {} };
+
+    using X = SeqVal<S>;
+    using Y = typename decltype ( 
+        declval<F>()( declval<Acc>(), declval<X>() )
+    )::second_type;
+
+    S r;
+    Y y;
+    for( const auto& x : reverse_wrap(s) ) {
+        std::tie(a,y) = std::forward<F>(f)( std::move(a), x );
+        r.push_back( std::move(y) );
+    }
+
+    return { std::move(a), std::move(r) };
+}
+
 template< class F, class X, class S,
           class V = std::vector<Decay<X>> >
 V scanl( F&& f, X&& x, const S& s ) {

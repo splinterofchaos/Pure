@@ -266,6 +266,12 @@ int main()
         foldr( Add(), {1,2,3,4} )
     );
 
+    auto accumF = []( int x, int y ) { return std::make_pair(x+y,x*y); };
+    printf( "mapAccumL (\\x y -> (x+y,x*y)) 0 [2,8,10] = %s\n",
+            show( mapAccumL(accumF,0,std::vector<int>{2,8,10}) ).c_str() );
+    printf( "mapAccumR (\\x y -> (x+y,x*y)) 0 [2,8,10] = %s\n",
+            show( mapAccumR(accumF,0,std::vector<int>{2,8,10}) ).c_str() );
+
     Vec fiveTwo = {{5,2}}, twoFive = {{2,5}};
 
     // Join lets us adapt an N-ary function to an (N-1) one.
