@@ -381,7 +381,7 @@ int main()
     std::vector<Closure<Add,int>> fs = { pure::plus(1), pure::plus(5), pure::plus(3) };
     puts( "fs = [(+1),(+5),(+3)]" );
     printf( "\tfs <*> pure 1 = %s\n", 
-            show( fs*pure::ap::pure<std::vector>(1) ).c_str() );
+            show( fs*apure<std::vector>(1) ).c_str() );
     printf( "[1,2,3] <|> [4] <|> empty = %s\n",
             show( std::vector<int>{1,2,3} || std::vector<int>{4} 
                   || empty<std::vector<int>>() ).c_str() );

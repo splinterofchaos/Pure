@@ -18,6 +18,14 @@ constexpr auto pure( X&& x )
     return A::template pure<M>( std::forward<X>(x) );
 }
 
+// apure -- To disambiguate between the function and namespace.
+template< template<class...>class M, class X, class A = Applicative<Cat<M<X>>> >
+constexpr auto apure( X&& x ) 
+    -> decltype( A::template pure<M>(std::declval<X>()) ) 
+{
+    return A::template pure<M>( std::forward<X>(x) );
+}
+
 template< class X, class ...Y, class A = Applicative<Cat<X>> >
 constexpr auto ap( X&& x, Y&& ...y ) 
     -> decltype( A::ap(std::declval<X>(),std::declval<Y>()...) )
