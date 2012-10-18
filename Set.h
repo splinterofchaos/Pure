@@ -1,4 +1,6 @@
 
+#pragma once
+
 #include "List.h"
 
 #include <algorithm>
@@ -74,9 +76,23 @@ namespace generic {
 
 using namespace common;
 
+// The fallowing do not appear in set::ordered.
+
+/* ys appended to xs */
+template< class XS, class YS >
+Decay<XS> operator + ( XS&& xs, YS&& ys ) {
+    return list::append( std::forward<XS>(xs), std::forward<YS>(ys) );
+}
+
+/* reverse s */
+template< class S >
+auto operator - ( S&& s ) -> decltype( list::reverse_wrap(std::declval<S>()) ) 
+{
+    return list::reverse_wrap( std::forward<S>(s) );
+}
+
 // These operations are guaranteed to work even if the arguments are unsorted
 // or contain duplicates.
-
 
 /* x is an element of s */
 template< class X, class S >
