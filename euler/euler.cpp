@@ -190,6 +190,7 @@ namespace pure {
 }
 
 #include "../Fold.h"
+#include "../Set.h"
 using pure::fold::foldMap;
 
 void problem4() {
@@ -375,6 +376,7 @@ void problem11() {
 using Factor = PrimeType;
 using Factors = std::vector<PrimeType>;
 
+#include "../Set.h"
 bool isPrime( Factor x ) {
     using namespace pure::list::taking;
     return elem( x, primes < x );
@@ -439,23 +441,29 @@ void problem13() {
         io::fileContents<std::string>(fin) 
     );
 
-    unsigned int carry = 0;
-    auto sum = reverse (
-        map (
+    Digits r;
+
+    {
+        using namespace pure::set; // For reverse (-s)
+                                   // and append (s+s)
+        // Note: pure::set overloads <<, so it cannot be used with std::cout.
+        unsigned int carry = 0;
+        auto sum = -map (
             [&]( unsigned int i ) {
-                unsigned long int sum = carry;
+                unsigned int sum = carry;
                 for( auto j : enumerate(nums) )
                     sum += nums[j][i];
                 carry = sum / 10;
                 return sum % 10;
             },
             // Reverse the order of the columns: LSD first.
-            reverse( dupTo<std::vector>(enumerate(nums[0])) )
-        )
-    );
+            -dupTo<std::vector>( enumerate(nums[0]) )
+        );
 
-    using namespace pure::ap;
-    cout << (digits(carry) || take(8,sum)) << endl;
+        r = digits(carry) + take( 8, sum );
+    }
+
+    cout << r << endl;
 }
 
 unsigned int e14Iterate( unsigned int x ) {
@@ -530,7 +538,7 @@ unsigned long long int& countWaysCached( int x, int y ) {
         // must be calculated.
         unsigned int ans = y==1 ? x+1 
             : x==0 or y==0;
-        cache.push_back( { {{x,y}}, ans } );
+        cache.push_back( {Vec{{x,y}}, ans} );
         return cache.back().x;
     }
 }
@@ -553,6 +561,7 @@ void problem15() {
 }
 
 Digits operator* ( Digits ds, int x ) {
+    using namespace pure::set;
     unsigned int carry = 0;
     ds = map (
         [&]( unsigned int d ) {
@@ -560,11 +569,10 @@ Digits operator* ( Digits ds, int x ) {
             carry = r / 10;
             return r % 10;
         },
-        reverse(move(ds))
+        -move(ds)
     );
 
-    using namespace pure::ap;
-    return reverse( move(ds) || digits(carry) );
+    return -( move(ds) + digits(carry) );
 }
 
 void problem16() {

@@ -4,6 +4,7 @@
 #include "Arrow.h"
 #include "State.h"
 #include "Applicative.h"
+#include "Set.h"
 
 #include <cstdio>
 #include <cmath>
@@ -96,6 +97,12 @@ string show( size_t x ) {
     return digits;
 }
 
+string show( unsigned long long x ) {
+    char digits[20];
+    sprintf( digits, "%llu", x );
+    return digits;
+}
+
 string show( char c ) { 
     return "'" + string( 1, c ) + "'"; 
 }
@@ -113,6 +120,8 @@ string show( string s ) {
 string show( const char* str ) {
     return show( string(str) );
 }
+
+template< class X, class Y > string show( const pair<X,Y>& p );
 
 template< class S > 
 auto show( const S& s ) -> decltype( begin(s), string() )
@@ -216,6 +225,23 @@ int main()
             show( evens ).c_str(), show( scanl( Add(), evens ) ).c_str() );
     printf( "\tscanr (+) %s = %s\n", 
             show( evens ).c_str(), show( scanr( Add(), evens ) ).c_str() );
+    {
+        using namespace pure::set::ordered;
+        printf( "\npure::set :\n"
+                "es contains 2 = %s\n", show(2<evens).c_str() );
+        printf( "The length of es = %s\n", show(+evens).c_str() );
+        printf( "[6,2] is a subset of es: %s\n", 
+                show( S(6,2) <= evens ).c_str() );
+        printf( "union of es and [3,7,10] = %s\n",
+                show( S(3,7,10) | evens ).c_str() );
+        printf( "intersection of es and [4,7,10] = %s\n",
+                show( S(4,7,10) % evens ).c_str() );
+        printf( "es without [2,8,10] = %s\n",
+                show( evens / S(2,8,10) ).c_str() );
+
+        printf( "['a','b'] * evens = %s\n",
+                show( S('a','b') * S(1,2) ).c_str() );
+    }
     puts("");
 
     printf( "intersparse ',' \"abcd\" = %s\n",
