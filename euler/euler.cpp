@@ -95,12 +95,10 @@ constexpr unsigned long long operator "" _M ( unsigned long long x ) {
 
 void problem2() {
     using namespace pure::list::misc;
+    using namespace pure::list::taking;
     cout << "The sum of every even Fibonacci number below 4-million: "
          << flush << sum (
-             takeWhile (
-                 lessThan(4_M),
-                 biIterate( Add(), 1u, 2u )
-             ) / even 
+             (biIterate( Add(), 1u, 2u ) < 4_M) / even 
          ) << endl;
 }
 
@@ -377,7 +375,8 @@ using Factor = PrimeType;
 using Factors = std::vector<PrimeType>;
 
 bool isPrime( Factor x ) {
-    return elem( x, takeWhile( lessThan(x), primes ) );
+    using namespace pure::list::taking;
+    return elem( x, primes < x );
 }
 
 // Computes the low factors of x, given an accumulation of low factors. 
@@ -397,10 +396,9 @@ Factors _lowFactors( Factors lfs, Factor x ) {
 }
 
 Factors primeFactors( Factor x ) {
-    return filter (
-        divisorOf(x), 
-        takeWhile( lessThan(std::sqrt(x)), primes ) 
-    );
+    using namespace pure::list::taking;
+    using namespace pure::list::misc;
+    return (primes < std::sqrt(x)) / divisorOf(x);
 }
 
 Factors lowFactors( Factor x ) {

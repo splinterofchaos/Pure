@@ -1762,6 +1762,47 @@ auto operator ++ ( S&& s ) -> decltype( init(declval<S>()) ) {
 
 } // namespace misc
 
+namespace taking {
+
+// A simple symbolic notation for takeWhile.
+
+template< class S >
+auto operator < ( S&& s, unsigned long long x ) 
+    -> decltype( takeWhile(lessThan(x),declval<S>()) )
+{
+    return takeWhile( lessThan(x), forward<S>(s) );
+}
+
+template< class S >
+auto operator > ( S&& s, unsigned long long x ) 
+    -> decltype( takeWhile(greaterThan(x),declval<S>()) )
+{
+    return takeWhile( greaterThan(x), forward<S>(s) );
+}
+                      
+template< class S >
+auto operator >= ( S&& s, unsigned long long x ) 
+    -> decltype( takeWhile(greaterEqualTo(x),declval<S>()) )
+{
+    return takeWhile( greaterEqualTo(x), forward<S>(s) );
+}
+
+template< class S >
+auto operator <= ( S&& s, unsigned long long x ) 
+    -> decltype( takeWhile(lessEqualTo(x),declval<S>()) )
+{
+    return takeWhile( lessEqualTo(x), forward<S>(s) );
+}
+
+template< class S, class F >
+auto operator && ( S&& s, F&& f ) 
+    -> decltype( takeWhile(declval<F>(),declval<S>()) ) 
+{
+    return takeWhile( forward<F>(f), forward<S>(s) );
+}
+
+} // namespace taking
+
 } // namespace list.
 } // namespace pure.
 
