@@ -8,6 +8,11 @@ namespace pure {
 
 namespace set {
 
+namespace generic {
+
+// These operations are guaranteed to work even if the arguments are unsorted
+// or contain duplicates.
+
 /* Create a set. */
 template< class X, class ...Y >
 std::set<Decay<X>> S( X&& x, Y&& ...y ) {
@@ -137,6 +142,139 @@ R operator * ( const XS& xs, const YS& ys ) {
     );
 }
 
+} // namespace generic
+
+namespace ordered {
+
+// These versions take advantage of knowing the container is ordered.
+
+/* Create a set. */
+template< class X, class ...Y >
+std::set<Decay<X>> S( X&& x, Y&& ...y ) {
+    return std::set<Decay<X>>({ std::forward<X>(x), 
+                                std::forward<Y>(y)... });
 }
+
+/* s is null */
+template< class S >
+bool operator ! ( const S& s ) {
+    return pure::list::null(s);
+}
+
+/* |s| -- the magnitude of s. (The closest thing we have to an abs sign.) */
+template< class S >
+unsigned long long operator + ( const S& s ) {
+    return pure::list::length( s );
+}
+
+/* x is an element of s */
+template< class X, class S >
+bool operator < ( const X& x, const S& s ) {
+    return std::binary_search( begin(s), end(s), x );
+}
+
+/* s contains x */
+template< class S, class X >
+bool operator > ( const S& s, const X& x ) {
+    return std::binary_search( begin(s), end(s), x );
+}
+
+/* xs is a subset of ys */
+template< class XS, class YS >
+bool operator <= ( const XS& xs, const YS& ys ) {
+    return std::includes( begin(ys), end(ys), begin(xs), end(xs) );
+}
+
+/* s without x */
+template< class S, class X >
+Decay<S> operator >> ( S&& s, const X& x ) {
+    return pure::list::erase( x, std::forward<S>(s) );
+}
+
+/* (reference version) */
+template< class S, class X >
+S& operator >>= ( S& s, const X& x ) {
+    s = std::move(s) >> x;
+    return s;
+}
+
+/* s appended with x */
+template< class S, class X >
+Decay<S> operator << ( S&& s, X&& x ) {
+    return pure::list::insert( std::forward<X>(x), std::forward<S>(s) );
+}
+
+/* (reference version) */
+template< class S, class X >
+S& operator <<= ( S& s, X&& x ) {
+    s = std::move(s) << std::forward<X>(x);
+    return s;
+}
+
+/* The union of xs and ys (with no duplicates). */
+template< class XS, class YS >
+XS operator | ( const XS& xs, const YS& ys ) {
+    XS r;
+    std::merge( begin(xs), end(xs), begin(ys), end(ys), 
+                       list::tailInserter(r) );
+    return r;
+}
+
+/* (reference version) */
+template< class XS, class YS >
+XS& operator |= ( XS& xs, YS&& ys ) {
+    xs = std::move(xs) | std::forward<YS>(ys);
+    return xs;
+}   
+
+/* Every x from xs such that there is no y from ys where x = y. */
+template< class XS, class YS >
+XS operator / ( const XS& xs, const YS& ys ) {
+    XS r;
+    std::set_difference( begin(xs), end(xs), begin(ys), end(ys),
+                         list::tailInserter(r) );
+    return r;
+}
+
+/* (reference version) */
+template< class XS, class YS >
+XS& operator /= ( XS& xs, const YS& ys ) {
+    xs = std::move(xs) / ys;
+    return xs;
+}
+
+/* The intersection of xs and ys. (Or: The remainder of xs/ys.) */
+template< class XS, class YS >
+XS operator % ( const XS& xs, const YS& ys ) {
+    XS r;
+    std::set_intersection( begin(xs), end(xs), begin(ys), end(ys),
+                           list::tailInserter(r) );
+    return r;
+}
+
+/* (reference version) */
+template< class XS, class YS >
+XS& operator %= ( XS& xs, YS&& ys ) {
+    xs = std::move(xs) % std::forward<YS>(ys);
+    return xs;
+}   
+
+/* The Cartesian product of xs and ys. */
+template< class XS, class YS, 
+          class X = list::SeqVal<XS>, class Y = list::SeqVal<YS>,
+          class P = std::pair<X,Y>,
+          class R = list::Remap<XS,P> >
+R operator * ( const XS& xs, const YS& ys ) {
+    return list::map (
+        []( const X& x, const Y& y ) { return P{x,y}; },
+        xs, ys
+    );
+}
+
+} // namespace ordered
+
+using namespace generic;
+
+} // namespace set
 
 }

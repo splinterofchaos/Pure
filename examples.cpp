@@ -223,7 +223,7 @@ int main()
     printf( "\tscanr (+) %s = %s\n", 
             show( evens ).c_str(), show( scanr( Add(), evens ) ).c_str() );
     {
-        using namespace pure::set;
+        using namespace pure::set::ordered;
         printf( "\npure::set :\n"
                 "es contains 2 = %s\n", show(2<evens).c_str() );
         printf( "The length of es = %s\n", show(+evens).c_str() );
