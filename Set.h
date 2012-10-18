@@ -8,10 +8,34 @@ namespace pure {
 
 namespace set {
 
-namespace generic {
+/* 
+ * Set theory!
+ *
+ * A small set of operator overloads to simplify working with sets, or
+ * generically, sequences.
+ *
+ * S(x,y,z...) -- create a set from x, y, z...
+ * !s          -- s is null.
+ * +s          -- the length of s (Or: |s|.)
+ * x > s | s < x -- s contains x
+ * s >> x      -- s without x
+ * s << x      -- s with x
+ * xs | ys     -- The union of xs and ys.
+ * xs / ys     -- The difference of xs and ys.
+ * xs % ys     -- The intersection of xs and ys.
+ * xs * xs     -- The Cartesian product of xs and xs.
+ *
+ * The source has been split into two sections: generic, which implements
+ * versions of these functions that should work on all containers, and ordered,
+ * which takes advantage of ordering for optimization. The common namespace
+ * implements functions that are the same in both.
+ *
+ * To use this, fully import the namespace with one of the fallowing:
+ *      using namespace pure::set; // for generic
+ *      using namespace pure::set::ordered;
+ */
 
-// These operations are guaranteed to work even if the arguments are unsorted
-// or contain duplicates.
+namespace common {
 
 /* Create a set. */
 template< class X, class ...Y >
@@ -31,6 +55,28 @@ template< class S >
 unsigned long long operator + ( const S& s ) {
     return pure::list::length( s );
 }
+
+/* The Cartesian product of xs and ys. */
+template< class XS, class YS, 
+          class X = list::SeqVal<XS>, class Y = list::SeqVal<YS>,
+          class P = std::pair<X,Y>,
+          class R = list::Remap<XS,P> >
+R operator * ( const XS& xs, const YS& ys ) {
+    return list::map (
+        []( const X& x, const Y& y ) { return P{x,y}; },
+        xs, ys
+    );
+}
+
+} // namespace common
+
+namespace generic {
+
+using namespace common;
+
+// These operations are guaranteed to work even if the arguments are unsorted
+// or contain duplicates.
+
 
 /* x is an element of s */
 template< class X, class S >
@@ -130,42 +176,13 @@ XS& operator %= ( XS& xs, YS&& ys ) {
     return xs;
 }   
 
-/* The Cartesian product of xs and ys. */
-template< class XS, class YS, 
-          class X = list::SeqVal<XS>, class Y = list::SeqVal<YS>,
-          class P = std::pair<X,Y>,
-          class R = list::Remap<XS,P> >
-R operator * ( const XS& xs, const YS& ys ) {
-    return list::map (
-        []( const X& x, const Y& y ) { return P{x,y}; },
-        xs, ys
-    );
-}
-
 } // namespace generic
 
 namespace ordered {
 
+using namespace common;
+
 // These versions take advantage of knowing the container is ordered.
-
-/* Create a set. */
-template< class X, class ...Y >
-std::set<Decay<X>> S( X&& x, Y&& ...y ) {
-    return std::set<Decay<X>>({ std::forward<X>(x), 
-                                std::forward<Y>(y)... });
-}
-
-/* s is null */
-template< class S >
-bool operator ! ( const S& s ) {
-    return pure::list::null(s);
-}
-
-/* |s| -- the magnitude of s. (The closest thing we have to an abs sign.) */
-template< class S >
-unsigned long long operator + ( const S& s ) {
-    return pure::list::length( s );
-}
 
 /* x is an element of s */
 template< class X, class S >
@@ -258,18 +275,6 @@ XS& operator %= ( XS& xs, YS&& ys ) {
     xs = std::move(xs) % std::forward<YS>(ys);
     return xs;
 }   
-
-/* The Cartesian product of xs and ys. */
-template< class XS, class YS, 
-          class X = list::SeqVal<XS>, class Y = list::SeqVal<YS>,
-          class P = std::pair<X,Y>,
-          class R = list::Remap<XS,P> >
-R operator * ( const XS& xs, const YS& ys ) {
-    return list::map (
-        []( const X& x, const Y& y ) { return P{x,y}; },
-        xs, ys
-    );
-}
 
 } // namespace ordered
 

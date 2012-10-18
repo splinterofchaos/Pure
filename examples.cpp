@@ -120,6 +120,8 @@ string show( const char* str ) {
     return show( string(str) );
 }
 
+template< class X, class Y > string show( const pair<X,Y>& p );
+
 template< class S > 
 auto show( const S& s ) -> decltype( begin(s), string() )
 {
@@ -237,7 +239,7 @@ int main()
                 show( evens / S(2,8,10) ).c_str() );
 
         printf( "['a','b'] * evens = %s\n",
-                show( std::vector<char>{'a','b'} * enumerateTo(2) ).c_str() );
+                show( S('a','b') * S(1,2) ).c_str() );
     }
     puts("");
 
