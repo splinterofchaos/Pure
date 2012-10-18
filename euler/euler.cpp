@@ -221,6 +221,7 @@ void problem5() {
          << " is divisible by all numbers 1 thought 20." << endl;
 }
 
+#include "../Free.h"
 void problem6() {
     cout << "The difference between the sum squared and squared sum "
             "of each number between 1 and 100: " << flush;
@@ -229,8 +230,8 @@ void problem6() {
 
     unsigned int sqrOfSum = sum(N) * sum(N);
 
-    using P = float(*)(float,float);
-    cout << sqrOfSum - (unsigned int)sum( rclosure(P(pow),2) ^ N ) << endl;
+    using namespace pure::free;
+    cout << sqrOfSum - (unsigned int)sum( rclosure(F<double>(pow),2) ^ N ) << endl;
 }
 
 void problem7() {
