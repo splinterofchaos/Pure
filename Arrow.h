@@ -9,6 +9,22 @@ namespace arr {
 
 template< class ... > struct Arrow;
 
+/* f > g = g . f (Haskell's >>>.) */
+template< class F, class G >
+auto operator > ( F&& f, G&& g ) 
+    -> decltype( compose(declval<G>(),declval<F>()) )
+{
+    return compose( forward<G>(g), forward<F>(f) );
+}
+
+/* f < g = f . g (Haskell's <<<.) */
+template< class F, class G >
+auto operator < ( F&& f, G&& g ) 
+    -> decltype( compose(declval<F>(),declval<G>()) )
+{
+    return compose( forward<F>(f), forward<G>(g) );
+}
+
 template< class A, class F, class Arr = Arrow<A> >
 decltype( Arr::arr( declval<F>() ) )
 arr( F&& f ) { return Arr::arr( forward<F>(f) ); }
@@ -25,6 +41,20 @@ template< class F, class G, class A = Arrow<F> >
 decltype( A::fan(declval<F>(),declval<G>()) )
 fan( F&& f, G&& g ) {
     return A::fan( forward<F>(f), forward<G>(g) );
+}
+
+template< class F, class G >
+auto operator * ( F&& f, G&& g ) 
+    -> decltype( split(declval<F>(),declval<G>()) )
+{
+    return split( forward<F>(f), forward<G>(g) );
+}
+
+template< class F, class G >
+auto operator && ( F&& f, G&& g ) 
+    -> decltype( fan(declval<F>(),declval<G>()) )
+{
+    return fan( forward<F>(f), forward<G>(g) );
 }
 
 /* (first f) (x,y) = (f x, y) */

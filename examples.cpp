@@ -463,16 +463,19 @@ int main()
     printf( "[1] `mplus` [2] = %s\n",
             show( mplus(vector<int>{1},vector<int>{2}) ).c_str() );
 
-    pair<int,int> p( 1, 2 );
-    using Show = string(int);
-    auto showInt = [](int x){ return show(x); };
-    printf( "first show >>> second (+2) $ (1,2) = %s\n", 
-            show( comp(arr::first(showInt), arr::second(plus_two))( p ) ).c_str() );
-    printf( "show *** (+2) $ (1,2) = %s\n",
-            show( arr::split( showInt, plus_two )( p ) ).c_str() );
+    {
+        using namespace pure::arr;
+        pair<int,int> p( 1, 2 );
+        using Show = string(int);
+        auto showInt = [](int x){ return show(x); };
+        printf( "first show >>> second (+2) $ (1,2) = %s\n", 
+                show( (first(showInt) > second(plus_two))( p ) ).c_str() );
+        printf( "show *** (+2) $ (1,2) = %s\n",
+                show( (showInt * plus_two)( p ) ).c_str() );
 
-    printf( "show &&& (+2) $ 5 = %s\n",
-            show( arr::fan( showInt, plus_two )( 5 ) ).c_str() );
+        printf( "show &&& (+2) $ 5 = %s\n",
+                show( (showInt && plus_two)( 5 ) ).c_str() );
+    }
 
     puts("");
     auto s = state::returnState<int>(10);
