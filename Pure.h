@@ -162,10 +162,12 @@ void for_ij( const F& f, const I& imax, const J& jmax ) {
  * Just  x -> Maybe (Just x) | with a definite value.
  * Nothing -> Maybe Nothing  | with definitely no value.
  */
-template< class T, class M = std::unique_ptr<T> > 
-constexpr M Just( T t ) {
-    return M( new T(move(t)) );
-}
+constexpr struct _Just {
+    template< class T, class M = std::unique_ptr<T> > 
+    constexpr M operator () ( T t ) {
+        return M( new T(move(t)) );
+    }
+} Just{};
 
 struct ReturnJust {
     template< class X >
@@ -184,30 +186,6 @@ template< class R, class F, class P >
 constexpr R maybe( R&& nothingVal, F&& f, P&& m ) {
     return m ? forward<F>(f)( *forward<P>(m) )
              : forward<R>( nothingVal );
-}
-
-/* 
- * Just f  * Just x  = Just (f x)
- * _       * _       = Nothing
- * Just x  | _       = Just x
- * Nothing | Just x  = Just x
- * Nothing | Nothing = Nothing
- */
-template< class F, class P, 
-          class Ret = decltype( Just( (*declval<F>())(*declval<P>()) ) ) >
-Ret operator* ( F&& a, P&& b ) {
-    return a and b ? Just( (*forward<F>(a))(*forward<P>(b)) ) 
-                   : nullptr;
-}
-
-template< class P > 
-constexpr P operator|| ( P&& a, P&& b ) {
-    return a ? forward<P>(a) : forward<P>(b); 
-}
-
-template< class P, class R = decltype( Just(*declval<P>()) ) > 
-constexpr R operator|| ( const P& a, const P& b ) {
-    return a ? Just(*a) : b ? Just(*b) : nullptr;
 }
 
 /* Either a b : Left a | Right b */
@@ -527,7 +505,7 @@ template<> struct Monoid< cata::maybe > {
 
     template< class M >
     static M dup( const M& m ) {
-        return maybe( mempty<M>(), ReturnJust(), m );
+        return m ? Just(*m) : nullptr;
     }
 
     template< class X >
@@ -545,7 +523,7 @@ template<> struct Monoid< cata::maybe > {
     template< class M >
     static constexpr Decay<M> mappend( M&& x, M&& y ) {
         return x and y ? Just( fwd_mappend(*forward<M>(x), *forward<M>(y)) )
-            : dup(forward<M>(x) || forward<M>(y));
+            : x ? dup(forward<M>(x)) : dup(forward<M>(y));
     }
 
     /* mconcat [Just x, Just y, Nothing] = Just (x <> y <> Nothing)*/

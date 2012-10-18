@@ -3,6 +3,7 @@
 #include "Fold.h"
 #include "Arrow.h"
 #include "State.h"
+#include "Applicative.h"
 
 #include <cstdio>
 #include <cmath>
@@ -42,7 +43,7 @@ Vec operator * ( Vec a, float x )
 {
     return map( closure(Mult(),x), a ); 
 }
-Vec operator * ( float x, const Vec& a ) { return Vec(a) * x; }
+Vec operator * ( float x, Vec a ) { return move(a) * x; }
 
 Vec operator / ( const Vec& v, float x ) { return v * (1/x); }
 
@@ -357,6 +358,10 @@ int main()
     printf( "find (==9) [1,2,3,4,5,6,7,8] = %s\n", 
             show( find(equalsN, N) ).c_str() );
 
+    // Bring in the operator overloads * (ap) and || (alt).
+    using namespace pure::ap;
+
+    puts("");
     printf( "Just (+2) <*> Just 2  = %s\n",
             show( Just(plus_two) * Just(2) ).c_str() );
     printf( "Just (+2) <*> Nothing = %s\n",
@@ -373,6 +378,20 @@ int main()
     printf( "Nothing <|> Nothing  = %s\n", 
             show( Nothing<int>() || Nothing<int>() ).c_str() );
 
+    std::vector<Closure<Add,int>> fs = { pure::plus(1), pure::plus(5), pure::plus(3) };
+    puts( "fs = [(+1),(+5),(+3)]" );
+    printf( "\tfs <*> pure 1 = %s\n", 
+            show( fs*apure<std::vector>(1) ).c_str() );
+    printf( "[1,2,3] <|> [4] <|> empty = %s\n",
+            show( std::vector<int>{1,2,3} || std::vector<int>{4} 
+                  || empty<std::vector<int>>() ).c_str() );
+    printf( "pure 5 :: [] = %s\n",
+            show( pure::ap::pure<std::vector>(5) ).c_str() );
+    printf( "([1,2],(+2)) <*> ([3,4],5) = %s\n",
+            show( std::make_pair(std::vector<int>{1,2}, plus_two)
+                  * std::make_pair(std::vector<int>{3,4},5) ).c_str() );
+
+    puts("");
     printf( "Just 1 >> Just \"hya!\" = %s\n",
             show( Just(1) >> Just("hya!") ).c_str() );
 

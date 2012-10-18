@@ -1,6 +1,7 @@
 
 #include "../Pure.h"
 #include "../Arrow.h"
+#include "../Applicative.h"
 
 using namespace pure;
 using namespace list;
@@ -93,10 +94,11 @@ constexpr unsigned long long operator "" _M ( unsigned long long x ) {
 }
 
 void problem2() {
+    using namespace pure::list::misc;
+    using namespace pure::list::taking;
     cout << "The sum of every even Fibonacci number below 4-million: "
-         << flush << 
-         ( sum ^ filter(even) ^ takeWhile(lessThan(4_M)) ) (
-             biIterate( Add(), 1u, 2u )
+         << flush << sum (
+             (biIterate( Add(), 1u, 2u ) < 4_M) / even 
          ) << endl;
 }
 
@@ -189,14 +191,18 @@ namespace pure {
 
 #include "../Fold.h"
 using pure::fold::foldMap;
+
 void problem4() {
+    using namespace pure::list::misc;
     cout << "The largest palindrome product of three digit numbers :"
          << flush;
     cout << foldMap (
             []( const IRange& r ) -> Largest<int> {
-                auto ps = filter( palindrome, 
-                                  map( times(last(r)), init(r) ) );
-                return notNull(ps) ? maximum(ps) : 0;
+                return maximum (
+                    // Multiply the init of r by its last; filter for
+                    // palindromes.
+                    times(-r) * (++r) / palindrome | A(0) // And append zero.
+                );
             },
             // We remove the first three values: {} {100}, and {100,101}.
             drop( 3, inits(enumerate(100,999)) ) 
@@ -361,8 +367,8 @@ void problem11() {
             return take_dir_prod( dir, {{i,j}}, 4, mat ); 
         }, 
         enumerate(mat), enumerate(mat[0]),  
-        std::initializer_list<Vec>{ "-1x0"_v, " 1x1"_v,
-                                    " 0x1"_v, "-1x1"_v }
+        pure::ap::spure<Vec>( "-1x0"_v, " 1x1"_v,
+                              " 0x1"_v, "-1x1"_v )
     ) << endl;
 }
 
@@ -370,7 +376,8 @@ using Factor = PrimeType;
 using Factors = std::vector<PrimeType>;
 
 bool isPrime( Factor x ) {
-    return elem( x, takeWhile( lessThan(x), primes ) );
+    using namespace pure::list::taking;
+    return elem( x, primes < x );
 }
 
 // Computes the low factors of x, given an accumulation of low factors. 
@@ -390,10 +397,9 @@ Factors _lowFactors( Factors lfs, Factor x ) {
 }
 
 Factors primeFactors( Factor x ) {
-    return filter (
-        divisorOf(x), 
-        takeWhile( lessThan(std::sqrt(x)), primes ) 
-    );
+    using namespace pure::list::taking;
+    using namespace pure::list::misc;
+    return (primes < std::sqrt(x)) / divisorOf(x);
 }
 
 Factors lowFactors( Factor x ) {
@@ -448,7 +454,8 @@ void problem13() {
         )
     );
 
-    cout << append( digits(carry), take(8,sum) ) << endl;
+    using namespace pure::ap;
+    cout << (digits(carry) || take(8,sum)) << endl;
 }
 
 unsigned int e14Iterate( unsigned int x ) {
@@ -556,7 +563,8 @@ Digits operator* ( Digits ds, int x ) {
         reverse(move(ds))
     );
 
-    return reverse( append( move(ds), digits(carry) ) );
+    using namespace pure::ap;
+    return reverse( move(ds) || digits(carry) );
 }
 
 void problem16() {

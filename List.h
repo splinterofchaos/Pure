@@ -5,6 +5,8 @@
 #pragma once
 
 #include <set>
+#include <vector>
+#include <list>
 #include <memory>
 
 namespace pure { 
@@ -448,6 +450,15 @@ A map( F&& f, const std::array< X, N >& xs ) {
     _map( forward<F>(f), begin(r), xs );
     return r;
 }
+
+struct Map {
+    template< class ...Args >
+    auto operator () ( Args&& ...args ) 
+        -> decltype( map(declval<Args>()...) ) 
+    {
+        return map( std::forward<Args>(args)... );
+    }
+};
 
 template< class F, class ...S >
 using ResultMap = decltype( map(declval<F>(), declval<S>()...) );
@@ -1669,6 +1680,128 @@ S unwords( const SS& ss ) {
         concatMap( closure(flip(Cons()),' '), ss )
     );
 }
+
+namespace misc {
+
+template< class X, class ...Y, class Ar = std::array<Decay<X>,1+sizeof...(Y)> >
+constexpr Ar A( X&& x, Y&& ...y ) {
+    return {{
+        std::forward<X>(x),
+        std::forward<Y>(y)... 
+    }}; 
+}
+
+template< class X, class ...Y, class V_ = std::vector<Decay<X>> >
+constexpr V_ V( X&& x, Y&& ...y ) {
+    return {
+        std::forward<X>(x),
+        std::forward<Y>(y)... 
+    }; 
+}
+
+template< class X, class ...Y, class L_ = std::list<Decay<X>> >
+constexpr L_ L( X&& x, Y&& ...y ) {
+    return {
+        std::forward<X>(x),
+        std::forward<Y>(y)... 
+    }; 
+}
+
+template< class F, class S >
+auto operator * ( F&& f, S&& s ) -> ResultMap<F,S> {
+    return map( forward<F>(f), forward<S>(s) );
+}
+
+template< class F, class S >
+S& operator *= ( F&& f, S& s ) {
+    s = forward<F>(f) * move(s);
+    return s;
+}
+
+template< class S, class F > 
+Decay<S> operator / ( S s, F&& f ) {
+    return filter( forward<F>(f), move(s) );
+}
+
+template< class F, class S >
+S& operator /= ( F&& f, S& s ) {
+    s = forward<F>(f) / move(s);
+    return s;
+}
+
+template< class XS, class YS >
+Decay<XS> operator | ( XS&& xs, YS&& ys ) {
+    return append( forward<XS>(xs), forward<YS>(ys) );
+}
+
+template< class F, class S >
+S& operator |= ( F&& f, S& s ) {
+    s = forward<F>(f) | move(s);
+    return s;
+}
+
+template< class S >
+SeqRef<S> operator + ( S&& s ) {
+    return head(forward<S>(s));
+}
+
+template< class S >
+auto operator -- ( S&& s ) -> decltype( tail(declval<S>()) ) {
+    return tail( forward<S>(s) );
+}
+
+template< class S >
+SeqRef<S> operator - ( S&& s ) {
+    return last(forward<S>(s));
+}
+
+template< class S >
+auto operator ++ ( S&& s ) -> decltype( init(declval<S>()) ) {
+    return init( forward<S>(s) );
+}
+
+} // namespace misc
+
+namespace taking {
+
+// A simple symbolic notation for takeWhile.
+
+template< class S >
+auto operator < ( S&& s, unsigned long long x ) 
+    -> decltype( takeWhile(lessThan(x),declval<S>()) )
+{
+    return takeWhile( lessThan(x), forward<S>(s) );
+}
+
+template< class S >
+auto operator > ( S&& s, unsigned long long x ) 
+    -> decltype( takeWhile(greaterThan(x),declval<S>()) )
+{
+    return takeWhile( greaterThan(x), forward<S>(s) );
+}
+                      
+template< class S >
+auto operator >= ( S&& s, unsigned long long x ) 
+    -> decltype( takeWhile(greaterEqualTo(x),declval<S>()) )
+{
+    return takeWhile( greaterEqualTo(x), forward<S>(s) );
+}
+
+template< class S >
+auto operator <= ( S&& s, unsigned long long x ) 
+    -> decltype( takeWhile(lessEqualTo(x),declval<S>()) )
+{
+    return takeWhile( lessEqualTo(x), forward<S>(s) );
+}
+
+template< class S, class F >
+auto operator && ( S&& s, F&& f ) 
+    -> decltype( takeWhile(declval<F>(),declval<S>()) ) 
+{
+    return takeWhile( forward<F>(f), forward<S>(s) );
+}
+
+} // namespace taking
 
 } // namespace list.
 } // namespace pure.
