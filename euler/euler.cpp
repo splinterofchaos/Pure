@@ -94,10 +94,13 @@ constexpr unsigned long long operator "" _M ( unsigned long long x ) {
 }
 
 void problem2() {
+    using namespace pure::list::misc;
     cout << "The sum of every even Fibonacci number below 4-million: "
-         << flush << 
-         ( sum ^ filter(even) ^ takeWhile(lessThan(4_M)) ) (
-             biIterate( Add(), 1u, 2u )
+         << flush << sum (
+             takeWhile (
+                 lessThan(4_M),
+                 biIterate( Add(), 1u, 2u )
+             ) / even 
          ) << endl;
 }
 
@@ -192,17 +195,15 @@ namespace pure {
 using pure::fold::foldMap;
 
 void problem4() {
-    using namespace pure::ap; // for spure(x) = array{x}
-                              // and {x,y} || {u,v} = {x,y,u,v}
+    using namespace pure::list::misc;
     cout << "The largest palindrome product of three digit numbers :"
          << flush;
     cout << foldMap (
             []( const IRange& r ) -> Largest<int> {
-                return maximum ( 
-                    filter( palindrome,
-                            map( times(last(r)), init(r) ) )
-                    // Return at least zero if filter returns null list.
-                    || spure(0)
+                return maximum (
+                    // Multiply the init of r by its last; filter for
+                    // palindromes.
+                    times(-r) * (++r) / palindrome | A(0) // And append zero.
                 );
             },
             // We remove the first three values: {} {100}, and {100,101}.
