@@ -560,7 +560,7 @@ template< class F, class S,
           class X = typename cata::sequence_traits<S>::value_type >
 constexpr X foldl( F&& f, S&& s ) {
     return list::foldl( forward<F>(f), 
-                  head(forward<S>(s)), tail_wrap(forward<S>(s)) );
+                        head(forward<S>(s)), tail_wrap(forward<S>(s)) );
 }
 
 template< class F, class X >
@@ -746,6 +746,7 @@ Scanr<F,S> scanr( F&& f, S&& s ) {
 template< class F, class X > struct Remember {
     using container  = std::vector<Decay<X>>;
     using reference  = typename container::reference;
+    using const_reference = typename container::const_reference;
     using value_type = typename container::value_type;
     using citerator  = typename container::iterator;
     using difference_type = typename container::difference_type;
@@ -813,7 +814,7 @@ template< class F, class X > struct Remember {
             return copy;
         }
 
-        reference operator* () {
+        const_reference operator* () {
             grow();
             return *it;
         }
@@ -979,7 +980,7 @@ constexpr IRange enumerate( unsigned int b ) {
 }
 
 constexpr IRange enumerateTo( unsigned int e ) {
-    return IRange( 0, e ); 
+    return enumerate( 0, e ); 
 }
 
 constexpr IRange enumerateN( unsigned int b, unsigned int n ) {
@@ -1136,9 +1137,9 @@ R filtrate( F&& f, P&& p, S&& s ) {
 /* find pred xs -> Maybe x */
 template< class F, class S,
           class Val = typename cata::sequence_traits<S>::value_type >
-const Val* find( F&& f, const S& s ) {
-    const auto& e = end(s);
-    const auto it = find_if( begin(s), e, forward<F>(f) );
+const Val* find( F&& f, S&& s ) {
+    auto e = end( forward<S>(s) );
+    auto it = std::find_if( begin(forward<S>(s)), e, forward<F>(f) );
     return it != e ? &(*it) : nullptr; 
 }
 
@@ -1351,7 +1352,7 @@ bool equal( const XS& xs, const YS& ys ) {
 
 template< class X, class S >
 bool elem( const X& x, const S& s ) {
-    return findFirst( x, s );
+    return std::find( begin(s), end(s), x ) != end(s);
 }
 
 template< class X, class S >

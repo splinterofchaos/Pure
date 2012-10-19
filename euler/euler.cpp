@@ -93,6 +93,8 @@ constexpr unsigned long long operator "" _M ( unsigned long long x ) {
     return x * 1000000;
 }
 
+auto fibs = biIterate( Add(), 1ull, 2ull );
+
 void problem2() {
     using namespace pure::list::misc;
     using namespace pure::list::taking;
@@ -105,14 +107,13 @@ void problem2() {
 using PrimeType = unsigned long long int;
 
 PrimeType next_prime( const vector<PrimeType>& past ) {
-    int x = last( past );
-
+    PrimeType x = last( past );
     do x += 2;
-    while( any( divisorOf(x), tail_wrap(past) ) );
+    while( any( divisorOf(x), reverse_wrap(tail_wrap(2,past)) ) );
     return x;
 }
 
-auto primes = memorize( next_prime, 1ull, 2ull, 3ull );
+auto primes = memorize( next_prime, 1ull, 2ull, 3ull, 5ull, 7ull, 11ull );
 
 void problem3() {
     const long int START = 600851475143;
@@ -139,13 +140,59 @@ struct DigitsT {
         Digits ds;
         for( ; x > 0; x = x / 10 )
             ds.push_back( x % 10 );
-        return ds;
+        return reverse(ds);
     }
 
     Digits operator() ( const std::string& s ) {
         return mapExactly<vector<unsigned int>>( toInt, s );
     }
 } digits;
+
+Digits operator* ( Digits ds, int x ) {
+    unsigned int carry = 0;
+    ds = map (
+        [&]( unsigned int d ) {
+            auto r = d * x + carry;
+            carry = r / 10;
+            return r % 10;
+        },
+        reverse(move(ds))
+    );
+
+    return reverse( append( move(ds), digits(carry) ) );
+}
+
+Digits operator* ( int x, Digits ds ) {
+    return move(ds) * x;
+}
+
+Digits operator+ ( Digits ds, unsigned long long x ) {
+    for( size_t i = 0; i < length(ds) and x>0; i++ ) {
+        auto& d = last( ds, i );
+        auto r = d + x;
+        d = r % 10;
+        x = r / 10;
+    }
+
+    return x ? append( reverse(digits(x)), ds )
+        : ds;
+}
+
+Digits operator+ ( Digits a, const Digits& b ) {
+    if( length(b) > length(a) )
+        return move(b) + move(a);
+
+    unsigned long carry = 0;
+    for( size_t i = 0; i < length(a); i++ ) {
+        auto& ai = last( a, i );
+        auto& bi = last( b, i );
+        auto r = ai + bi + carry;
+        ai = r % 10;
+        carry = r / 10;
+    }
+
+    return carry ? append( reverse(digits(carry)), a ) : a;
+}
 
 bool _palindrome( const vector<unsigned int>& v ) {
     return equal( v, reverse_wrap(v) );
@@ -282,21 +329,26 @@ void problem9() {
          << int(a*b*c()) << " when multiplied. " << endl;
 }
 
-void problem10() {
-    // TODO: This is too slow, too brute force, and WRONG!
-    cout << "The sum of all primes below 4 million is: " << flush;
-    //cout << sum ( 
-    //    takeWhile( less_than(4000000ull), memorize(next_prime,2ull,3ull) )
-    //) << endl;
-    
-    //unsigned long long sum = 0;
-    //auto primes = memorize( next_prime, 2ull, 3ull );
-    //auto p = begin( primes );
-    //while( *p < PrimeType(4000000ull) ) 
-    //    sum += *p++;
-    //cout << sum << endl;
+bool _notDivisibleByOdd( PrimeType odd, PrimeType x ) {
+    for( ; odd <= std::sqrt(x); odd += 2 )
+        if( x % odd == 0 )
+            return false;
+    return true;
+}
 
-    cout << endl;
+bool notDivisibleByOdd( PrimeType x ) {
+    return _notDivisibleByOdd( 3, x );
+}
+
+void problem10() {
+    cout << "The sum of all primes below 2 million is: " << flush;
+    PrimeType ds = 2;
+    for( PrimeType x=3; x < 2000000; x+=2 ) {
+        // Using the memorized "primes" is too slow for large primes. 
+        if( notDivisibleByOdd(x) )
+            ds = ds + x;
+    }
+    cout << ds << endl;
 }
 
 using Row = vector<unsigned int>;
@@ -406,6 +458,13 @@ Factors primeFactors( Factor x ) {
 
 Factors lowFactors( Factor x ) {
     return _lowFactors( primeFactors(x), x );
+}
+
+Factors factors( Factor x ) {
+    auto fs = lowFactors( x );
+    for( auto i = length(fs); i--; ) 
+        fs.push_back( x / fs[i] );
+    return fs;
 }
 
 Factor nFactors( Factor x ) {
@@ -560,21 +619,6 @@ void problem15() {
     cout << countWays(20) << " ways." << endl;
 }
 
-Digits operator* ( Digits ds, int x ) {
-    using namespace pure::set;
-    unsigned int carry = 0;
-    ds = map (
-        [&]( unsigned int d ) {
-            auto r = d * x + carry;
-            carry = r / 10;
-            return r % 10;
-        },
-        -move(ds)
-    );
-
-    return -( move(ds) + digits(carry) );
-}
-
 void problem16() {
     cout << "The sum of " << flush;
     Digits ds = { 2 };
@@ -673,6 +717,37 @@ void problem18() {
             cout << "No solution." << endl;
 }
 
+bool leapYear( unsigned int yr ) {
+    return yr % 4 == 0 and not (yr % 100 == 0 and yr % 400 != 0);
+}
+
+unsigned int daysInYear( unsigned int year ) {
+    return 365 + leapYear(year);
+}
+
+constexpr unsigned int daysIn[12] = { 31, 28, 31, 30, 31, 30, 
+                                      31, 31, 30, 31, 30, 31 };
+constexpr unsigned int FEB = 1;
+constexpr unsigned int daysInMonth( unsigned int m, bool leap ) {
+    return m != FEB ? daysIn[m]
+        : daysIn[FEB] + leap;
+}
+
+void problem19() {
+    cout << "There were " << flush;
+    unsigned int days /*since Jan 1, 1900*/ = daysInYear(1900);
+    unsigned int sundays = 0;
+    for( unsigned int y : enumerate(1901,2000) ) {
+        bool leap = leapYear( y );
+        for( unsigned int m : enumerateTo(11) ) {
+            sundays += days % 7 == 6;
+            days += daysInMonth( m, leap );
+        }
+    }
+    cout << sundays << 
+        " months beginning on Sunday in the 20th century." << endl;
+}
+
 void problem20() {
     cout << "The sum of !100 = " << flush;
     Digits ds = { 1 };
@@ -681,7 +756,228 @@ void problem20() {
     cout << sum(ds) << endl;
 }
 
+void problem21() {
+    auto d = []( Factor x ) { return sum(factors(x)) - x; };
+
+    cout << "The sum of every amicable number under 10000 : " << flush;
+
+    Factor sum = 0;
+    for( auto x : enumerate(2,10_K-1) )  {
+        if( x < d(x) and d(d(x)) == x )
+            sum += x + d(x);
+    }
+
+    cout << sum << endl;
+}
+
+void problem22() {
+    std::ifstream fin( "e22" );
+
+    cout << "The sum total score " << flush; 
+
+    auto cutEnds = [](const std::string& s) {
+        return std::string( next(begin(s)),
+                            prev(end(s)) );
+    };
+
+    std::string s;
+    fin >> s;
+    auto ss = sort (
+        map (
+            cutEnds,
+            splitBy( equalTo(','), s )
+        )
+    );
+
+    cout << "of all names : " << flush;
+
+    auto avalue = []( char c ) { return c - 'A' + 1; };
+    unsigned long long sum = 0;
+    for( auto i : enumerate(ss) ) {
+        sum += list::sum( map(avalue,ss[i]) ) * (i+1);
+    }
+
+    cout << sum << endl;
+}
+
+bool abundant( unsigned int x ) {
+    //TODO Why does this not work?
+    //return sum( factors(x) ) - x > x;
+    unsigned int sum = 0;
+    for( auto n : enumerate(1,x/2) )
+        if( x % n == 0 )
+            sum += n;
+    return sum > x;
+}
+
+void problem23() {
+    constexpr auto LARGEST = 28123u;
+
+    cout << "The sum of all integers " << flush; 
+
+    auto as = filter( abundant, enumerate(12,LARGEST+1) );
+
+    decltype(as) aSums;
+    for( auto i : enumerate(as) )
+        for( auto j : enumerate(i,length(as)-1) ) 
+            aSums.push_back( as[i] + as[j] );
+    aSums = filter( lessEqualTo(LARGEST), nub(move(aSums)) );
+
+    cout << "not the sum of two abundants : " << flush;
+
+    cout << sum(enumerateTo(LARGEST)) - sum(aSums) << endl;
+}
+
+void problem24() {
+    Digits ds = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    cout << "The millionth permutation of " << ds << " : " << flush;
+    cout << permutations(ds)[1_M-1] << endl;
+}
+
+struct Fib {
+    Digits i, j, r;
+    Fib() : i{3}, j{5}, r{2} { }
+};
+
+Fib nextFib( Fib f ) {
+    auto tmp = f.j;
+    f.j = f.i + f.j;
+    f.i = tmp;
+    return f;
+}
+
+std::string toString( const Digits& ds ) {
+    return mapExactly<std::string> (
+        []( int x ) { return x + '0'; },
+        ds
+    );
+}
+
+void problem25() {
+    cout << "The first Fibonacci number with 1000 digits : " << flush;
+    Fib fib;
+    unsigned long long term = 5; // F5 = 5 and Fib starts on 5.
+    for( ; length(fib.j) != 1000; term++ )
+        fib = nextFib( fib );
+    cout << term << endl;
+}
+
+Digits takeDigits( size_t n, float x ) {
+    Digits ds;
+    while( n-- ) {
+        ds.push_back( int(x) % 10 );
+        x *= 10;
+    }
+    return ds;
+}
+
+Digits repeatingDigits( double x ) {
+    Digits ds;
+    for( size_t n=1; true; n++ ) {
+        //x *= 10;
+        int d = int(x*std::pow(10.0,n)) % 10;
+
+        //if( length(ds) > 2 and ds == takeDigits( length(ds), x ) )
+        //    return ds;
+        //else 
+        //    ds.push_back( d );
+        //continue;
+
+        auto is = elemIndecies( d, ds );
+        if( length(is) >= 3 and is[1]-is[0] == is[2]-is[1] )
+            return Digits (
+                next( begin(ds), 0 ),
+                next( begin(ds), is[0] )
+            );
+
+        //auto it = begin( ds );
+        //while( length(ds) > 2 and it != end(ds) ) {
+        //    it = std::find( it, end(ds), d );
+        //    if( std::search( it, end(ds), begin(ds), it ) != end(ds) )
+        //        return ds;
+        //}
+        ds.push_back( d );
+    }
+}
+
+
+void problem26() {
+    cout << "The unit faction with the largest number of repeating digits : " << flush;
+
+    //unsigned int d = 3;
+    //unsigned int size = 1;
+
+    //for( auto n : enumerate(3,1_K) ) {
+    //    auto s = length( repeatingDigits(1.f/n) );
+    //    if( s > size ) {
+    //        d = n;
+    //        size = s;
+    //    }
+    //}
+
+    //cout << d << " (with " << size << " digits)" << endl;
+    
+    cout << "TODO!" << endl;
+}
+
+void problem28() {
+    cout << "The sum of the diagonals : " << flush;
+
+    unsigned long long total = 1;
+    unsigned int n = 2;
+    for(unsigned int width=3; width <= 1001; width += 2 ) {
+        // The length of this layer, straightened out.
+        for( auto i : enumerate( 1, (width-1) * 4 ) ) {
+            if( i % (width-1) == 0 ) {
+                total += n;
+            }
+            n++;
+        }
+    }
+
+    cout << total << endl;
+}
+
+void problem29() {
+    auto pow = []( Factor x, Factor exp ) { 
+        return std::pow( x, exp );
+    };
+
+    cout << "Number of distinct terms generated by a^b \n"
+            "\twhere I E { i | 2<=i<=100 } and I E a and I E b : " << flush;
+
+    constexpr auto RNG = enumerate(2,100);
+    cout << length( nub( map( pow, RNG, RNG ) ) ) << endl;
+}
+
+void problem30() {
+    cout << "Sum of all numbers writable as the fifth power of its digits : " << flush;
+
+    std::vector<unsigned int> xs;
+    auto fifth  = [](unsigned int x){ return x*x*x*x*x; };
+
+    // The maximum value for one digit.
+    constexpr auto maxD = 9*9*9*9*9;
+
+    // Compute the upper limit.
+    unsigned long long limit = 1;
+
+    unsigned int n = 1; // digits.
+    while( limit*std::pow(10,n) < maxD * n )
+        n++;
+    limit = maxD * n;
+
+    for( auto i : enumerate(2,limit) ) {
+        auto s = sum( map(fifth,digits(i)) );
+        if( s == i )
+            xs.push_back( i );
+    }
+
+    cout << sum(xs) << endl;
+}
+
 int main() {
+
     problem1();
     problem2();
     problem3();
@@ -700,6 +996,19 @@ int main() {
     problem16();
     problem17();
     problem18();
-    // 19!
+    problem19();
     problem20();
+    problem21();
+    problem22();
+    problem23();
+    problem24();
+    problem25();
+
+    //problem26();
+    // 27
+
+    problem28();
+    problem29();
+    problem30();
+
 }
