@@ -394,17 +394,76 @@ auto mapExactly( F&& f, S r ) -> ESame<R,S,S> {
     return r;
 }
 
+template< size_t ... > struct LastIndex;
+
+template< size_t X > struct LastIndex<X> {
+    static constexpr size_t I = X;
+};
+
+template< size_t X, size_t ...Y > struct LastIndex<X,Y...> {
+    static constexpr size_t I = LastIndex<Y...>::I;
+};
+
+template< size_t ...i > struct IndexList {
+    static constexpr size_t I = LastIndex<i...>::I;
+    using Next = IndexList< i..., I+1 >;
+};
+
+template< size_t n > struct IListBuilder {
+    using type = typename IListBuilder< n-1 >::type::Next;
+};
+
+template<> struct IListBuilder<0> {
+    using type = IndexList<0>;
+};
+
+template< class F, class X, size_t N, size_t ...i,
+          class R = Result<F,X> >
+constexpr auto mapExactlyA( F&& f, const std::array<X,N>& a, IndexList<i...> ) 
+    -> XSame< X, R, std::array<R,N> >
+{
+    return {{ forward<F>(f)( std::get<i>(a) )... }};
+}
+
+template< size_t I, class F, class X >
+void _doMapA( const F&, std::array<X,I>& ) {
+}
+
+template< size_t I, class F, class X, size_t N >
+void _doMapA( F&& f, std::array<X,N>& a ) {
+    std::get<I>(a) = std::forward<F>(f)( std::get<I>(a) );
+    _doMapA<I+1>( std::forward<F>(f), a );
+}
+
+template< class F, class X, size_t N, size_t ...i,
+          class R = Result<F,X> >
+auto mapExactlyA( F&& f, std::array<X,N> a, IndexList<i...> ) 
+    -> ESame< X, R, std::array<X,N> >
+{
+    // We could break down here and do an std::transform on a, but this has
+    // proven slightly more performant.
+    _doMapA<0>( forward<F>(f), a );
+    return a;
+}
+
+template< class R, class F, class X, size_t N >
+constexpr auto mapExactly( F&& f, std::array<X,N>&& a ) 
+    -> std::array< Result<F,X>, N >
+{
+    return mapExactlyA( forward<F>(f), a, typename IListBuilder<N-1>::type() );
+}
+
 /* mapTo<R> v = R( map(f,v) ) */
 template< template<class...> class _R, class F, class ...S,
           class R = _R< Decay<decltype(declval<F>()(*begin(declval<S>())...))> > >
-R mapTo( F&& f, S&& ...s ) {
+constexpr R mapTo( F&& f, S&& ...s ) {
     return mapExactly<R>( forward<F>(f), forward<S>(s)... );
 }
 
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< class S, class X = SeqVal<S>,
           class F, class FX = Result<F,X>, class R = Remap<S,FX> > 
-R map( F&& f, S&& xs ) 
+constexpr R map( F&& f, S&& xs ) 
 {
     return mapExactly<R>( forward<F>(f), forward<S>(xs) );
 }
@@ -431,7 +490,7 @@ auto map( F&& f, const std::initializer_list<X>& ...l )
  * map is, however, more efficient because it does not construct a new sequence
  * for every x.
  */
-template< class XS, class YS, class ...ZS, class F, 
+template< class F, class XS, class YS, class ...ZS, 
           class R = Remap <
               XS, 
               decltype (
@@ -443,17 +502,10 @@ R map( F&& f, XS&& xs, YS&& ys, ZS&& ...zs ) {
                           forward<XS>(xs), forward<YS>(ys), forward<ZS>(zs)... );
 }
 
-// TODO: requires further specialization.
-template< class X, size_t N, class F, class A = std::array<Result<F,X>,N> >
-A map( F&& f, const std::array< X, N >& xs ) {
-    A r;
-    _map( forward<F>(f), begin(r), xs );
-    return r;
-}
 
 struct Map {
     template< class ...Args >
-    auto operator () ( Args&& ...args ) 
+    constexpr auto operator () ( Args&& ...args ) 
         -> decltype( map(declval<Args>()...) ) 
     {
         return map( std::forward<Args>(args)... );
@@ -530,7 +582,7 @@ constexpr Decay<X> accuml( F&& f, X&& x, const XS& ...xs ) {
 // We use && only to let GCC know to prefer this version.
 template< class F, class X, class S >
 constexpr Decay<X> accuml( F&& f, X&& x, S&& s ) {
-    return std::accumulate( begin(s), end(s), 
+    return std::accumulate( begin(forward<S>(s)), end(forward<S>(s)), 
                             forward<X>(x), forward<F>(f) );
 }
 
@@ -540,7 +592,7 @@ X accuml( F&& f, X x, XS&& xs, YS&& ys ) {
     auto yi = begin( forward<YS>(ys) );
 
     for( ; xi != end(xs) and yi != end(ys); xi++, yi++ )
-        x = forward<F>(f)( x, *xi, *yi );
+        x = forward<F>(f)( std::move(x), *xi, *yi );
     return x;
 }
 
