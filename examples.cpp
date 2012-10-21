@@ -139,7 +139,7 @@ auto show( const S& s ) -> decltype( begin(s), string() )
 }
 
 template< class X, class Y > string show( const pair<X,Y>& p ) {
-    return "Pair (" + show(p.first) + ") (" + show(p.second) + ")";
+    return "(Pair: " + show(p.first) + ", " + show(p.second) + ")";
 }
 
 template< class X > string showJust( const X& x );
@@ -151,13 +151,13 @@ template< class X > string show( X* m ) {
 }
 
 template< class X > string showJust( const X& x ) {
-    return "Just (" + show( x ) + ")";
+    return "(Just " + show( x ) + ")";
 }
 
 template< class R > string showRight( const R& r ) 
-{ return "Right (" + show( r ) + ")"; }
+{ return "(Right " + show( r ) + ")"; }
 template< class L > string showLeft( const L& l ) 
-{ return "Left  (" + show( l ) + ")"; }
+{ return "(Left  " + show( l ) + ")"; }
 
 template< class L, class R > 
 string show( const Either<L,R>& e ) {
