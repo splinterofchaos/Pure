@@ -6,6 +6,7 @@
 
 #include <set>
 #include <memory>
+#include <limits>
 
 namespace pure { 
 
@@ -1121,30 +1122,34 @@ R filtrate( F&& f, P&& p, S&& s ) {
     return r;
 }
 
+template< class I, class X = decltype(*declval<I>()) > 
+struct MaybeElem {
+    I pos, end;
+
+    constexpr MaybeElem( I p, I e ) : pos(p), end(e) { }
+    constexpr MaybeElem( std::nullptr_t ) : end(pos) { }
+
+    constexpr operator bool () { return pos != end; }
+
+    constexpr X operator * () { return *pos; }
+};
+
+
 /* find pred xs -> Maybe x */
-template< class F, class S,
+template< class F, class S, 
+          class I = typename cata::sequence_traits<S>::iterator,
           class Val = typename cata::sequence_traits<S>::value_type >
-const Val* find( F&& f, const S& s ) {
+MaybeElem<I> find( F&& f, const S& s ) {
     const auto& e = end(s);
     const auto it = find_if( begin(s), e, forward<F>(f) );
-    return it != e ? &(*it) : nullptr; 
+    return MaybeElem<I>( it, e );
 }
 
-using MaybeIndex = std::unique_ptr<size_t>;
-
-MaybeIndex JustIndex( size_t x ) { return MaybeIndex( new size_t(x) ); }
-MaybeIndex NothingIndex() { return nullptr; }
-
-/* Construct MaybeIndex from an iterator. */
-template< class I, class S >
-MaybeIndex PossibleIndex( const I& i, const S& s ) {
-    return i != end(s) ? JustIndex( distance(begin(s),i) ) : NothingIndex();
-}
-
-template< class X, class S >
-const SeqVal<S>* findFirst( const X& x, const S& s ) {
-    auto it = std::find( begin(s), end(s), x );
-    return it != end(s) ? &(*it) : nullptr;
+template< class X, class S,
+          class I = typename cata::sequence_traits<S>::iterator >
+const MaybeElem<I> findFirst( const X& x, const S& s ) {
+    return MaybeElem<I>( std::find( begin(s), end(s), x ),
+                         end(s) );
 }
 
 /* cfind x C -> C::iterator */
@@ -1173,6 +1178,29 @@ constexpr auto cfindNot( const T& x, S&& s, F&& f = F() )
         forward<S>(s)
     );
 }
+
+struct MaybeIndex {
+    size_t i;
+    static constexpr size_t NOT = std::numeric_limits<size_t>::max();
+
+    constexpr MaybeIndex( size_t i ) : i(i) { }
+    constexpr MaybeIndex() : i(NOT) { }
+    constexpr MaybeIndex( std::nullptr_t ) : MaybeIndex() { }
+
+    constexpr operator bool () { return i != NOT; }
+
+    constexpr size_t operator * () { return i; }
+};
+
+MaybeIndex JustIndex( size_t x ) { return MaybeIndex( x ); }
+MaybeIndex NothingIndex() { return MaybeIndex(); }
+
+/* Construct MaybeIndex from an iterator. */
+template< class I, class S >
+MaybeIndex PossibleIndex( const I& i, const S& s ) {
+    return i != end(s) ? JustIndex( distance(begin(s),i) ) : NothingIndex();
+}
+
 
 template< class F, class S >
 MaybeIndex findIndex( F&& f, const S& s ) {

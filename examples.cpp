@@ -130,11 +130,16 @@ template< class X, class Y > string show( const pair<X,Y>& p ) {
 }
 
 template< class X > string showJust( const X& x );
-template< class X > string show( const unique_ptr<X>& m ) {
+template< class M > string showMaybe( const M& m ) {
+    using X = decltype( *declval<M>() );
     return maybe( string("Nothing"), showJust<X>, m );
 }
+
+template< class X > string show( const unique_ptr<X>& m ) {
+    return showMaybe( m );
+}
 template< class X > string show( X* m ) {
-    return maybe( string("Nothing"), showJust<X>, m );
+    return showMaybe( m );
 }
 
 template< class X > string showJust( const X& x ) {
@@ -355,10 +360,10 @@ int main()
     int n = 5;
     auto equalsN = closure( equal_to<int>(), n );
     printf( "find (==5) [1,2,3,4,5,6,7,8] = %s\n", 
-            show( find(equalsN, N) ).c_str() );
+            showMaybe( find(equalsN, N) ).c_str() );
     n = 9;
     printf( "find (==9) [1,2,3,4,5,6,7,8] = %s\n", 
-            show( find(equalsN, N) ).c_str() );
+            showMaybe( find(equalsN, N) ).c_str() );
 
     printf( "Just (+2) <*> Just 2  = %s\n",
             show( Just(plus_two) * Just(2) ).c_str() );
