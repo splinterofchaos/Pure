@@ -1508,8 +1508,8 @@ R intersect( XS&& xs, const YS& ys ) {
 
 struct Sum {
     template< class S >
-    SeqVal<S> operator() ( const S& s ) const {
-        return std::accumulate( begin(s), end(s), 0 );
+    constexpr SeqVal<S> operator() ( const S& s ) {
+        return list::foldl( Add(), SeqVal<S>(0), s );
     }
 
     template< class I >
@@ -1520,8 +1520,8 @@ struct Sum {
 } sum;
 
 template< class S >
-SeqVal<S> product( const S& s ) {
-    return std::accumulate( begin(s), end(s), 1, Mult() );
+constexpr SeqVal<S> product( const S& s ) {
+    return list::foldl( Mult(), SeqVal<S>(1), s );
 }
 
 template< class S >
@@ -1597,7 +1597,7 @@ struct Inits {
     static V _inits( const S& s ) {
         V v;
         for( auto it = begin(s); it != end(s); it++ )
-            v.emplace_back( S(begin(s),it) );
+            v.emplace_back( begin(s), it );
         return v;
     }
 
@@ -1612,7 +1612,7 @@ struct Tails {
     static V _tails( const S& s ) {
         V v{ S() };
         for( auto it = end(s); it != begin(s); )
-            v.emplace_back( S(--it,end(s)) );
+            v.emplace_back( --it, end(s) );
         return v;
     }
 
