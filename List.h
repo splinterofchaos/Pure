@@ -1286,10 +1286,8 @@ constexpr Closet<Take,size_t> take( size_t n ) {
 
 struct TakeWhile {
     template< class P, class S, class _S = Dup<S> >
-    _S operator() ( P&& p, S&& s ) const {
-        auto it = begin(forward<S>(s)); 
-        while( it != end(s) and forward<P>(p)(*it) )
-             it++ ;
+    XSame<Decay<S>,_S,_S> operator() ( P&& p, S&& s ) const {
+        auto it = cfindIf( fnot(forward<P>(p)), forward<S>(s) );
 
         // TODO: This is a hack and won't work on non-random iterators, but
         // required to work with Remember. I should implement Dup as a class
@@ -1298,6 +1296,14 @@ struct TakeWhile {
             it - begin(s),
             forward<S>(s)
         );
+    }
+    template< class P, class S, class _S = Dup<S> >
+    ESame<S,_S,S> operator() ( P&& p, S s ) const {
+        s.erase ( 
+            cfindIf( fnot(forward<P>(p)), forward<S>(s) ),
+            end(forward<S>(s)) 
+        );
+        return s;
     }
 
     template< class P >
