@@ -1695,6 +1695,32 @@ R concatMap( F&& f, S&& ...xs ) {
     );
 }
 
+template< class F, class Fold, class X, class S >
+X foldMap( F&& f, Fold&& fold, X x, const S& s ) {
+    using R = Result<F,SeqRef<S>>;
+    for( const auto& y : s )
+        x = forward<Fold>(fold) (
+            move(x),
+            forward<F>(f)( y )
+        );
+    return x;
+}
+
+template< class F, class Fold, class X, class XS, class YS, class ...ZS >
+X foldMap( F&& f, Fold&& fold, X x, 
+           const XS& xs, const YS& ys, const ZS& ...zs ) {
+    using R = decltype (
+        declval<F>()( head(xs), head(ys), head(zs)... )
+    );
+    for( const auto& y : xs )
+        x = foldMap (
+            closure( forward<F>(f), y ), forward<Fold>(fold),
+            move(x),
+            ys, zs...
+        );
+    return x;
+}
+
 /* zipWith f A B -> { f(a,b) for a in A and b in B } */
 template< class F, class R, class ...S >
 R _zipWith( F&& f, R r, const S& ...s ) {

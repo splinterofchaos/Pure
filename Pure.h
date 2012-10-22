@@ -1195,25 +1195,5 @@ vector<T> generate( F&& f, unsigned int n ) {
     return c;
 }
 
-template< class Cmp, class S, class R = decltype( begin(declval<Cmp>()) ) >
-constexpr R max( Cmp&& cmp, const S& cont ) {
-return max_element( begin(cont), end(cont), forward<Cmp>(cmp) );
-}
-
-template< class S >
-constexpr auto max( const S& cont ) -> decltype( begin(cont) ) {
-return max_element( begin(cont), end(cont) );
-}
-
-template< class Cmp, class S >
-constexpr auto min( Cmp&& cmp, const S& cont ) -> decltype( begin(cont) ) {
-    return min_element( begin(cont), end(cont), forward<Cmp>(cmp) );
-}
-
-template< class Container >
-constexpr auto min( const Container& cont ) -> decltype( begin(cont) ) {
-    return min_element( begin(cont), end(cont) );
-}
-
 } // namespace pure
 
