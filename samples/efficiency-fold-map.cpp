@@ -325,9 +325,32 @@ VUI append( VUI v, const VUI& w ) {
 
 VUI foldAppend( VUI v, const VUI& w ) {
     // This is somewhat less efficient compared to the above.
-    return foldl( pure::list::Cons(), 
-                  std::move(v),
-                  w );
+    foldl( pure::list::Cons(), v, w );
+    return v;
+}
+
+VUI pm2( unsigned x ) { return {x+2,x-2}; }
+
+VUI pm2Copy( const VUI& v ) {
+    VUI w;
+    for( auto x : v ) {
+        // GCC inlines this whole loop.
+        auto m = pm2(x);
+        std::copy( std::begin(m), std::end(m), std::back_inserter(w) );
+    }
+    return w;
+}
+
+VUI pm2Append( const VUI& v ) {
+    VUI w;
+    for( auto x : v ) 
+        pure::list::append_( w, pm2(x) );
+    return w;
+}
+
+VUI pm2Concat( const VUI& v ) {
+    // Equivalent to pm2Copy.
+    return pure::list::concatMap( pm2, v );
 }
 
 std::ostream& operator << ( std::ostream& os, const VUI& s ) {

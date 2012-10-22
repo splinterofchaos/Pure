@@ -443,7 +443,7 @@ Factors _lowFactors( Factors lfs, Factor x ) {
         return lfs;
 
     auto next = filter (
-        [&]( Factor y ) { return y <= std::sqrt(x) and x % y == 0; },
+        [=]( Factor y ) { return y <= std::sqrt(x) and x % y == 0; },
         nub(map(Mult(), lfs, lfs))
     );
 
@@ -453,7 +453,7 @@ Factors _lowFactors( Factors lfs, Factor x ) {
 Factors primeFactors( Factor x ) {
     using namespace pure::list::taking;
     using namespace pure::list::misc;
-    return (primes < std::sqrt(x)) / divisorOf(x);
+    return (primes <= std::sqrt(x)) / divisorOf(x);
 }
 
 Factors lowFactors( Factor x ) {
