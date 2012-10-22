@@ -1,5 +1,7 @@
 
 #include "../Pure.h"
+#include "../Arrow.h"
+#include "../Applicative.h"
 
 using namespace pure;
 using namespace list;
@@ -7,13 +9,17 @@ using namespace list;
 #include <iostream>
 #include <fstream>
 #include <sstream>
+#include <vector>
+#include <string>
 
 using std::cout;
 using std::endl;
 using std::flush;
 
+using std::vector;
+
 template< class X >
-std::ostream& operator<< ( std::ostream& os, const std::vector<X>& v ) {
+std::ostream& operator<< ( std::ostream& os, const vector<X>& v ) {
     os << "{ ";
     std::copy( begin(v), end(v), std::ostream_iterator<X>(os," ") );
     os << "}";
@@ -90,10 +96,11 @@ constexpr unsigned long long operator "" _M ( unsigned long long x ) {
 auto fibs = biIterate( Add(), 1ull, 2ull );
 
 void problem2() {
+    using namespace pure::list::misc;
+    using namespace pure::list::taking;
     cout << "The sum of every even Fibonacci number below 4-million: "
-         << flush << 
-         ( sum ^ filter(even) ^ takeWhile(lessThan(4_M)) ) (
-             fibs
+         << flush << sum (
+             (biIterate( Add(), 1u, 2u ) < 4_M) / even 
          ) << endl;
 }
 
@@ -229,14 +236,21 @@ namespace pure {
     };
 }
 
+#include "../Fold.h"
+#include "../Set.h"
+using pure::fold::foldMap;
+
 void problem4() {
+    using namespace pure::list::misc;
     cout << "The largest palindrome product of three digit numbers :"
          << flush;
     cout << foldMap (
             []( const IRange& r ) -> Largest<int> {
-                auto ps = filter( palindrome, 
-                                  map( times(last(r)), init(r) ) );
-                return notNull(ps) ? maximum(ps) : 0;
+                return maximum (
+                    // Multiply the init of r by its last; filter for
+                    // palindromes.
+                    times(-r) * (++r) / palindrome | A(0) // And append zero.
+                );
             },
             // We remove the first three values: {} {100}, and {100,101}.
             drop( 3, inits(enumerate(100,999)) ) 
@@ -257,10 +271,11 @@ int lcm( int x, int y ) {
 }
 
 void problem5() {
-    cout << pure::foldl( lcm, enumerate(2,19) ) 
+    cout << foldl( lcm, enumerate(2,19) ) 
          << " is divisible by all numbers 1 thought 20." << endl;
 }
 
+#include "../Free.h"
 void problem6() {
     cout << "The difference between the sum squared and squared sum "
             "of each number between 1 and 100: " << flush;
@@ -269,8 +284,8 @@ void problem6() {
 
     unsigned int sqrOfSum = sum(N) * sum(N);
 
-    using P = float(*)(float,float);
-    cout << sqrOfSum - (unsigned int)sum( rclosure(P(pow),2) ^ N ) << endl;
+    using namespace pure::free;
+    cout << sqrOfSum - (unsigned int)sum( rclosure(F<double>(pow),2) ^ N ) << endl;
 }
 
 void problem7() {
@@ -283,7 +298,7 @@ int from_sym( char sym ) { return sym - '0'; }
 void problem8() {
     cout << "The largest sum of five numbers in the given sequence: " << flush;
 
-    const string nsStr = "7316717653133062491922511967442657474235534919493496983520312774506326239578318016984801869478851843858615607891129494954595017379583319528532088055111254069874715852386305071569329096329522744304355766896648950445244523161731856403098711121722383113622298934233803081353362766142828064444866452387493035890729629049156044077239071381051585930796086670172427121883998797908792274921901699720888093776657273330010533678812202354218097512545405947522435258490771167055601360483958644670632441572215539753697817977846174064955149290862569321978468622482839722413756570560574902614079729686524145351004748216637048440319989000889524345065854122758866688116427171479924442928230863465674813919123162824586178664583591245665294765456828489128831426076900422421902267105562632111110937054421750694165896040807198403850962455444362981230987879927244284909188845801561660979191338754992005240636899125607176060588611646710940507754100225698315520005593572972571636269561882670428252483600823257530420752963450";
+    const std::string nsStr = "7316717653133062491922511967442657474235534919493496983520312774506326239578318016984801869478851843858615607891129494954595017379583319528532088055111254069874715852386305071569329096329522744304355766896648950445244523161731856403098711121722383113622298934233803081353362766142828064444866452387493035890729629049156044077239071381051585930796086670172427121883998797908792274921901699720888093776657273330010533678812202354218097512545405947522435258490771167055601360483958644670632441572215539753697817977846174064955149290862569321978468622482839722413756570560574902614079729686524145351004748216637048440319989000889524345065854122758866688116427171479924442928230863465674813919123162824586178664583591245665294765456828489128831426076900422421902267105562632111110937054421750694165896040807198403850962455444362981230987879927244284909188845801561660979191338754992005240636899125607176060588611646710940507754100225698315520005593572972571636269561882670428252483600823257530420752963450";
 
     cout << foldMap ( 
         []( const vector<int>& v ) -> Largest<int> {
@@ -405,16 +420,18 @@ void problem11() {
             return take_dir_prod( dir, {{i,j}}, 4, mat ); 
         }, 
         enumerate(mat), enumerate(mat[0]),  
-        std::initializer_list<Vec>{ "-1x0"_v, " 1x1"_v,
-                                    " 0x1"_v, "-1x1"_v }
+        pure::ap::spure<Vec>( "-1x0"_v, " 1x1"_v,
+                              " 0x1"_v, "-1x1"_v )
     ) << endl;
 }
 
 using Factor = PrimeType;
 using Factors = std::vector<PrimeType>;
 
+#include "../Set.h"
 bool isPrime( Factor x ) {
-    return elem( x, takeWhile( lessThan(x), primes ) );
+    using namespace pure::list::taking;
+    return elem( x, primes < x );
 }
 
 // Computes the low factors of x, given an accumulation of low factors. 
@@ -434,10 +451,9 @@ Factors _lowFactors( Factors lfs, Factor x ) {
 }
 
 Factors primeFactors( Factor x ) {
-    return filter (
-        divisorOf(x), 
-        takeWhile( lessThan(std::sqrt(x)), primes ) 
-    );
+    using namespace pure::list::taking;
+    using namespace pure::list::misc;
+    return (primes < std::sqrt(x)) / divisorOf(x);
 }
 
 Factors lowFactors( Factor x ) {
@@ -484,22 +500,29 @@ void problem13() {
         io::fileContents<std::string>(fin) 
     );
 
-    unsigned int carry = 0;
-    auto sum = reverse (
-        map (
+    Digits r;
+
+    {
+        using namespace pure::set; // For reverse (-s)
+                                   // and append (s+s)
+        // Note: pure::set overloads <<, so it cannot be used with std::cout.
+        unsigned int carry = 0;
+        auto sum = -map (
             [&]( unsigned int i ) {
-                unsigned long int sum = carry;
+                unsigned int sum = carry;
                 for( auto j : enumerate(nums) )
                     sum += nums[j][i];
                 carry = sum / 10;
                 return sum % 10;
             },
             // Reverse the order of the columns: LSD first.
-            reverse( dupTo<std::vector>(enumerate(nums[0])) )
-        )
-    );
+            -dupTo<std::vector>( enumerate(nums[0]) )
+        );
 
-    cout << append( digits(carry), take(8,sum) ) << endl;
+        r = digits(carry) + take( 8, sum );
+    }
+
+    cout << r << endl;
 }
 
 unsigned int e14Iterate( unsigned int x ) {
@@ -574,7 +597,7 @@ unsigned long long int& countWaysCached( int x, int y ) {
         // must be calculated.
         unsigned int ans = y==1 ? x+1 
             : x==0 or y==0;
-        cache.push_back( { {{x,y}}, ans } );
+        cache.push_back( {Vec{{x,y}}, ans} );
         return cache.back().x;
     }
 }
@@ -688,7 +711,10 @@ void problem18() {
         }
     }
 
-    cout << list::maximum( last(rows) ) << endl;
+    if( rows.size() and last(rows).size() )
+            cout << list::maximum( last(rows) ) << endl;
+    else
+            cout << "No solution." << endl;
 }
 
 bool leapYear( unsigned int yr ) {

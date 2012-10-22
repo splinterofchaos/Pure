@@ -5,6 +5,8 @@
 #pragma once
 
 #include <set>
+#include <vector>
+#include <list>
 #include <memory>
 
 namespace pure { 
@@ -13,6 +15,7 @@ using std::begin;
 using std::end;
 using std::next;
 using std::prev;
+using std::get;
 
 // Used by group.
 // TODO: Return<sequence> should be implemented by a function in THIS file.
@@ -371,37 +374,98 @@ void _map( F&& f, RI&& ri,
               forward<YS>(ys), forward<ZS>(zs)... );
 }
 
-template< class R, class F, class ...S >
-R mapExactly( F&& f, S&& ...s ) {
+template< class R, class F, class XS, class ...YS >
+R mapExactly( F&& f, XS&& xs, YS&& ...ys ) {
     R r;
-    _map( forward<F>(f), tailInserter(r), forward<S>(s)... );
+    _map( forward<F>(f), tailInserter(r), forward<XS>(xs), forward<YS>(ys)... );
     return r;
+}
+
+template< class R, class F, class S >
+auto mapExactly( F&& f, S&& s ) -> XSame<R,Decay<S>,R> {
+    R r;
+    _map( forward<F>(f), tailInserter(r), forward<S>(s) );
+    return r;
+}
+
+template< class R, class F, class S >
+auto mapExactly( F&& f, S r ) -> ESame<R,S,S> {
+    _map( forward<F>(f), begin(r), r );
+    return r;
+}
+
+template< size_t ... > struct LastIndex;
+
+template< size_t X > struct LastIndex<X> {
+    static constexpr size_t I = X;
+};
+
+template< size_t X, size_t ...Y > struct LastIndex<X,Y...> {
+    static constexpr size_t I = LastIndex<Y...>::I;
+};
+
+template< size_t ...i > struct IndexList {
+    static constexpr size_t I = LastIndex<i...>::I;
+    using Next = IndexList< i..., I+1 >;
+};
+
+template< size_t n > struct IListBuilder {
+    using type = typename IListBuilder< n-1 >::type::Next;
+};
+
+template<> struct IListBuilder<0> {
+    using type = IndexList<0>;
+};
+
+template< class F, class X, size_t N, size_t ...i,
+          class R = Result<F,X> >
+constexpr auto mapExactlyA( F&& f, const std::array<X,N>& a, IndexList<i...> ) 
+    -> XSame< X, R, std::array<R,N> >
+{
+    return {{ forward<F>(f)( std::get<i>(a) )... }};
+}
+
+template< size_t I, class F, class X >
+void _doMapA( const F&, std::array<X,I>& ) {
+}
+
+template< size_t I, class F, class X, size_t N >
+void _doMapA( F&& f, std::array<X,N>& a ) {
+    std::get<I>(a) = std::forward<F>(f)( std::get<I>(a) );
+    _doMapA<I+1>( std::forward<F>(f), a );
+}
+
+template< class F, class X, size_t N, size_t ...i,
+          class R = Result<F,X> >
+auto mapExactlyA( F&& f, std::array<X,N> a, IndexList<i...> ) 
+    -> ESame< X, R, std::array<X,N> >
+{
+    // We could break down here and do an std::transform on a, but this has
+    // proven slightly more performant.
+    _doMapA<0>( forward<F>(f), a );
+    return a;
+}
+
+template< class R, class F, class X, size_t N >
+constexpr auto mapExactly( F&& f, std::array<X,N>&& a ) 
+    -> std::array< Result<F,X>, N >
+{
+    return mapExactlyA( forward<F>(f), a, typename IListBuilder<N-1>::type() );
 }
 
 /* mapTo<R> v = R( map(f,v) ) */
 template< template<class...> class _R, class F, class ...S,
-          class R = _R< decltype(declval<F>()(*begin(declval<S>())...)) > >
-R mapTo( F&& f, S&& ...s ) {
+          class R = _R< Decay<decltype(declval<F>()(*begin(declval<S>())...))> > >
+constexpr R mapTo( F&& f, S&& ...s ) {
     return mapExactly<R>( forward<F>(f), forward<S>(s)... );
 }
 
 /* map f {1,2,3} -> { f(1), f(2), f(3) } */
 template< class S, class X = SeqVal<S>,
           class F, class FX = Result<F,X>, class R = Remap<S,FX> > 
-auto map( F&& f, const S& xs ) -> R
+constexpr R map( F&& f, S&& xs ) 
 {
-    return mapExactly<R>( forward<F>(f), xs );
-}
-
-// When mapping from X to X, we can optimize by not returning a new sequence.
-template< class S, class F >
-auto map( F&& f, S&& xs ) -> ESame< SeqVal<S>, Result<F,SeqRef<S>>, 
-                                // If this type dups to something else, 
-                                // we can't use this version.
-                                ESame<Decay<S>,Dup<S>,S> >
-{
-    _map( forward<F>(f), begin(xs), forward<S>(xs) );
-    return xs;
+    return mapExactly<R>( forward<F>(f), forward<S>(xs) );
 }
 
 template< template<class...> class R, class F, class ...S >
@@ -426,7 +490,7 @@ auto map( F&& f, const std::initializer_list<X>& ...l )
  * map is, however, more efficient because it does not construct a new sequence
  * for every x.
  */
-template< class XS, class YS, class ...ZS, class F, 
+template< class F, class XS, class YS, class ...ZS, 
           class R = Remap <
               XS, 
               decltype (
@@ -438,13 +502,15 @@ R map( F&& f, XS&& xs, YS&& ys, ZS&& ...zs ) {
                           forward<XS>(xs), forward<YS>(ys), forward<ZS>(zs)... );
 }
 
-// TODO: requires further specialization.
-template< class X, size_t N, class F, class A = std::array<Result<F,X>,N> >
-A map( F&& f, const std::array< X, N >& xs ) {
-    A r;
-    _map( forward<F>(f), begin(r), xs );
-    return r;
-}
+
+struct Map {
+    template< class ...Args >
+    constexpr auto operator () ( Args&& ...args ) 
+        -> decltype( map(declval<Args>()...) ) 
+    {
+        return map( std::forward<Args>(args)... );
+    }
+};
 
 template< class F, class ...S >
 using ResultMap = decltype( map(declval<F>(), declval<S>()...) );
@@ -516,7 +582,7 @@ constexpr Decay<X> accuml( F&& f, X&& x, const XS& ...xs ) {
 // We use && only to let GCC know to prefer this version.
 template< class F, class X, class S >
 constexpr Decay<X> accuml( F&& f, X&& x, S&& s ) {
-    return std::accumulate( begin(s), end(s), 
+    return std::accumulate( begin(forward<S>(s)), end(forward<S>(s)), 
                             forward<X>(x), forward<F>(f) );
 }
 
@@ -526,7 +592,7 @@ X accuml( F&& f, X x, XS&& xs, YS&& ys ) {
     auto yi = begin( forward<YS>(ys) );
 
     for( ; xi != end(xs) and yi != end(ys); xi++, yi++ )
-        x = forward<F>(f)( x, *xi, *yi );
+        x = forward<F>(f)( std::move(x), *xi, *yi );
     return x;
 }
 
@@ -653,6 +719,47 @@ struct RCons {
         return rcons( move(s), forward<X>(x)... );
     }
 };
+
+
+template< class F, class Acc, class S >
+std::pair<Acc,S> mapAccumL( F&& f, Acc a, const S& s ) {
+    if( null(s) )
+        return { std::move(a), {} };
+
+    using X = SeqVal<S>;
+    using Y = typename decltype ( 
+        declval<F>()( declval<Acc>(), declval<X>() )
+    )::second_type;
+
+    S r;
+    Y y;
+    for( const auto& x : s ) {
+        std::tie(a,y) = std::forward<F>(f)( std::move(a), x );
+        r.push_back( std::move(y) );
+    }
+
+    return { std::move(a), std::move(r) };
+}
+
+template< class F, class Acc, class S >
+std::pair<Acc,S> mapAccumR( F&& f, Acc a, const S& s ) {
+    if( null(s) )
+        return { std::move(a), {} };
+
+    using X = SeqVal<S>;
+    using Y = typename decltype ( 
+        declval<F>()( declval<Acc>(), declval<X>() )
+    )::second_type;
+
+    S r;
+    Y y;
+    for( const auto& x : reverse_wrap(s) ) {
+        std::tie(a,y) = std::forward<F>(f)( std::move(a), x );
+        r.push_back( std::move(y) );
+    }
+
+    return { std::move(a), std::move(r) };
+}
 
 template< class F, class X, class S,
           class V = std::vector<Decay<X>> >
@@ -1667,6 +1774,128 @@ S unwords( const SS& ss ) {
         concatMap( closure(flip(Cons()),' '), ss )
     );
 }
+
+namespace misc {
+
+template< class X, class ...Y, class Ar = std::array<Decay<X>,1+sizeof...(Y)> >
+constexpr Ar A( X&& x, Y&& ...y ) {
+    return {{
+        std::forward<X>(x),
+        std::forward<Y>(y)... 
+    }}; 
+}
+
+template< class X, class ...Y, class V_ = std::vector<Decay<X>> >
+constexpr V_ V( X&& x, Y&& ...y ) {
+    return {
+        std::forward<X>(x),
+        std::forward<Y>(y)... 
+    }; 
+}
+
+template< class X, class ...Y, class L_ = std::list<Decay<X>> >
+constexpr L_ L( X&& x, Y&& ...y ) {
+    return {
+        std::forward<X>(x),
+        std::forward<Y>(y)... 
+    }; 
+}
+
+template< class F, class S >
+auto operator * ( F&& f, S&& s ) -> ResultMap<F,S> {
+    return map( forward<F>(f), forward<S>(s) );
+}
+
+template< class F, class S >
+S& operator *= ( F&& f, S& s ) {
+    s = forward<F>(f) * move(s);
+    return s;
+}
+
+template< class S, class F > 
+Decay<S> operator / ( S s, F&& f ) {
+    return filter( forward<F>(f), move(s) );
+}
+
+template< class F, class S >
+S& operator /= ( F&& f, S& s ) {
+    s = forward<F>(f) / move(s);
+    return s;
+}
+
+template< class XS, class YS >
+Decay<XS> operator | ( XS&& xs, YS&& ys ) {
+    return append( forward<XS>(xs), forward<YS>(ys) );
+}
+
+template< class F, class S >
+S& operator |= ( F&& f, S& s ) {
+    s = forward<F>(f) | move(s);
+    return s;
+}
+
+template< class S >
+SeqRef<S> operator + ( S&& s ) {
+    return head(forward<S>(s));
+}
+
+template< class S >
+auto operator -- ( S&& s ) -> decltype( tail(declval<S>()) ) {
+    return tail( forward<S>(s) );
+}
+
+template< class S >
+SeqRef<S> operator - ( S&& s ) {
+    return last(forward<S>(s));
+}
+
+template< class S >
+auto operator ++ ( S&& s ) -> decltype( init(declval<S>()) ) {
+    return init( forward<S>(s) );
+}
+
+} // namespace misc
+
+namespace taking {
+
+// A simple symbolic notation for takeWhile.
+
+template< class S >
+auto operator < ( S&& s, unsigned long long x ) 
+    -> decltype( takeWhile(lessThan(x),declval<S>()) )
+{
+    return takeWhile( lessThan(x), forward<S>(s) );
+}
+
+template< class S >
+auto operator > ( S&& s, unsigned long long x ) 
+    -> decltype( takeWhile(greaterThan(x),declval<S>()) )
+{
+    return takeWhile( greaterThan(x), forward<S>(s) );
+}
+                      
+template< class S >
+auto operator >= ( S&& s, unsigned long long x ) 
+    -> decltype( takeWhile(greaterEqualTo(x),declval<S>()) )
+{
+    return takeWhile( greaterEqualTo(x), forward<S>(s) );
+}
+
+template< class S >
+auto operator <= ( S&& s, unsigned long long x ) 
+    -> decltype( takeWhile(lessEqualTo(x),declval<S>()) )
+{
+    return takeWhile( lessEqualTo(x), forward<S>(s) );
+}
+
+template< class S, class F >
+auto operator && ( S&& s, F&& f ) 
+    -> decltype( takeWhile(declval<F>(),declval<S>()) ) 
+{
+    return takeWhile( forward<F>(f), forward<S>(s) );
+}
+
+} // namespace taking
 
 } // namespace list.
 } // namespace pure.

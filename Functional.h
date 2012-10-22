@@ -383,21 +383,27 @@ template< class X > constexpr X dec( X x ) { return --x; }
 
 struct Add {
     template< class X, class Y >
-    constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
+    constexpr auto operator() ( X&& x, Y&& y ) 
+        -> decltype( declval<X>() + declval<Y>() )
+    {
         return forward<X>(x) + forward<Y>(y);
     }
 };
 
 struct Subtract {
     template< class X, class Y >
-    constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
+    constexpr auto operator() ( X&& x, Y&& y ) 
+        -> decltype( declval<X>() - declval<Y>() )
+    {
         return forward<X>(x) - forward<Y>(y);
     }
 };
 
 struct Mult {
     template< class X, class Y >
-    constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
+    constexpr auto operator() ( X&& x, Y&& y ) 
+        -> decltype( declval<X>() * declval<Y>() )
+    {
         return forward<X>(x) * forward<Y>(y);
     }
 };

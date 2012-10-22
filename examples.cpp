@@ -1,5 +1,10 @@
 
 #include "Pure.h"
+#include "Fold.h"
+#include "Arrow.h"
+#include "State.h"
+#include "Applicative.h"
+#include "Set.h"
 
 #include <cstdio>
 #include <cmath>
@@ -39,7 +44,7 @@ Vec operator * ( Vec a, float x )
 {
     return map( closure(Mult(),x), a ); 
 }
-Vec operator * ( float x, const Vec& a ) { return Vec(a) * x; }
+Vec operator * ( float x, Vec a ) { return move(a) * x; }
 
 Vec operator / ( const Vec& v, float x ) { return v * (1/x); }
 
@@ -92,6 +97,12 @@ string show( size_t x ) {
     return digits;
 }
 
+string show( unsigned long long x ) {
+    char digits[20];
+    sprintf( digits, "%llu", x );
+    return digits;
+}
+
 string show( char c ) { 
     return "'" + string( 1, c ) + "'"; 
 }
@@ -110,6 +121,8 @@ string show( const char* str ) {
     return show( string(str) );
 }
 
+template< class X, class Y > string show( const pair<X,Y>& p );
+
 template< class S > 
 auto show( const S& s ) -> decltype( begin(s), string() )
 {
@@ -126,7 +139,7 @@ auto show( const S& s ) -> decltype( begin(s), string() )
 }
 
 template< class X, class Y > string show( const pair<X,Y>& p ) {
-    return "Pair (" + show(p.first) + ") (" + show(p.second) + ")";
+    return "(Pair: " + show(p.first) + ", " + show(p.second) + ")";
 }
 
 template< class X > string showJust( const X& x );
@@ -138,13 +151,13 @@ template< class X > string show( X* m ) {
 }
 
 template< class X > string showJust( const X& x ) {
-    return "Just (" + show( x ) + ")";
+    return "(Just " + show( x ) + ")";
 }
 
 template< class R > string showRight( const R& r ) 
-{ return "Right (" + show( r ) + ")"; }
+{ return "(Right " + show( r ) + ")"; }
 template< class L > string showLeft( const L& l ) 
-{ return "Left  (" + show( l ) + ")"; }
+{ return "(Left  " + show( l ) + ")"; }
 
 template< class L, class R > 
 string show( const Either<L,R>& e ) {
@@ -212,6 +225,23 @@ int main()
             show( evens ).c_str(), show( scanl( Add(), evens ) ).c_str() );
     printf( "\tscanr (+) %s = %s\n", 
             show( evens ).c_str(), show( scanr( Add(), evens ) ).c_str() );
+    {
+        using namespace pure::set::ordered;
+        printf( "\npure::set :\n"
+                "es contains 2 = %s\n", show(2<evens).c_str() );
+        printf( "The length of es = %s\n", show(+evens).c_str() );
+        printf( "[6,2] is a subset of es: %s\n", 
+                show( S(6,2) <= evens ).c_str() );
+        printf( "union of es and [3,7,10] = %s\n",
+                show( S(3,7,10) | evens ).c_str() );
+        printf( "intersection of es and [4,7,10] = %s\n",
+                show( S(4,7,10) % evens ).c_str() );
+        printf( "es without [2,8,10] = %s\n",
+                show( evens / S(2,8,10) ).c_str() );
+
+        printf( "['a','b'] * evens = %s\n",
+                show( S('a','b') * S(1,2) ).c_str() );
+    }
     puts("");
 
     printf( "intersparse ',' \"abcd\" = %s\n",
@@ -265,6 +295,12 @@ int main()
         "sum of (4,3,2,1) = %d\n", // = 10
         foldr( Add(), {1,2,3,4} )
     );
+
+    auto accumF = []( int x, int y ) { return std::make_pair(x+y,x*y); };
+    printf( "mapAccumL (\\x y -> (x+y,x*y)) 0 [2,8,10] = %s\n",
+            show( mapAccumL(accumF,0,std::vector<int>{2,8,10}) ).c_str() );
+    printf( "mapAccumR (\\x y -> (x+y,x*y)) 0 [2,8,10] = %s\n",
+            show( mapAccumR(accumF,0,std::vector<int>{2,8,10}) ).c_str() );
 
     Vec fiveTwo = {{5,2}}, twoFive = {{2,5}};
 
@@ -342,7 +378,7 @@ int main()
     printf( "\tzip_with add3 [1,2] [3,4] [5,6] = %s\n",
             show( zipWith(add3,V{1,2},V{3,4},V{5,6}) ).c_str() );
     printf( "\tfold add3 10 [1,2] [3,4] = %s\n",
-            show( pure::foldl(add3,10,V{1,2},V{3,4}) ).c_str() );
+            show( foldl(add3,10,V{1,2},V{3,4}) ).c_str() );
     puts("");
 
     vector<int> N = {1,2,3,4,5,6,7,8};
@@ -354,6 +390,10 @@ int main()
     printf( "find (==9) [1,2,3,4,5,6,7,8] = %s\n", 
             show( find(equalsN, N) ).c_str() );
 
+    // Bring in the operator overloads * (ap) and || (alt).
+    using namespace pure::ap;
+
+    puts("");
     printf( "Just (+2) <*> Just 2  = %s\n",
             show( Just(plus_two) * Just(2) ).c_str() );
     printf( "Just (+2) <*> Nothing = %s\n",
@@ -370,6 +410,20 @@ int main()
     printf( "Nothing <|> Nothing  = %s\n", 
             show( Nothing<int>() || Nothing<int>() ).c_str() );
 
+    std::vector<Closure<Add,int>> fs = { pure::plus(1), pure::plus(5), pure::plus(3) };
+    puts( "fs = [(+1),(+5),(+3)]" );
+    printf( "\tfs <*> pure 1 = %s\n", 
+            show( fs*apure<std::vector>(1) ).c_str() );
+    printf( "[1,2,3] <|> [4] <|> empty = %s\n",
+            show( std::vector<int>{1,2,3} || std::vector<int>{4} 
+                  || empty<std::vector<int>>() ).c_str() );
+    printf( "pure 5 :: [] = %s\n",
+            show( pure::ap::pure<std::vector>(5) ).c_str() );
+    printf( "([1,2],(+2)) <*> ([3,4],5) = %s\n",
+            show( std::make_pair(std::vector<int>{1,2}, plus_two)
+                  * std::make_pair(std::vector<int>{3,4},5) ).c_str() );
+
+    puts("");
     printf( "Just 1 >> Just \"hya!\" = %s\n",
             show( Just(1) >> Just("hya!") ).c_str() );
 
@@ -415,14 +469,44 @@ int main()
     printf( "[1] `mplus` [2] = %s\n",
             show( mplus(vector<int>{1},vector<int>{2}) ).c_str() );
 
-    pair<int,int> p( 1, 2 );
-    using Show = string(int);
-    auto showInt = [](int x){ return show(x); };
-    printf( "first show >>> second (+2) $ (1,2) = %s\n", 
-            show( comp(first(showInt), second(plus_two))( p ) ).c_str() );
-    printf( "show *** (+2) $ (1,2) = %s\n",
-            show( split( showInt, plus_two )( p ) ).c_str() );
+    {
+        using namespace pure::arr;
+        pair<int,int> p( 1, 2 );
+        using Show = string(int);
+        auto showInt = [](int x){ return show(x); };
+        printf( "first show >>> second (+2) $ (1,2) = %s\n", 
+                show( (first(showInt) > second(plus_two))( p ) ).c_str() );
+        printf( "show *** (+2) $ (1,2) = %s\n",
+                show( (showInt * plus_two)( p ) ).c_str() );
 
-    printf( "show &&& (+2) $ 5 = %s\n",
-            show( fan( showInt, plus_two )( 5 ) ).c_str() );
+        printf( "show &&& (+2) $ 5 = %s\n",
+                show( (showInt && plus_two)( 5 ) ).c_str() );
+    }
+
+    puts("");
+    auto s = state::returnState<int>(10);
+    puts("let s = return 10 :: State Int Int");
+    printf( "runState  s 5 = %s\n", show( state::run( s,5).get() ).c_str() );
+    printf( "evalState s 5 = %s\n", show( state::eval(s,5).get() ).c_str() );
+    printf( "execState s 5 = %s\n", show( state::exec(s,5).get() ).c_str() );
+    printf( "runState (fmap (\\x->x*2) s) 10 = %s\n",
+            show( fmap(times_two, s).runState(10).get() ).c_str() );
+    printf( "runState (s >>= (\\x->return x)) 10 = %s\n",
+            show( (s >>= state::Return<int>()).runState(10).get() ).c_str() );
+
+    auto tick = state::get<int>() >>= []( int x ){
+        return state::put( x+1 ) >>= state::Return<int>();
+    };
+    puts("tick = do\n\tn <- get\n\tput (n+1)\n\treturn n");
+    printf( "execState tick 5 = %s\n",
+            show( state::exec( tick, 5 ).get() ).c_str() );
+
+    puts("tick2 = modify (+2) >> get");
+    auto tick2 = state::modify<int>( plus_two ) >> state::get<int>();
+    printf( "execState tick2 5 = %s\n",
+            show( state::exec( tick2, 5 ).get() ).c_str() );
+    
+    printf( "runState (gets (+2)) 5 = %s\n",
+            show( state::gets<int>(plus_two).runState(5).get() ).c_str() );
 }
+

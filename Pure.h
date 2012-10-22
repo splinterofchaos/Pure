@@ -21,8 +21,6 @@
 
 namespace pure {
 
-using namespace std;
-
 namespace cata {
 
 /* 
@@ -53,7 +51,7 @@ struct maybe {};
 // If we want to return a pointer that defines ownership, we want a smart
 // pointer. Consider any non-raw pointer good 'nuff.
 template< class Ptr > struct SmartPtr { using type = Ptr; };
-template< class X > struct SmartPtr<X*> { using type = unique_ptr<X>; };
+template< class X > struct SmartPtr<X*> { using type = std::unique_ptr<X>; };
 
 template< class Ptr > struct maybe_traits {
     using pointer    = Ptr;
@@ -122,10 +120,6 @@ template< class F > struct Category<F> {
     }
 };
 
-template< class ... > struct Arrow;
-
-/* Haskell defines <<< as an alias for (.). */
-
 /*
  * fcomp (forward compose): the reverse of comp.
  * Haskell's >>>.
@@ -144,86 +138,6 @@ fcomp( F&& f, G&& g, H&& h, I&& ...i ) {
     return comp( fcomp( forward<G>(g), forward<H>(h), forward<I>(i)... ),
                  forward<F>(f) );
 }
-
-template< class A, class F, class Arr = Arrow<A> >
-decltype( Arr::arr( declval<F>() ) )
-arr( F&& f ) { return Arr::arr( forward<F>(f) ); }
-
-/* (f *** g) (x,y) = (f x, g y) */
-template< class F, class G, class A = Arrow<F> >
-decltype( A::split(declval<F>(), declval<G>()) )
-split( F&& f, G&& g ) {
-    return A::split( forward<F>(f), forward<G>(g) );
-}
-
-/* (f &&& g) x = (f x, g x) */
-template< class F, class G, class A = Arrow<F> >
-decltype( A::fan(declval<F>(),declval<G>()) )
-fan( F&& f, G&& g ) {
-    return A::fan( forward<F>(f), forward<G>(g) );
-}
-
-/* (first f) (x,y) = (f x, y) */
-template< class F, class A = Arrow<F> >
-decltype( A::first(declval<F>()) )
-first( F&& f ) {
-    return A::first( forward<F>(f) );
-}
-
-/* (second f) (x,y) = (x, f y) */
-template< class F, class A = Arrow<F> >
-decltype( A::second(declval<F>()) )
-second( F&& f ) {
-    return A::second( forward<F>(f) );
-}
-
-template< class Func > struct Arrow<Func> {
-    static constexpr Id arr = Id();
-
-    // Same decltype expression used many times. Save typing.
-    template< class F, class G >
-    using Split = decltype( pairCompose(declval<F>(), declval<G>()) );
-
-    /*
-     * Note: It would seem that an easier way to define this class might be to
-     * have it define only split, and define first, second, and fan in terms
-     * of that. This goes against Haskell's version, but I don't see a reason,
-     * currently, why it would not be just as generic and more convenient.
-     */
-
-    template< class F, class G > static 
-    constexpr Split<F,G> split ( F&& f, G&& g ) 
-    {
-        return pairCompose( forward<F>(f), forward<G>(g) );
-    }
-
-    template< class F > static 
-    constexpr Split<F,Id> first( F&& f ) 
-    { 
-        return pairCompose( forward<F>(f), Id() );
-    }
-
-    template< class F > static 
-    constexpr Split<Id,F> second( F&& f ) 
-    {
-        return pairCompose( Id(), forward<F>(f) );
-    }
-
-    struct Splitter {
-        template< class X, class P = pair<X,X> > 
-            constexpr P operator() ( const X& x ) {
-                return P( x, x );
-            }
-    };
-
-    template< class F, class G > static 
-    constexpr auto fan( F&& f, G&& g ) 
-        -> decltype( compose(declval< Split<F,G> >(), Splitter()) )
-    {
-        return compose( pairCompose( forward<F>(f), forward<G>(g) ), 
-                        Splitter() );
-    }
-};
 
 template< typename Container, typename F >
 void for_each( F&& f, const Container& cont ) {
@@ -248,14 +162,16 @@ void for_ij( const F& f, const I& imax, const J& jmax ) {
  * Just  x -> Maybe (Just x) | with a definite value.
  * Nothing -> Maybe Nothing  | with definitely no value.
  */
-template< class T, class M = std::unique_ptr<T> > 
-constexpr M Just( T t ) {
-    return M( new T(move(t)) );
-}
+constexpr struct _Just {
+    template< class T, class M = std::unique_ptr<T> > 
+    constexpr M operator () ( T t ) {
+        return M( new T(move(t)) );
+    }
+} Just{};
 
 struct ReturnJust {
     template< class X >
-    unique_ptr<Decay<X>> operator() ( X&& x ) {
+    std::unique_ptr<Decay<X>> operator() ( X&& x ) {
         return Just( forward<X>(x) );
     }
 };
@@ -272,30 +188,6 @@ constexpr R maybe( R&& nothingVal, F&& f, P&& m ) {
              : forward<R>( nothingVal );
 }
 
-/* 
- * Just f  * Just x  = Just (f x)
- * _       * _       = Nothing
- * Just x  | _       = Just x
- * Nothing | Just x  = Just x
- * Nothing | Nothing = Nothing
- */
-template< class F, class P, 
-          class Ret = decltype( Just( (*declval<F>())(*declval<P>()) ) ) >
-Ret operator* ( F&& a, P&& b ) {
-    return a and b ? Just( (*forward<F>(a))(*forward<P>(b)) ) 
-                   : nullptr;
-}
-
-template< class P > 
-constexpr P operator|| ( P&& a, P&& b ) {
-    return a ? forward<P>(a) : forward<P>(b); 
-}
-
-template< class P, class R = decltype( Just(*declval<P>()) ) > 
-constexpr R operator|| ( const P& a, const P& b ) {
-    return a ? Just(*a) : b ? Just(*b) : nullptr;
-}
-
 /* Either a b : Left a | Right b */
 template< class L, class R >
 struct Either
@@ -303,8 +195,8 @@ struct Either
     typedef L left_type;
     typedef R right_type;
 
-    unique_ptr<left_type> left;
-    unique_ptr<right_type> right;
+    std::unique_ptr<left_type> left;
+    std::unique_ptr<right_type> right;
 
     // TODO: Make these type constructors, not types.
     struct Left { 
@@ -383,6 +275,20 @@ constexpr Pure<X> pure( X&& x )
     return Pure<X>( forward<X>(x) );
 }
 
+template< class F > struct PureFunction {
+    F f;
+
+    template< class ...X >
+    constexpr auto operator () ( X&& ... ) -> decltype( f() ) {
+        return f();
+    }
+};
+
+template< class F > 
+constexpr PureFunction<F> pureFunction( F f ) {
+    return { move(f) };
+}
+
 /* 
  * Functor F:
  *      fmap f (F a) -> F (f a)
@@ -441,7 +347,7 @@ struct Functor<Function> {
 
 /* fmap f Pair(x,y) = Pair( f x, f y ) */
 template< class X, class Y >
-struct Functor< pair<X,Y> > {
+struct Functor< std::pair<X,Y> > {
     template< unsigned N, class P >
     using Nth = decltype( get<N>( declval<P>() ) );
 
@@ -453,11 +359,11 @@ struct Functor< pair<X,Y> > {
     template< class F, class ...P >
     static constexpr auto fmap( F&& f, P&& ...p ) 
         -> decltype (
-            make_pair( declval<PX<F,P...>>(), declval<PY<F,P...>>() )
+            std::make_pair( declval<PX<F,P...>>(), declval<PY<F,P...>>() )
         )
     {
-        return make_pair( forward<F>(f)(forward<P>(p).first...),
-                  forward<F>(f)(forward<P>(p).second...) );
+        return std::make_pair( forward<F>(f)(forward<P>(p).first...),
+                               forward<F>(f)(forward<P>(p).second...) );
     }
 };
 
@@ -507,18 +413,18 @@ struct Functor< Either<L,R> > {
 
 template< class C > struct IsSeqImpl {
     // Can only be supported on STL-like sequence types, not pointers.
-    template< class _C > static true_type f(typename _C::iterator*);
-    template< class _C > static false_type f(...);
+    template< class _C > static std::true_type f(typename _C::iterator*);
+    template< class _C > static std::false_type f(...);
     typedef decltype( f<C>(0) ) type;
 };
 
 template< class C > struct IsSeq : public IsSeqImpl<C>::type { };
 
 /* Enable if is an STL-like sequence. */
-template< class C, class R > struct ESeq : enable_if<IsSeq<C>::value,R> { };
+template< class C, class R > struct ESeq : std::enable_if<IsSeq<C>::value,R> { };
 
 /* Disable if is sequence. */
-template< class C, class R > struct XSeq : enable_if<not IsSeq<C>::value,R> { };
+template< class C, class R > struct XSeq : std::enable_if<not IsSeq<C>::value,R> { };
 
 /* f <$> m */
 template< class F, class M >
@@ -599,7 +505,7 @@ template<> struct Monoid< cata::maybe > {
 
     template< class M >
     static M dup( const M& m ) {
-        return maybe( mempty<M>(), ReturnJust(), m );
+        return m ? Just(*m) : nullptr;
     }
 
     template< class X >
@@ -617,7 +523,7 @@ template<> struct Monoid< cata::maybe > {
     template< class M >
     static constexpr Decay<M> mappend( M&& x, M&& y ) {
         return x and y ? Just( fwd_mappend(*forward<M>(x), *forward<M>(y)) )
-            : dup(forward<M>(x) || forward<M>(y));
+            : x ? dup(forward<M>(x)) : dup(forward<M>(y));
     }
 
     /* mconcat [Just x, Just y, Nothing] = Just (x <> y <> Nothing)*/
@@ -629,8 +535,8 @@ template<> struct Monoid< cata::maybe > {
 };
 
 /* Monoid (Pair X X) */
-template< class X, class Y > struct Monoid< pair<X,Y> > {
-    typedef pair<X,Y> P;
+template< class X, class Y > struct Monoid< std::pair<X,Y> > {
+    typedef std::pair<X,Y> P;
 
     static P mempty() { return P( fwd_mempty<X>(), fwd_mempty<Y>() ); }
 
@@ -824,112 +730,6 @@ template<> struct MonadPlus< cata::maybe > {
     template< class A, class B >
     static constexpr Result<A,B> mplus( A&& a, B&& b ) { 
         return forward<A>(a) || forward<B>(b); 
-    }
-};
-
-template< class ... > struct Foldable;
-
-template< class X, class F = Foldable< Cat<X> > >
-auto fold( X&& x ) -> decltype( F::fold(declval<X>()) ) {
-    return F::fold( forward<X>(x) );
-}
-
-template< class F, class X, class ...Y, class Fo = Foldable< Cat<X> > >
-auto foldMap( F&& f, X&& x, Y&& ...y ) 
-    -> decltype( Fo::foldMap(declval<F>(),declval<X>(),declval<Y>()...) ) 
-{
-    return Fo::foldMap( forward<F>(f), forward<X>(x), forward<Y>(y)... );
-}
-
-template< class F, class X, class Fo = Foldable< Cat<X> > >
-auto foldl( F&& f, X&& x ) 
-    -> decltype( Fo::foldl(declval<F>(), declval<X>()) ) 
-{
-    return Fo::foldl( forward<F>(f), forward<X>(x) );
-}
-
-template< class F, class X, class Y, class ...Z, 
-          class Fo = Foldable< Cat<Y> > >
-auto foldl( F&& f, X&& x, Y&& y, Z&& ...z ) 
-    -> decltype( Fo::foldl(declval<F>(),
-                           declval<X>(),declval<Y>(),declval<Z>()...) ) 
-{
-    return Fo::foldl( forward<F>(f), 
-                      forward<X>(x), forward<Y>(y), forward<Z>(z)... );
-}
-
-template< class F, class X, class Fo = Foldable< Cat<X> > >
-auto foldr( F&& f, X&& x ) 
-    -> decltype( Fo::foldr(declval<F>(), declval<X>()) ) 
-{
-    return Fo::foldr( forward<F>(f), forward<X>(x) );
-}
-
-
-template< class F, class X, class Y, class ...Z, 
-          class Fo = Foldable< Cat<Y> > >
-auto foldr( F&& f, X&& x, Y&& y, Z&& ...z ) 
-    -> decltype( Fo::foldr(declval<F>(),
-                           declval<X>(),declval<Y>(),declval<Z>()...) ) 
-{
-    return Fo::foldr( forward<F>(f), 
-                      forward<X>(x), forward<Y>(y), forward<Z>(z)... );
-}
-
-template<> struct Foldable< cata::sequence > {
-    template< class S > using Val = list::SeqVal<S>;
-    template< class S > using Ref = list::SeqRef<S>;
-
-    template< class S, class X = Val<S> > static
-    X fold( const S& s ) {
-        return list::foldr( mappend, mempty<X>(), s );
-    }
-
-    template< class F, class S, class X = Val<S>,
-              class R = Result<F,X> > 
-    static R foldMap( F&& f, const S& s ) {
-        return list::foldr( compose( mappend, forward<F>(f) ),
-                            mempty<R>(), s );
-    }
-
-    template< class F, class XS, class YS, class ...ZS,
-              class R = decltype (
-                  declval<F>()( declval<Ref<XS>>(), declval<Ref<YS>>(),
-                                declval<Ref<ZS>>()... )
-              ) >
-    static R foldMap( F&& f, const XS& xs, const YS& ys, const ZS& ...zs ) {
-        R r = mempty<R>();
-        for( const auto& x : xs )
-            r = mappend( move(r),
-                         foldMap( closure(forward<F>(f),x), 
-                                  ys, zs... ) );
-        return r;
-    }
-
-    template< class F, class ...X > static
-    auto foldl( F&& f, X&& ...x ) 
-        -> decltype( list::foldl(declval<F>(),declval<X>()...) ) 
-    {
-        return list::foldl( forward<F>(f), forward<X>(x)... );
-    }
-
-    template< class F, class ...X > static
-    auto foldr( F&& f, X&& ...x ) 
-        -> decltype( list::foldr(declval<F>(),declval<X>()...) ) 
-    {
-        return list::foldr( forward<F>(f), forward<X>(x)... );
-    }
-};
-
-template<> struct Foldable< cata::maybe > {
-    template< class F, class X, class M >
-    static Decay<X> foldr( F&& f, X&& x, M&& m ) {
-        return not m ? forward<X>(x)
-            : forward<F>(f)( *forward<M>(m), forward<X>(x) );
-    }
-    template< class F, class X, class M >
-    static Decay<X> foldl( F&& f, X&& x, M&& m ) {
-        return foldr( flip(forward<F>(f)), forward<X>(x), forward<M>(m) );
     }
 };
 
@@ -1165,7 +965,7 @@ constexpr Join<F,L,R> join( F&& f, L&& l, R&& r ) {
  */
 template< typename X, typename F, typename ... Fs,
           typename R = decltype( declval<F>()(declval<X>()) ) >
-constexpr array<R,sizeof...(Fs)+1> cleave( X&& x, F&& f, Fs&& ... fs ) 
+constexpr std::array<R,sizeof...(Fs)+1> cleave( X&& x, F&& f, Fs&& ... fs ) 
 {
     return {{ forward<F> (f )( forward<X>(x) ), 
               forward<Fs>(fs)( forward<X>(x) )... }};
@@ -1174,46 +974,100 @@ constexpr array<R,sizeof...(Fs)+1> cleave( X&& x, F&& f, Fs&& ... fs )
 /* cleave_with f x y z =  { f(x), f(y), f(z) } */
 template< class F, class A, class ...B >
 constexpr auto cleave_with( F&& f, A&& a, B&& ...b )
-    -> array< decltype( declval<F>()(declval<A>()) ), sizeof...(B)+1 > 
+    -> std::array< decltype( declval<F>()(declval<A>()) ), sizeof...(B)+1 > 
 {
     return {{ f(forward<A>(a)), f(forward<B>(b))... }};
 }
 
 template< class T, unsigned int N, class F >
-array<T,N> generate( F&& f ) {
-    array<T,N> cont;
+std::array<T,N> generate( F&& f ) {
+    std::array<T,N> cont;
     generate( begin(cont), end(cont), forward<F>(f) );
     return cont;
 }
 
 template< class T, class F >
-vector<T> generate( F&& f, unsigned int n ) {
-    vector<T> c; 
+std::vector<T> generate( F&& f, unsigned int n ) {
+    std::vector<T> c; 
     c.reserve(n);
     while( n-- )
         c.push_back( forward<F>(f)() );
     return c;
 }
 
-template< class Cmp, class S, class R = decltype( begin(declval<Cmp>()) ) >
-constexpr R max( Cmp&& cmp, const S& cont ) {
-return max_element( begin(cont), end(cont), forward<Cmp>(cmp) );
+template< class X > struct Identity {
+    using value_type = Decay<X>;
+    using reference  = value_type&;
+    using const_reference = const value_type&;
+
+    value_type x;
+
+    const_reference get() const { return x; }
+    reference get() { return x; }
+};
+
+constexpr struct ReturnIdentity {
+    template< class X > 
+    constexpr Identity<X> operator () ( X x ) { 
+        return {move(x)};
+    }
+} identity{};
+
+template< class I >
+using IdentGet = decltype( declval<I>().get() );
+
+template< class _X > struct Monad< Identity<_X> > {
+    template< class _, class X >
+    constexpr static Identity< X > mreturn( X x ) {
+        return { move(x) };
+    }
+
+    template< class I, class F, class X = IdentGet<I> >
+    static auto mbind( I&& i, F&& f ) 
+        -> decltype( declval<F>()( declval<X>() ) )
+    {
+        return forward<F>(f)( forward<I>(i).get() );
+    }
+};
+
+template< class _X > struct Functor< Identity<_X> > {
+    template< class F > 
+    static constexpr auto fmap( F&& f, Identity<_X> i )
+        -> Identity < 
+            decltype( declval<F>()(i.get()) )
+        >
+    {
+        return identity( forward<F>(f)( move(i.get()) ) );
+    }
+};
+
+template< class F, class G > struct  MCompose {
+    F f;
+    G g;
+
+    constexpr MCompose( F f, G g ) : f(move(f)), g(move(g)) { }
+
+    template< class ...X >
+    constexpr auto operator () ( X&& ...x )
+        -> decltype( g( declval<X>()... ) >>= f )
+    {
+        return g( forward<X>(x)... ) >>= f;
+    }
+};
+
+template< class G, class F >
+constexpr MCompose<G,F> mcompose( G g, F f ) {
+    return { move(g), move(f) };
 }
 
-template< class S >
-constexpr auto max( const S& cont ) -> decltype( begin(cont) ) {
-return max_element( begin(cont), end(cont) );
+template< class F, class G, 
+          class FM = decltype( fmap(declval<F>()) ) >
+constexpr auto fcompose( F f, G g ) -> NCompoposition<FM,G> {
+    return { fmap( move(f) ), move(g) };
 }
 
-template< class Cmp, class S >
-constexpr auto min( Cmp&& cmp, const S& cont ) -> decltype( begin(cont) ) {
-    return min_element( begin(cont), end(cont), forward<Cmp>(cmp) );
-}
-
-template< class Container >
-constexpr auto min( const Container& cont ) -> decltype( begin(cont) ) {
-    return min_element( begin(cont), end(cont) );
-}
+template< class F, class G >
+using FCompose = decltype( fcompose(declval<F>(),declval<G>()) );
 
 } // namespace pure
 
