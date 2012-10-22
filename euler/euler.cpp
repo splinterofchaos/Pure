@@ -375,7 +375,7 @@ Factors _lowFactors( Factors lfs, Factor x ) {
 
     auto next = filter (
         [&]( Factor y ) { return y <= std::sqrt(x) and x % y == 0; },
-        nub(map(Mult(), lfs, lfs))
+        nub(mapSquared(Mult(),lfs))
     );
 
     return lfs == next ? lfs : _lowFactors( move(next), x );

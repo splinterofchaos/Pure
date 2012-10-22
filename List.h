@@ -449,6 +449,15 @@ A map( F&& f, const std::array< X, N >& xs ) {
     return r;
 }
 
+template< class F, class S >
+Dup<S> mapSquared( F&& f, const S& s ) {
+    Dup<S> r;
+    for( auto i = begin(s); i != end(s); i++ )
+        for( auto j=i; j != end(s); j++ )
+            r.emplace_back( forward<F>(f)( *i, *j ) );
+    return r;
+}
+
 template< class F, class ...S >
 using ResultMap = decltype( map(declval<F>(), declval<S>()...) );
 
