@@ -1092,40 +1092,34 @@ P middleClosure( F&& f, Y&& y ) {
 }
 
 /* everyOther x [a,b,c...] = [x,a,x,b,x,c...] */
-template< class X, class S, class R >
-constexpr R _everyOther( const X& x, const S& s, R r ) {
-    return foldl( middleClosure(Cons(),x), move(r), s );
-}
-
 template< class X, class S >
-constexpr S everyOther( const X& x, const S& s ) {
-    return foldl( middleClosure(Cons(),x), S(), s );
+constexpr Dup<S> everyOther( const X& x, const S& s ) {
+    Dup<S> r;
+    for( const auto& y : init_wrap(s) ) {
+        cons_( r, y );
+        cons_( r, x );
+    }
+    cons_( r, last(s) );
+    return r;
 }
 
 /* intersparse x [a,b,c] = [a,x,b,x,c] */
 template< class X, class S >
 constexpr S intersparse( const X& x, const S& s ) {
     return length(s) > 1 ?
-        _everyOther( x, tail_wrap(s), S{head(s)} ) : s;
-}
-
-template< class S, class SS, class R >
-constexpr R _everyOther_append( const S& s, const SS& ss, R r ) {
-    using F = R (*)( R, const S&, SeqRef<SS> );
-    return foldl( middleClosure((F)append,s), move(r), ss );
-}
-
-template< class S, class SS >
-constexpr S everyOther_append( const S& s, const SS& ss ) {
-    return _everyOther_append( s, ss, S() );
+        everyOther( x, s ) : s;
 }
 
 /* intercalcate "--" {"ab","cd","ef"} */
 template< class S, class SS >
-S intercalcate( const S& s, const SS& ss ) {
-    return not null(ss) ? 
-        _everyOther_append( s, tail_wrap(ss), S{head(ss)} )
-        : S();
+Dup<S> intercalcate( const S& s, const SS& ss ) {
+    Dup<S> r;
+    for( const auto& ys : init_wrap(ss) ) {
+        append_( r, ys );
+        append_( r, xs );
+    }
+    append_( r, last(ss) );
+    return r;
 }
 
 /* concat {{1},{2,3},{4}} = {1,2,3,4} */
