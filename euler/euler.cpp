@@ -976,6 +976,43 @@ void problem30() {
     cout << sum(xs) << endl;
 }
 
+bool pandigital( Digits ds ) {
+    Digits ns = { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+    
+    if( ds.size() != ns.size() )
+        return false;
+
+    for( auto n : ns )
+        if( not elem(n,ds) )
+            return false;
+
+    return true;
+}
+
+bool pandigitalProd( unsigned a, unsigned b ) {
+    using namespace pure::list::misc;
+    return pandigital( digits(a) | digits(b) | digits(a*b) );
+}
+
+void problem32() {
+    cout << "The sum of all pandigital products : " << flush;
+
+    using list::enumerate;
+    std::vector< unsigned long long > r;
+    for( auto a : enumerate(1,987) ) {
+        auto top = std::pow( 10, 4 - std::log10(a) );
+        for( auto b : enumerate(a+1,top) ) {
+            if( a * b > 9876 )
+                break;
+            if( pandigitalProd(a,b) )
+                pure::list::nubInsert_( a*b, r );
+        }
+    }
+            
+    cout << sum(r) << endl;
+}
+
+
 int main() {
 
     problem1();
@@ -1010,5 +1047,6 @@ int main() {
     problem28();
     problem29();
     problem30();
+    problem32();
 
 }

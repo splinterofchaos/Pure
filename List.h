@@ -1110,9 +1110,9 @@ constexpr S intersparse( const X& x, const S& s ) {
         everyOther( x, s ) : s;
 }
 
-/* intercalcate "--" {"ab","cd","ef"} */
+/* intercalcate "--" {"ab","cd","ef"} = "ab--cd--ef" */
 template< class S, class SS >
-Dup<S> intercalcate( const S& s, const SS& ss ) {
+Dup<S> intercalcate( const S& xs, const SS& ss ) {
     Dup<S> r;
     for( const auto& ys : init_wrap(ss) ) {
         append_( r, ys );
@@ -1461,10 +1461,17 @@ S insert( X&& x, S s ) {
 }
 
 template< class X, class S >
-S nubInsert( X&& x, S s ) {
+bool nubInsert_( X&& x, S& s ) {
     auto it = std::lower_bound( begin(s), end(s), forward<X>(x) );
-    if( *it != x )
+    if( it == end(s) or *it != x ) {
         s.insert( it, forward<X>(x) );
+        return true;
+    }
+    return false;
+}
+template< class X, class S >
+S nubInsert( X&& x, S s ) {
+    nubInsert_( forward<X>(x), s );
     return s;
 }
 
