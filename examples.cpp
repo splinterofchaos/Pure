@@ -438,7 +438,7 @@ int main()
     printf( "Just 400 >>= (quadraticRoot 1 3) = %s\n",
             show( Just(400) >>= qr ).c_str() );
     printf( "return 1 :: Maybe Int = %s\n",
-            show( mreturn<unique_ptr<int>>(1) ).c_str() );
+            show( mreturn<unique_ptr>(1) ).c_str() );
     printf( "Just 1 >> fail 'oops' = %s\n",
             show( Just(1) >> mfail<unique_ptr<int>>("oops") ).c_str() );
 

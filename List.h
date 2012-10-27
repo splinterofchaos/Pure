@@ -17,10 +17,6 @@ using std::next;
 using std::prev;
 using std::get;
 
-// Used by group.
-// TODO: Return<sequence> should be implemented by a function in THIS file.
-template< class M > struct Return;
-
 namespace cata {
     /*
      * []
@@ -1612,18 +1608,15 @@ V group( S&& s, P&& p = P() ) {
 
     for( ; it != e; it = next) {
         auto adj = std::adjacent_find( it, e, forward<P>(p) );
-        v = maybeConsRange ( 
-            // First, cons all the non-adjacent members.
-            list::foldl (
-                // \v s -> cons v (return s)
-                flip( compose(flip(Cons()), Return<_S>()) ),
-                move(v), range<S>( it, adj ) 
-            ),
-            // Then cons the adjacent members.
-            _S( adj, 
-                next = cfindNot( *adj, range<S>(adj,e),
-                                  forward<P>(p) ) ) 
-        );
+
+        // First, cons all the non-adjacent members.
+        for( const auto& x : range<S>(it,adj) )
+            v.push_back(_S{x});
+
+        // Then cons the adjacent members.
+        next = cfindNot( *adj, range<S>(adj,e), forward<P>(p) );
+        if( next != adj )
+            v.emplace_back( adj, next ); 
     }
 
     return v;

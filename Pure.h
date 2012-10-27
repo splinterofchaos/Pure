@@ -585,6 +585,11 @@ M mreturn( X&& x ) {
     return Monad< Cat<M> >::template mreturn<M>( forward<X>(x) );
 }
 
+template< template<class...>class M, class X > 
+M<X> mreturn( X&& x ) {
+    return Monad< Cat<M<X>> >::template mreturn<M<X>>( forward<X>(x) );
+}
+
 /* mreturn () = (\x -> return x) */
 template< class M, class Mo = Monad<Cat<M>> > 
 constexpr auto mreturn() -> decltype( Mo::mreturn() ) { 
@@ -599,6 +604,7 @@ template< class M > struct Return {
         return mreturn<M>( forward<X>(x) );
     }
 };
+
 
 template< class M >
 M mfail( const char* const why ) {
