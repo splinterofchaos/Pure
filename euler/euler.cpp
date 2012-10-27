@@ -1012,41 +1012,77 @@ void problem32() {
     cout << sum(r) << endl;
 }
 
+unsigned int commonPart( const Digits& a, const Digits& b ) {
+    // Since zero is considered trivial, it makes a good representation of
+    // failure.
+    if( a == b )
+        return 0;
+
+    if( a[0] == b[0] or a[0] == b[1] )
+        return a[0];
+    if( a[1] == b[0] or a[1] == b[1] )
+        return a[1];
+
+    return 0;
+}
+
+unsigned int curious( unsigned int num, unsigned int den ) {
+    Digits dn=digits(num), dd=digits(den);
+    auto c = commonPart( dn, dd );
+
+    if( c ) {
+        erase_( c, dn );
+        erase_( c, dd );
+        // Compare the inverses. (Keep integral :)
+        if( den/num == dd[0]/dn[0] )
+            return den;
+    }
+    
+    return 0;
+}
+
+void problem33() {
+    cout << "LCD of the four two-digit curious fractions : " << flush;
+    cout << endl;
+    cout << "   is 49/98 ? " << curious(49,98) << endl;
+    cout << "   is 30/50 ? " << curious(30,50) << endl;
+}
 
 int main() {
 
-    problem1();
-    problem2();
-    problem3();
-    problem4();
-    problem5();
-    problem6();
-    problem7();
-    problem8();
-    problem9();
-    problem10(); 
-    problem11(); 
-    problem12();
-    problem13();
-    problem14();
-    problem15();
-    problem16();
-    problem17();
-    problem18();
-    problem19();
-    problem20();
-    problem21();
-    problem22();
-    problem23();
-    problem24();
-    problem25();
+//    problem1();
+//    problem2();
+//    problem3();
+//    problem4();
+//    problem5();
+//    problem6();
+//    problem7();
+//    problem8();
+//    problem9();
+//    problem10(); 
+//    problem11(); 
+//    problem12();
+//    problem13();
+//    problem14();
+//    problem15();
+//    problem16();
+//    problem17();
+//    problem18();
+//    problem19();
+//    problem20();
+//    problem21();
+//    problem22();
+//    problem23();
+//    problem24();
+//    problem25();
+//
+//    //problem26();
+//    // 27
+//
+//    problem28();
+//    problem29();
+//    problem30();
+//    problem32();
 
-    //problem26();
-    // 27
-
-    problem28();
-    problem29();
-    problem30();
-    problem32();
-
+    problem33();
 }

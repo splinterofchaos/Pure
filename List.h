@@ -1486,10 +1486,18 @@ S insert( P&& p, X&& x, S s ) {
 }
 
 template< class X, class S >
-S erase( const X& x, S s ) {
+bool erase_( const X& x, S& s ) {
     auto it = cfind( x, s );
-    if( it != end(s) )
+    if( it != end(s) ) {
         s.erase( it );
+        return true;
+    }
+    return false;
+}
+
+template< class X, class S >
+S erase( const X& x, S s ) {
+    erase_( x, s );
     return s;
 }
 
