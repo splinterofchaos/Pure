@@ -81,6 +81,8 @@ constexpr auto exec = fcompose( snd, run );
 
 } // namespace state
 
+namespace monad {
+
 template< class S, class A, template<class...>class M, class F > 
 struct Functor< state::StateT<S,A,M,F> > {
     /* 
@@ -132,6 +134,8 @@ struct Monad< state::StateT<S,A,M,F> > {
         return mbind( forward<SA>(sa), pure(forward<SB>(sb)) );
     }
 };
+
+} // namespace monad
 
 namespace state {
 
@@ -205,7 +209,7 @@ struct SPut {
 
 template< class S, template<class...>class M = Identity, class F >
 constexpr auto modify( F f ) 
-    -> decltype( get<S,M>() >>= compose( SPut<S,M>(), f ) )
+    -> decltype( get<S,M>()>>=compose(SPut<S,M>(),f) )
 {
     return get<S,M>() >>= compose( SPut<S,M>(), f );
 }
@@ -214,7 +218,6 @@ template< class S, template<class...>class M = Identity, class F,
           class Fst = typename arr::First::template type<F>,
           class G = Composition< Fst, arr::Splitter > >
 constexpr auto gets( F f ) 
-    //-> decltype( get<S,M>() >>= compose( R(), move(f) ) )
     -> decltype( stateT<S,M>( declval<G>() ) )
 {
     return stateT<S,M>( compose( arr::first(move(f)), arr::splitter ) );

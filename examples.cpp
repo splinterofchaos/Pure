@@ -183,6 +183,7 @@ bool even( int x ) { return x % 2 == 0; }
 
 // The typical monadic Maybe example.
 unique_ptr<int> addM( const unique_ptr<int>& a, const unique_ptr<int>& b ) {
+    using namespace pure::monad; // Import >>= overload.
     return a >>= [&](int x){ 
         return b >>= [x](int y){ 
             return Just(x+y); 
@@ -424,31 +425,35 @@ int main()
                   * std::make_pair(std::vector<int>{3,4},5) ).c_str() );
 
     puts("");
-    printf( "Just 1 >> Just \"hya!\" = %s\n",
-            show( Just(1) >> Just("hya!") ).c_str() );
+    {
+        using namespace pure::monad;
 
-    typedef unique_ptr<int>(*mret)(int&&);
-    printf( "Just 1 >> Nothing >>= return = %s\n",
-            show( Just(1) >> Nothing<int>() >>= mreturn<unique_ptr<int>>() ).c_str() );
+        printf( "Just 1 >> Just \"hya!\" = %s\n",
+                show( Just(1) >> Just("hya!") ).c_str() );
 
-    auto qr = closet( quadratic_root, 1, 3 );
-    typedef pair<float,float> QR;
-    printf( "Just -4  >>= (quadraticRoot 1 3) = %s\n",
-            show( Just(-4) >>= qr ).c_str() );
-    printf( "Just 400 >>= (quadraticRoot 1 3) = %s\n",
-            show( Just(400) >>= qr ).c_str() );
-    printf( "return 1 :: Maybe Int = %s\n",
-            show( mreturn<unique_ptr>(1) ).c_str() );
-    printf( "Just 1 >> fail 'oops' = %s\n",
-            show( Just(1) >> mfail<unique_ptr<int>>("oops") ).c_str() );
+        typedef unique_ptr<int>(*mret)(int&&);
+        printf( "Just 1 >> Nothing >>= return = %s\n",
+                show( Just(1) >> Nothing<int>() >>= mreturn<unique_ptr<int>>() ).c_str() );
 
-    printf( "[1,2,3] >> [4,5] = %s\n",
-            show( vector<int>{1,2,3} >> vector<int>{4,5} ).c_str() );
-    printf( "[] >> [3,4] = %s\n",
-            show( vector<int>{} >> vector<int>{3,4} ).c_str() );
+        auto qr = closet( quadratic_root, 1, 3 );
+        typedef pair<float,float> QR;
+        printf( "Just -4  >>= (quadraticRoot 1 3) = %s\n",
+                show( Just(-4) >>= qr ).c_str() );
+        printf( "Just 400 >>= (quadraticRoot 1 3) = %s\n",
+                show( Just(400) >>= qr ).c_str() );
+        printf( "return 1 :: Maybe Int = %s\n",
+                show( mreturn<unique_ptr>(1) ).c_str() );
+        printf( "Just 1 >> fail 'oops' = %s\n",
+                show( Just(1) >> mfail<unique_ptr<int>>("oops") ).c_str() );
 
-    printf( "[1,2,3] >>= (\\x->[x,-x]) = %s\n",
-            show( vector<int>{1,2,3} >>= pos_neg ).c_str() );
+        printf( "[1,2,3] >> [4,5] = %s\n",
+                show( vector<int>{1,2,3} >> vector<int>{4,5} ).c_str() );
+        printf( "[] >> [3,4] = %s\n",
+                show( vector<int>{} >> vector<int>{3,4} ).c_str() );
+
+        printf( "[1,2,3] >>= (\\x->[x,-x]) = %s\n",
+                show( vector<int>{1,2,3} >>= pos_neg ).c_str() );
+    }
 
     printf( "Just [1,2] <> Just [3,4] = %s\n",
             show( mappend(Just(vector<int>{1,2}),Just(vector<int>{3,4})) ).c_str() );
@@ -484,29 +489,35 @@ int main()
     }
 
     puts("");
-    auto s = state::returnState<int>(10);
-    puts("let s = return 10 :: State Int Int");
-    printf( "runState  s 5 = %s\n", show( state::run( s,5).get() ).c_str() );
-    printf( "evalState s 5 = %s\n", show( state::eval(s,5).get() ).c_str() );
-    printf( "execState s 5 = %s\n", show( state::exec(s,5).get() ).c_str() );
-    printf( "runState (fmap (\\x->x*2) s) 10 = %s\n",
-            show( fmap(times_two, s).runState(10).get() ).c_str() );
-    printf( "runState (s >>= (\\x->return x)) 10 = %s\n",
-            show( (s >>= state::Return<int>()).runState(10).get() ).c_str() );
+    {
+        using namespace pure::monad;
+        using namespace pure::state;
 
-    auto tick = state::get<int>() >>= []( int x ){
-        return state::put( x+1 ) >>= state::Return<int>();
-    };
-    puts("tick = do\n\tn <- get\n\tput (n+1)\n\treturn n");
-    printf( "execState tick 5 = %s\n",
-            show( state::exec( tick, 5 ).get() ).c_str() );
+        auto s = state::returnState<int>(10);
+        puts("let s = return 10 :: State Int Int");
+        printf( "runState  s 5 = %s\n", show( run( s,5).get() ).c_str() );
+        printf( "evalState s 5 = %s\n", show( eval(s,5).get() ).c_str() );
+        printf( "execState s 5 = %s\n", show( exec(s,5).get() ).c_str() );
+        printf( "runState (fmap (\\x->x*2) s) 10 = %s\n",
+                show( fmap(times_two, s).runState(10).get() ).c_str() );
 
-    puts("tick2 = modify (+2) >> get");
-    auto tick2 = state::modify<int>( plus_two ) >> state::get<int>();
-    printf( "execState tick2 5 = %s\n",
-            show( state::exec( tick2, 5 ).get() ).c_str() );
-    
-    printf( "runState (gets (+2)) 5 = %s\n",
-            show( state::gets<int>(plus_two).runState(5).get() ).c_str() );
+        printf( "runState (s >>= (\\x->return x)) 10 = %s\n",
+                show( (s >>= state::Return<int>()).runState(10).get() ).c_str() );
+
+        auto tick = get<int>() >>= []( int x ){
+            return put( x+1 ) >>= state::Return<int>();
+        };
+        puts("tick = do\n\tn <- get\n\tput (n+1)\n\treturn n");
+        printf( "execState tick 5 = %s\n",
+                show( exec( tick, 5 ).get() ).c_str() );
+
+        puts("tick2 = modify (+2) >> get");
+        auto tick2 = modify<int>( plus_two ) >> state::get<int>();
+        printf( "execState tick2 5 = %s\n",
+                show( exec( tick2, 5 ).get() ).c_str() );
+
+        printf( "runState (gets (+2)) 5 = %s\n",
+                show( gets<int>(plus_two).runState(5).get() ).c_str() );
+    }
 }
 
