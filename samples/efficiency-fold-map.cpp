@@ -105,7 +105,7 @@ constexpr unsigned int sumFoldA2( const Arr& a ) {
  * and its use looks like this:
  *      movedqa .LC2(%rip), %xmm1 # Add the vector, xmm1, with LC2.
  */
-unsigned plusTwo( unsigned x ) { return x + 2; }
+constexpr unsigned plusTwo( const unsigned x ) { return x + 2; }
 
 void p2Transform( VUI& v ) {
     /* 
@@ -325,9 +325,138 @@ VUI append( VUI v, const VUI& w ) {
 
 VUI foldAppend( VUI v, const VUI& w ) {
     // This is somewhat less efficient compared to the above.
-    return foldl( pure::list::Cons(), 
-                  std::move(v),
-                  w );
+    foldl( pure::list::Cons(), v, w );
+    return v;
+}
+
+VUI pm2( unsigned x ) { return {x+2,x-2}; }
+
+VUI pm2Copy( const VUI& v ) {
+    VUI w;
+    for( auto x : v ) {
+        // GCC inlines this whole loop.
+        auto m = pm2(x);
+        std::copy( std::begin(m), std::end(m), std::back_inserter(w) );
+    }
+    return w;
+}
+
+VUI pm2Append( const VUI& v ) {
+    VUI w;
+    for( auto x : v ) 
+        pure::list::append_( w, pm2(x) );
+    return w;
+}
+
+VUI pm2Concat( const VUI& v ) {
+    // Equivalent to pm2Copy.
+    return pure::list::concatMap( pm2, v );
+}
+
+VUI forplusPlus( const VUI& v ) {
+    VUI r;
+    /* 
+     * GCC optimizes plusTwo(plusTwo(x)) to x + 4.
+     *
+     *  	movl	(%rbx), %eax
+     *      addl	$4, %eax
+     *      cmpq	%rcx, %rdx
+     *      movl	%eax, (%rsp)
+     *
+     */
+    for( auto x : v ) 
+        /* But fails to optimize the vector operation.
+         *
+         *  	jne	.L485
+         *  	movq	%rsp, %rsi
+         *  	movq	%rbp, %rdi
+         *  .LEHB13:
+         *  	call	_ZNSt6vectorIjSaIjEE19_M_emplace_back_auxIIjEEEvDpOT_
+         *
+         * It cannot tell then r will grow to v's size.
+         */
+        pure::list::cons_( r, plusTwo(plusTwo(x)) );
+    return r;
+}
+
+VUI mapMap( const VUI& v ) {
+    using pure::list::map;
+
+    /*
+     * GCC inlines the actual plus operations with the LC2 vector, but that
+     * vector holds {2,2,2,2}. 
+     *
+     *      movq	%r8, %r14
+     *      subq	%rcx, %r14
+     *      movq	%r14, %r10
+     *      shrq	$2, %r10
+     *      leaq	0(,%r10,4), %r11
+     *      testq	%r11, %r11
+     *      je	.L230
+     *      movdqa	.LC2(%rip), %xmm0 # twos = {2,2,2,2}
+     *      leaq	0(%rbp,%rcx,4), %rsi # it = (base+c*4)
+     *      xorl	%eax, %eax # a = 0
+     *      xorl	%ecx, %ecx # c = 0
+     *      .p2align 4,,10
+     *      .p2align 3
+     * .L231:                          # do {
+     *      movdqa	(%rsi,%rcx), %xmm1 #    v = it[c]a // Load four.
+     *      addq	$1, %rax           #    a++
+     *      paddd	%xmm0, %xmm1       #    v += twos
+     *      movdqa	%xmm1, (%rsi,%rcx) #    it[c] = v // Store four
+     *      addq	$16, %rcx          #    c += sizeof int * 4
+     *      cmpq	%r10, %rax         # } while( a < r10 )
+     *      jb	.L231                  #
+     *      cmpq	%r11, %r14
+     *      leaq	(%rdx,%r11,4), %rdx
+     *      je	.L229
+     *
+     * This snippet appears twice in the generated code. That GCC cannot
+     * convert this to forplusPlus is not surprising; it cannot implicitly
+     * convert a two-pass algorithm to one-pass.
+     *
+     * The more general, non vectorized version of the +2 loop seen in
+     * forplusPlus also appears twice as well, presumably for the end of the
+     * array when it can't load 4 any more.
+     */
+    return map (
+        plusTwo,
+        map( plusTwo, v )
+    );
+}
+
+VUI transTrans( const VUI& v ) {
+    // This produces similar code to forplusPlus, but with mapMap's vectorized
+    // optimizations. It does not inline the push_back.
+    VUI r;
+    std::transform( v.begin(), v.end(), std::back_inserter(r), plusTwo );
+    std::transform( r.begin(), r.end(), r.begin(), plusTwo );
+    return r;
+}
+
+VUI mapCompose( const VUI& v ) {
+    /*
+     * GCC does not inline plusTwo here, but it does recognize that the size of
+     * the result will be that of v, so insertion operations are optimized out,
+     * as opposed to the forplusPlus example.
+     *
+     * .L190:                     # do {
+     *  	movl	(%rbx), %edi  #     d = *it
+     *  	call	_Z7plusTwoj   #     a = plusTwo(d)
+     *  	movl	%eax, %edi    #     d = a
+     *  	call	_Z7plusTwoj   #     a = plusTwo(d)
+     *  	movl	%eax, (%rbx)  #     *it = a
+     *  	addq	$4, %rbx      #     it++
+     *  	cmpq	%rbx, %rbp    # } while( it != end )
+     *  	jne	.L190
+     *
+     * The trade off here is not optimizing plusTwo, but the advantage is
+     * optimizing the loop.
+     */
+    return pure::list::map (
+        pure::compose( plusTwo, plusTwo ),
+        v
+    );
 }
 
 std::ostream& operator << ( std::ostream& os, const VUI& s ) {

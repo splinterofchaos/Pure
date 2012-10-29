@@ -430,7 +430,10 @@ void _doMapA( const F&, std::array<X,I>& ) {
 }
 
 template< size_t I, class F, class X, size_t N >
-void _doMapA( F&& f, std::array<X,N>& a ) {
+auto _doMapA( F&& f, std::array<X,N>& a ) 
+    -> typename std::enable_if< I < N, void >::type
+{
+    static_assert( I < N, "Index larger than container!" );
     std::get<I>(a) = std::forward<F>(f)( std::get<I>(a) );
     _doMapA<I+1>( std::forward<F>(f), a );
 }
@@ -645,19 +648,27 @@ constexpr Y foldr( F&& f, std::initializer_list<Y> s ) {
     return foldr( forward<F>(f), head(s), tail_wrap(move(s)) );
 }
 
+constexpr struct Append_ {
+    template< typename A, typename B >
+    A& operator () ( A& a, B&& b ) const {
+        std::copy( begin(forward<B>(b)), end(forward<B>(b)), tailInserter(a) );
+        return a;
+    }
+} append_{};
+
 /* 
  * append({1},{2,3},{4}) -> {1,2,3,4} 
  * Similar to [1]++[2,3]++[4]
  */
 template< typename A, typename B = A >
 A append( A a, const B& b ) {
-    std::copy( begin(b), end(b), tailInserter(a) );
+    append_( a, b );
     return a;
 }
 
 template< typename A, typename B, typename C, typename ...D >
-A append( A a, const B& b, const C& c, const D& ... d ) {
-    return append( append(move(a), b), c, d... );
+Decay<A> append( A&& a, const B& b, const C& c, const D& ... d ) {
+    return append( append(forward<A>(a), b), c, d... );
 }
 
 struct Append {
@@ -667,15 +678,23 @@ struct Append {
     }
 };
 
-template< class XS, class X >
-EBackInsert<XS,XS> cons( XS xs, X&& x ) {
-    xs.push_back( forward<X>(x) );
-    return xs;
-}
+constexpr struct Cons_ {
+    template< class XS, class X >
+    EBackInsert<XS,XS&> operator () ( XS& xs, X&& x ) const {
+        xs.push_back( forward<X>(x) );
+        return xs;
+    }
+
+    template< class XS, class X >
+    XBackInsert<XS,XS&> operator () ( XS& xs, X&& x ) const {
+        xs.insert( forward<X>(x) );
+        return xs;
+    }
+} cons_{};
 
 template< class XS, class X >
-XBackInsert<XS,XS> cons( XS xs, X&& x ) {
-    xs.insert( forward<X>(x) );
+XS cons( XS xs, X&& x ) {
+    cons_( xs, forward<X>(x) );
     return xs;
 }
 
@@ -1267,10 +1286,8 @@ constexpr Closet<Take,size_t> take( size_t n ) {
 
 struct TakeWhile {
     template< class P, class S, class _S = Dup<S> >
-    _S operator() ( P&& p, S&& s ) const {
-        auto it = begin(forward<S>(s)); 
-        while( it != end(s) and forward<P>(p)(*it) )
-             it++ ;
+    XSame<Decay<S>,_S,_S> operator() ( P&& p, S&& s ) const {
+        auto it = cfindIf( fnot(forward<P>(p)), forward<S>(s) );
 
         // TODO: This is a hack and won't work on non-random iterators, but
         // required to work with Remember. I should implement Dup as a class
@@ -1279,6 +1296,14 @@ struct TakeWhile {
             it - begin(s),
             forward<S>(s)
         );
+    }
+    template< class P, class S, class _S = Dup<S> >
+    ESame<S,_S,S> operator() ( P&& p, S s ) const {
+        s.erase ( 
+            cfindIf( fnot(forward<P>(p)), forward<S>(s) ),
+            end(forward<S>(s)) 
+        );
+        return s;
     }
 
     template< class P >
@@ -1711,16 +1736,16 @@ struct Permutations {
  * concatenated. This is an optimization that should be equivalent to the
  * inlined loop.
  */
-template< class F, class ...S,
-          class R = Result<F,SeqRef<S>...> >
-R concatMap( F&& f, S&& ...xs ) {
-    // Qualify foldl to prevent GCC from deducing pure::foldl.
-    // TODO: Is it a bug that it does?
-    return list::foldl (
-        // \xs x -> append xs (f x)
-        flip( compose( flip(Append()), forward<F>(f) ) ), 
-        R(), forward<S>(xs)...
-    );
+template< class F, class S,
+          class R = Result<F,SeqRef<S>> >
+R concatMap( F&& f, const S& xs ) {
+    // A Haskeller would define concatMap based on foldl, however GCC 4.7
+    // cannot inline f or append_ at that point.
+    R r;
+    for( const auto& x : xs ) {
+        append_( r, forward<F>(f)( x ) );
+    }
+    return r;
 }
 
 /* zipWith f A B -> { f(a,b) for a in A and b in B } */
