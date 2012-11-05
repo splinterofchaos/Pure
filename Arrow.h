@@ -1,29 +1,15 @@
 
-#include "Pure.h"
-
 #pragma once
+
+#include "Pure.h"
 
 namespace pure {
 
-namespace arr {
+namespace arrow {
+
+using namespace category;
 
 template< class ... > struct Arrow;
-
-/* f > g = g . f (Haskell's >>>.) */
-template< class F, class G >
-auto operator > ( F&& f, G&& g ) 
-    -> decltype( compose(declval<G>(),declval<F>()) )
-{
-    return compose( forward<G>(g), forward<F>(f) );
-}
-
-/* f < g = f . g (Haskell's <<<.) */
-template< class F, class G >
-auto operator < ( F&& f, G&& g ) 
-    -> decltype( compose(declval<F>(),declval<G>()) )
-{
-    return compose( forward<F>(f), forward<G>(g) );
-}
 
 template< class A, class F, class Arr = Arrow<A> >
 decltype( Arr::arr( declval<F>() ) )
