@@ -11,23 +11,34 @@ using namespace category;
 
 template< class ... > struct Arrow;
 
-template< class A, class F, class Arr = Arrow<A> >
-decltype( Arr::arr( declval<F>() ) )
-arr( F&& f ) { return Arr::arr( forward<F>(f) ); }
+struct Arr {
+    template< class A, class F, class Arr = Arrow<A> >
+    constexpr auto operator () ( F&& f )
+        ->  decltype( Arr::arr( declval<F>() ) ) 
+    { 
+        return Arr::arr( forward<F>(f) ); 
+    }
+} arr{};
 
 /* (f *** g) (x,y) = (f x, g y) */
-template< class F, class G, class A = Arrow<F> >
-decltype( A::split(declval<F>(), declval<G>()) )
-split( F&& f, G&& g ) {
-    return A::split( forward<F>(f), forward<G>(g) );
-}
+constexpr struct Split {
+    template< class F, class G, class A = Arrow<F> >
+    constexpr auto operator () ( F&& f, G&& g )
+        -> decltype( A::split(declval<F>(), declval<G>()) )
+    {
+        return A::split( forward<F>(f), forward<G>(g) );
+    }
+} split{};
 
 /* (f &&& g) x = (f x, g x) */
-template< class F, class G, class A = Arrow<F> >
-decltype( A::fan(declval<F>(),declval<G>()) )
-fan( F&& f, G&& g ) {
-    return A::fan( forward<F>(f), forward<G>(g) );
-}
+constexpr struct Fan {
+    template< class F, class G, class A = Arrow<F> >
+    constexpr auto operator () ( F&& f, G&& g )
+        -> decltype( A::fan(declval<F>(),declval<G>()) )
+    {
+        return A::fan( forward<F>(f), forward<G>(g) );
+    }
+} fan{};
 
 template< class F, class G >
 auto operator * ( F&& f, G&& g ) 
@@ -51,22 +62,21 @@ constexpr struct First {
     {
         return A::first( forward<F>(f) );
     }
-
-    template< class F >
-    using type = decltype( First()( declval<F>() ) );
 } first{};
 
 /* (second f) (x,y) = (x, f y) */
-template< class F, class A = Arrow<F> >
-auto second( F&& f ) -> decltype( A::second(declval<F>()) ) {
-    return A::second( forward<F>(f) );
-}
+constexpr struct Second {
+    template< class F, class A = Arrow<F> >
+    constexpr auto operator () ( F&& f ) -> decltype( A::second(declval<F>()) ) {
+        return A::second( forward<F>(f) );
+    }
+} second{};
 
 constexpr struct Splitter {
     template< class X, class P = std::pair<X,X> > 
-        constexpr P operator() ( const X& x ) {
-            return P( x, x );
-        }
+    constexpr P operator() ( const X& x ) {
+        return P( x, x );
+    }
 } splitter{};
 
 template< class Func > struct Arrow<Func> {
@@ -83,8 +93,8 @@ template< class Func > struct Arrow<Func> {
      * currently, why it would not be just as generic and more convenient.
      */
 
-    template< class F, class G > static 
-    constexpr Split<F,G> split ( F&& f, G&& g ) 
+    template< class F, class G > static
+    constexpr Split<F,G> split ( F&& f, G&& g )
     {
         return pairCompose( forward<F>(f), forward<G>(g) );
     }
