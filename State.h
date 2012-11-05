@@ -121,12 +121,12 @@ struct Monad< state::StateT<S,A,M,F> > {
     template< class K >
     static constexpr auto mbind( State m, K k ) 
         -> state::StateT< S, A, M, decltype (
-            mcompose( compose(arrow::unsplit(state::run),arrow::first(move(k))),
+            mcompose( compose(arrow::uncurry(state::run),arrow::first(move(k))),
                       closet(state::run,move(m)) )
         ) >
     {
         return { mcompose ( 
-            compose( arrow::unsplit(state::run), arrow::first(move(k)) ),
+            compose( arrow::uncurry(state::run), arrow::first(move(k)) ),
             closet( state::run, move(m) ) 
         ) };
     }
@@ -220,11 +220,11 @@ constexpr auto modify( F f )
 
 template< class S, template<class...>class M = Identity, class F,
           class Fst = decltype( arrow::first(std::declval<F>()) ),
-          class G = Composition< Fst, Splitter > >
+          class G = Composition< Fst, Duplicate > >
 constexpr auto gets( F f ) 
     -> decltype( stateT<S,M>( declval<G>() ) )
 {
-    return stateT<S,M>( compose( arrow::first(move(f)), splitter ) );
+    return stateT<S,M>( compose( arrow::first(move(f)), duplicate ) );
 }
 
 template< class S, template<class...>class M, class _F >
@@ -238,13 +238,13 @@ struct MonadState< StateT<S,S,M,_F> > {
 
     using RetM  = pure::Return< Monad >;
 
-    using GetF = Composition< RetM, Splitter >;
+    using GetF = Composition< RetM, Duplicate >;
     using SetF = Composition< RetM, RCloset<ReturnPair,S> >;
 
 
-    //static constexpr State<GetF> getter = state<S,S>( splitter );
+    //static constexpr State<GetF> getter = state<S,S>( duplicate );
 
-    static constexpr State<GetF> get() { return stateT<S,M>( splitter ); }
+    static constexpr State<GetF> get() { return stateT<S,M>( duplicate ); }
 
     static constexpr State<SetF> put( S s ) {
         return stateT<S,M>( rcloset(returnPair,move(s)) );

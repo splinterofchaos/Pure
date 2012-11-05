@@ -72,12 +72,12 @@ constexpr struct Second {
     }
 } second{};
 
-constexpr struct Splitter {
+constexpr struct Duplicate {
     template< class X, class P = std::pair<X,X> > 
     constexpr P operator() ( const X& x ) {
         return P( x, x );
     }
-} splitter{};
+} duplicate{};
 
 template< class Func > struct Arrow<Func> {
     static constexpr Id arr = Id();
@@ -93,34 +93,25 @@ template< class Func > struct Arrow<Func> {
      * currently, why it would not be just as generic and more convenient.
      */
 
-    template< class F, class G > static
-    constexpr Split<F,G> split ( F&& f, G&& g )
-    {
-        return pairCompose( forward<F>(f), forward<G>(g) );
-    }
+    /* split(f,g)(x,y) = { f(x), g(y) } */
+    static constexpr auto split = pairCompose;
 
-    template< class F > static 
-    constexpr Split<F,Id> first( F&& f ) 
-    { 
-        return pairCompose( forward<F>(f), Id() );
-    }
-
-    template< class F > static 
-    constexpr Split<Id,F> second( F&& f ) 
-    {
-        return pairCompose( Id(), forward<F>(f) );
-    }
+    /*
+     * first(f)(x,y)  = { f(x), y }
+     * second(f)(x,y) = { x, f(y) }
+     */
+    static constexpr auto first  = rcloset( split, Id() );
+    static constexpr auto second = closet ( split, Id() );
 
     template< class F, class G > static 
     constexpr auto fan( F&& f, G&& g ) 
-        -> decltype( compose(declval< Split<F,G> >(), Splitter()) )
+        -> decltype( duplicate > declval< Split<F,G> >() )
     {
-        return compose( pairCompose( forward<F>(f), forward<G>(g) ), 
-                        Splitter() );
+        return duplicate > split( forward<F>(f), forward<G>(g) );
     }
 };
 
-template< class Binary > struct Unsplit {
+template< class Binary > struct Uncurrier {
     Binary b;
 
     template< class P >
@@ -131,12 +122,12 @@ template< class Binary > struct Unsplit {
     }
 };
 
-constexpr struct ReturnUnsplit {
+constexpr struct Uncurry {
     template< class B > 
-    constexpr Unsplit<B> operator () ( B b ) {
+    constexpr Uncurrier<B> operator () ( B b ) {
         return { move(b) };
     }
-} unsplit{};
+} uncurry{};
 
 }
 
