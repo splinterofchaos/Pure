@@ -75,6 +75,21 @@ constexpr auto square = squash( Mult() );
 
 float to_float( int x ) { return x; }
 
+string show( bool );
+string show( int  );
+string show( unsigned int );
+string show( unsigned long int );
+string show( unsigned long long );
+string show( char );
+string show( const char* );
+string show( string );
+string show( float );
+template< class X, class Y > string show( const pair<X,Y>& p );
+template< class S > auto show( const S& s ) -> decltype( begin(s), string() );
+template< class X > string showJust( const X& );
+template< class X > string show( const unique_ptr<X>& );
+template< class X > string show( X* );
+
 string show( bool b ) {
     return b ? "True" : "False";
 }
@@ -91,7 +106,7 @@ string show( unsigned int x ) {
     return digits;
 }
 
-string show( size_t x ) {
+string show( unsigned long int x ){
     char digits[20];
     sprintf( digits, "%lu", x );
     return digits;
@@ -121,8 +136,6 @@ string show( const char* str ) {
     return show( string(str) );
 }
 
-template< class X, class Y > string show( const pair<X,Y>& p );
-
 template< class S > 
 auto show( const S& s ) -> decltype( begin(s), string() )
 {
@@ -142,7 +155,6 @@ template< class X, class Y > string show( const pair<X,Y>& p ) {
     return "(Pair: " + show(p.first) + ", " + show(p.second) + ")";
 }
 
-template< class X > string showJust( const X& x );
 template< class X > string show( const unique_ptr<X>& m ) {
     return maybe( string("Nothing"), showJust<X>, m );
 }
@@ -392,6 +404,8 @@ int main()
             show( find(equalsN, N) ).c_str() );
 
     {
+        puts("");
+
         // Bring in the operator overloads * (ap) and || (alt).
         using namespace pure::ap;
 
@@ -494,14 +508,18 @@ int main()
                 pure::monad::MReturn<std::unique_ptr>()
         );
 
-        auto plusTwoK = kleisli<std::unique_ptr>(
-            []( int x ) { return Just(x + 2); }
+        auto plusTwoK = arr<Kleisli<std::unique_ptr>>(
+            []( int x ) { return x + 2; }
         );
 
-        auto plusFourK = category::comp( plusTwoK, plusTwoK );
+        using namespace category;
+        auto plusFourK = plusTwoK > plusTwoK;
 
         printf( "plusFourK 10 = %s\n",
                 show( plusFourK(10) ).c_str() );
+        printf( "first plusTwoK (1,2) = %s\n",
+                show( first(plusTwoK)(p) ).c_str() );
+
     }
 
     puts("");

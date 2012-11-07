@@ -11,14 +11,26 @@ using namespace category;
 
 template< class ... > struct Arrow;
 
-struct Arr {
-    template< class A, class F, class Arr = Arrow<A> >
-    constexpr auto operator () ( F&& f )
-        ->  decltype( Arr::arr( declval<F>() ) ) 
-    { 
-        return Arr::arr( forward<F>(f) ); 
+template< class A, class F, class Arr = Arrow< Cat<A> > >
+constexpr auto arr( F&& f ) ->  decltype( Arr::arr( declval<F>() ) )
+{
+    return Arr::arr( forward<F>(f) );
+}
+
+template< template<class...> class A, class F  >
+constexpr auto arr( F f ) -> decltype( arr<A<F>>( declval<F>() ) )
+{
+    // TODO: Untested.
+    return arr<A<F>>( move(f) );
+}
+
+template< class A > struct Arr {
+    template< class F >
+    constexpr auto operator () ( F&& f ) -> decltype( arr(declval<F>()) )
+    {
+        return arr( forward<F>(f) );
     }
-} arr{};
+};
 
 /* (f *** g) (x,y) = (f x, g y) */
 constexpr struct Split {
@@ -56,7 +68,7 @@ auto operator && ( F&& f, G&& g )
 
 /* (first f) (x,y) = (f x, y) */
 constexpr struct First {
-    template< class F, class A = Arrow<F> >
+    template< class F, class A = Arrow<Cat<F>> >
     constexpr auto operator () ( F&& f ) 
         -> decltype( A::first(declval<F>()) ) 
     {
@@ -66,7 +78,7 @@ constexpr struct First {
 
 /* (second f) (x,y) = (x, f y) */
 constexpr struct Second {
-    template< class F, class A = Arrow<F> >
+    template< class F, class A = Arrow<Cat<F>> >
     constexpr auto operator () ( F&& f ) -> decltype( A::second(declval<F>()) ) {
         return A::second( forward<F>(f) );
     }
@@ -125,7 +137,9 @@ constexpr struct Uncurry {
     }
 } uncurry{};
 
-template< template<class...> class M, class F > struct Kleisli {
+//template< template<class...>class, class ... > struct Kleisli;
+
+template< template<class...> class M, class F = Id > struct Kleisli {
     F f = F();
 
     constexpr Kleisli( F f ) : f(std::move(f)) { }
@@ -182,6 +196,50 @@ auto kleisliCompose( F&& f, G&& g )
     return KleisliCompose<M>()( std::forward<F>(f), std::forward<G>(g) );
 }
 
+template< template<class...> class M, class X, class Y >
+constexpr auto mreturnPair( X x, Y y )
+    -> decltype( mreturn<M>( declval<std::pair<X,Y>>() ) )
+{
+    return mreturn<M> (
+            std::pair<X,Y>{ move(x), move(y) }
+    );
+}
+
+template< template<class...> class M > struct MReturnPair {
+    template< class X, class Y >
+    constexpr auto operator () ( X&& x, Y&& y )
+        -> decltype( mreturnPair<M>( declval<X>(),declval<Y>() ) )
+    {
+        return mreturnPair<M>( forward<X>(x), forward<Y>(y) );
+    }
+};
+
+template< template<class...> class M, class F >
+struct KleisliFirst {
+    F f;
+
+    template< class _F >
+    constexpr KleisliFirst( _F&& f )
+        : f(std::forward<_F>(f))
+    {
+    }
+
+    template< class ...X >
+    using Monad1 = decltype( g( std::declval<X>()... ) );
+
+    template< class X, class Y >
+    constexpr auto operator () ( const std::pair<X,Y>& p )
+        -> decltype( f( p.first ) >>= rcloset( MReturnPair<M>(), p.second ) )
+    {
+         return f( p.first ) >>= rcloset( MReturnPair<M>(), p.second );
+    }
+};
+
+template< template<class...> class M, class F >
+constexpr auto kleisliFirst( F f ) -> KleisliFirst<M,F> {
+    return KleisliFirst<M,F>( move(f) );
+}
+
 } // namespace arrow
 
 namespace category {
@@ -216,5 +274,27 @@ struct Category< arrow::Kleisli<M,F> > {
 };
 
 } // namespace category
+
+namespace arrow {
+
+template< template<class...> class M, class F >
+struct Arrow< Kleisli<M,F> > {
+    template< class G >
+    using Comp = decltype (
+            comp( monad::MReturn<M>(), std::declval<G>() )
+    );
+
+    template< class G >
+    static constexpr auto arr( G g ) -> Kleisli< M, Comp<G> > {
+        return kleisli<M>( comp(monad::MReturn<M>(), std::move(g)) );
+    }
+
+    template< class G >
+    static constexpr auto first( G g ) -> KleisliFirst<M,G> {
+        return kleisliFirst<M>( move(g) );
+    }
+};
+
+}  // namespace arrow
 
 }
