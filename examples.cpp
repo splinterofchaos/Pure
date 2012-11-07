@@ -504,21 +504,21 @@ int main()
         printf( "show &&& (+2) $ 5 = %s\n",
                 show( (showInt && plus_two)( 5 ) ).c_str() );
 
-        auto k = kleisli<std::unique_ptr>(
-                pure::monad::MReturn<std::unique_ptr>()
+        constexpr auto plusTwoK = arr<Kleisli<std::unique_ptr>>(
+            plus_two
         );
 
-        auto plusTwoK = arr<Kleisli<std::unique_ptr>>(
-            []( int x ) { return x + 2; }
+        auto subTwoK = arr<Kleisli<std::unique_ptr>>(
+            []( int x ) { return x - 2; }
         );
 
         using namespace category;
-        auto plusFourK = plusTwoK > plusTwoK;
+        constexpr auto plusFourK = plusTwoK > plusTwoK;
 
         printf( "plusFourK 10 = %s\n",
                 show( plusFourK(10) ).c_str() );
-        printf( "first plusTwoK (1,2) = %s\n",
-                show( first(plusTwoK)(p) ).c_str() );
+        printf( "(plusTwoK &&& subTwoK) 0 = %s\n",
+                show( (plusTwoK && subTwoK)(0) ).c_str() );
 
     }
 

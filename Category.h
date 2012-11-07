@@ -131,7 +131,7 @@ template< class F > struct Category<F> {
 
 /* f > g = g . f (Haskell's >>>.) */
 template< class F, class G >
-auto operator > ( F&& f, G&& g )
+constexpr auto operator > ( F&& f, G&& g )
     -> decltype( comp(declval<G>(),declval<F>()) )
 {
     return comp( forward<G>(g), forward<F>(f) );
@@ -139,7 +139,7 @@ auto operator > ( F&& f, G&& g )
 
 /* f < g = f . g (Haskell's <<<.) */
 template< class F, class G >
-auto operator < ( F&& f, G&& g )
+constexpr auto operator < ( F&& f, G&& g )
     -> decltype( comp(declval<F>(),declval<G>()) )
 {
     return comp( forward<F>(f), forward<G>(g) );
