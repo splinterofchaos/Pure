@@ -179,6 +179,15 @@ constexpr auto mreturn() -> decltype( Mo::mreturn() ) {
     return Mo::mreturn();
 }
 
+template< template<class...> class M > struct MReturn {
+    template< class X >
+    constexpr auto operator () ( X&& x )
+        -> decltype( mreturn<M>(std::declval<X>()) )
+    {
+        return mreturn<M>( std::forward<X>(x) );
+    }
+};
+
 template< class M > struct Return {
     template< class X >
     constexpr auto operator() ( X&& x ) 

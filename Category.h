@@ -79,9 +79,9 @@ using Cat = typename CatImpl<X>::type;
 
 template< class ... > struct Category;
 
-template< class X, class C = Category<X> >
-auto cid( X&& x ) -> decltype( C::id( declval<X>() ) ) {
-    return C::id( forward<X>(x) );
+template< class F, class X, class C = Category< Cat<F> > >
+auto cid( X&& x ) -> decltype( C::template id< Cat<F> >( declval<X>() ) ) {
+    return C::template id< Cat<F> >( forward<X>(x) );
 }
 
 struct CId {
@@ -90,8 +90,8 @@ struct CId {
 };
 
 /* Let comp be a generalization of compose. */
-template< class F, class ...G, class C = Category<F> > 
-constexpr decltype( Category<F>::comp( declval<F>(), declval<G>()... ) )
+template< class F, class ...G, class C = Category< Cat<F> > >
+constexpr decltype( C::comp( declval<F>(), declval<G>()... ) )
 comp( F&& f, G&& ...g ) {
     return C::comp( forward<F>(f), forward<G>(g)... );
 }
@@ -116,6 +116,11 @@ fcomp( F&& f, G&& g, H&& h, I&& ...i ) {
 template< class F > struct Category<F> {
     static constexpr Id id = Id();
 
+    template< class G >
+    static constexpr G io( G&& g ) {
+        return std::forward<G>(g);
+    }
+
     template< class _F, class ..._G > static
     constexpr decltype( compose(declval<_F>(),declval<_G>()...) )
     comp( _F&& f, _G&& ...g ) {
@@ -135,7 +140,7 @@ auto operator > ( F&& f, G&& g )
 /* f < g = f . g (Haskell's <<<.) */
 template< class F, class G >
 auto operator < ( F&& f, G&& g )
-    -> decltype( compose(declval<F>(),declval<G>()) )
+    -> decltype( comp(declval<F>(),declval<G>()) )
 {
     return comp( forward<F>(f), forward<G>(g) );
 }

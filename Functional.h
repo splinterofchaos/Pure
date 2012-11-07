@@ -386,6 +386,40 @@ constexpr struct PairCompose {
     }
 } pairCompose{};
 
+template< class F, class G > struct FanComposition {
+    F f = F();
+    G g = G();
+
+    constexpr FanComposition( F f, G g )
+        : f( std::move(f) ), g( std::move(g) )
+    {
+    }
+
+    template< class X >
+    using resultF = Result<F,X>;
+
+    template< class X >
+    using resultG = Result<G,X>;
+
+    template< class X >
+    using result = std::pair< resultF<X>, resultG<X> >;
+
+    template< class X, class R = result<X> >
+    constexpr R operator () ( const X& x ) {
+        return R{ f(x), g(x) };
+    }
+};
+
+constexpr struct FanCompose {
+    template< class F, class G >
+    using Fn = FanComposition<F,G>;
+
+    template< class F, class G >
+    constexpr Fn<F,G> operator () ( F f, G g ) {
+        return Fn<F,G>( std::move(f), std::move(g) );
+    }
+} fanCompose{};
+
 template< class X > constexpr X inc( X x ) { return ++x; }
 template< class X > constexpr X dec( X x ) { return --x; }
 

@@ -478,6 +478,7 @@ int main()
 
     {
         using namespace pure::arrow;
+
         pair<int,int> p( 1, 2 );
         using Show = string(int);
         auto showInt = [](int x){ return show(x); };
@@ -488,6 +489,19 @@ int main()
 
         printf( "show &&& (+2) $ 5 = %s\n",
                 show( (showInt && plus_two)( 5 ) ).c_str() );
+
+        auto k = kleisli<std::unique_ptr>(
+                pure::monad::MReturn<std::unique_ptr>()
+        );
+
+        auto plusTwoK = kleisli<std::unique_ptr>(
+            []( int x ) { return Just(x + 2); }
+        );
+
+        auto plusFourK = category::comp( plusTwoK, plusTwoK );
+
+        printf( "plusFourK 10 = %s\n",
+                show( plusFourK(10) ).c_str() );
     }
 
     puts("");
