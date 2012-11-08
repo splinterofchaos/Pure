@@ -37,12 +37,8 @@ constexpr Flip<F> flip( F&& f ) {
  * partial( f, x )    = g
  * partial( f, x, y ) = h
  */
-template< class F, class ...X >
-struct Part;
-
 template< class F, class X >
-struct Part< F, X >
-{
+struct Part {
     F f;
     X x;
 
@@ -64,62 +60,12 @@ struct Part< F, X >
     }
 };
 
-/* Recursive, variadic version. */
-template< class F, class X1, class ...Xs >
-struct Part< F, X1, Xs... > 
-    : public Part< Part<F,X1>, Xs... >
-{
-    template< class _F, class _X1, class ..._Xs >
-    constexpr Part( _F&& f, _X1&& x1, _Xs&& ...xs )
-        : Part< Part<F,X1>, Xs... > (
-            Part<F,X1>( forward<_F>(f), forward<_X1>(x1) ),
-            forward<_Xs>(xs)...
-        )
-    {
-    }
-};
-
-/* 
- * Some languages implement partial application through closures, which hold
- * references to the function's arguments. But they also often use reference
- * counting. We must consider the scope of the variables we want to apply. If
- * we apply references and then return the applied function, its references
- * will dangle.
- *
- * See: 
- * upward funarg problem http://en.wikipedia.org/wiki/Upward_funarg_problem
- */
-
-/*
- * closure http://en.wikipedia.org/wiki/Closure_%28computer_science%29
- * Here, closure forwards the arguments, which may be references or rvalues--it
- * does not matter. A regular closure works for passing functions down.
- */
-template< class F, class ...X >
-constexpr Part<F,X...> closure( F&& f, X&& ...x ) {
-    return Part<F,X...>( forward<F>(f), forward<X>(x)... );
-}
-
-/*
- * Thinking as closures as open (having references to variables outside of
- * itself), let's refer to a closet as closed. It contains a function and its
- * arguments (or environment).
- */
-template< class F, class ...X >
-constexpr Part<F,X...> closet( F f, X ...x ) {
-    return Part<F,X...>( move(f), move(x)... );
-}
-
 /*
  * Reverse partial application. 
  * g(z) = f( x, y, z )
  * rpartial( f, y, z ) -> g(x)
  */
-template< class F, class ...X >
-struct RPart;
-
-template< class F, class X >
-struct RPart< F, X > {
+template< class F, class X > struct RPart {
     F f;
     X x;
 
@@ -134,29 +80,109 @@ struct RPart< F, X > {
     }
 };
 
-template< class F, class X1, class ...Xs >
-struct RPart< F, X1, Xs... > 
-    : public RPart< RPart<F,Xs...>, X1 >
-{
-    template< class _F, class _X1, class ..._Xs >
-    constexpr RPart( _F&& f, _X1&& x1, _Xs&& ...xs )
-        : RPart< RPart<F,Xs...>, X1 > (
-            RPart<F,Xs...>( forward<_F>(f), forward<_Xs>(xs)... ),
-            forward<_X1>(x1)
-        )
-    {
+template< class D > struct Binary {
+    template< class X >
+    constexpr Part<D,X> operator () ( X x ) {
+        return Part<D,X>( D(), move(x) );
+    }
+
+    template< class X >
+    constexpr RPart<D,X> with( X x ) {
+        return RPart<D,X>( D(), move(x) );
     }
 };
 
-template< class F, class ...X, class P = RPart<F,X...> >
-constexpr P rclosure( F&& f, X&& ...x ) {
-    return P( forward<F>(f), forward<X>(x)... );
-}
+template< class D > struct Chainable : Binary<D> {
+    using Binary<D>::operator();
 
-template< class F, class ...X, class P = RPart<F,X...> >
-constexpr P rcloset( F f, X ...x ) {
-    return P( move(f), move(x)... );
-}
+    template< class X, class Y >
+    using R = typename std::result_of< D(X,Y) >::type;
+
+    // Three arguments: unroll.
+    template< class X, class Y, class Z >
+    constexpr auto operator () ( X&& x, Y&& y, Z&& z )
+        -> R< R<X,Y>, Z >
+    {
+        return D()(
+            D()( std::forward<X>(x), std::forward<Y>(y) ),
+            std::forward<Z>(z)
+        );
+    }
+
+    template< class X, class Y, class ...Z >
+    using Unroll = typename std::result_of <
+        Chainable<D>( Result<X,Y>, Z... )
+    >::type;
+
+    // Any more? recurse.
+    template< class X, class Y, class Z, class H, class ...J >
+    constexpr auto operator () ( X&& x, Y&& y, Z&& z, H&& h, J&& ...j )
+        -> Unroll<X,Y,Z,H,J...>
+    {
+        // Notice how (*this) always gets applied at LEAST three arguments.
+        return (*this)(
+            D()( std::forward<X>(x), std::forward<Y>(y) ),
+            std::forward<Z>(z), std::forward<H>(h), std::forward<J>(j)...
+        );
+    }
+};
+
+/*
+ * Some languages implement partial application through closures, which hold
+ * references to the function's arguments. But they also often use reference
+ * counting. We must consider the scope of the variables we want to apply. If
+ * we apply references and then return the applied function, its references
+ * will dangle.
+ *
+ * See:
+ * upward funarg problem http://en.wikipedia.org/wiki/Upward_funarg_problem
+ */
+
+/*
+ * closure http://en.wikipedia.org/wiki/Closure_%28computer_science%29
+ * Here, closure forwards the arguments, which may be references or rvalues--it
+ * does not matter. A regular closure works for passing functions down.
+ */
+constexpr struct ReturnClosure : Chainable<ReturnClosure> {
+    using Chainable<ReturnClosure>::operator();
+
+    template< class F, class X >
+    constexpr Part<F,X> operator () ( F&& f, X&& x ) {
+        return Part<F,X>( forward<F>(f), forward<X>(x) );
+    }
+} closure{};
+
+/*
+ * Thinking as closures as open (having references to variables outside of
+ * itself), let's refer to a closet as closed. It contains a function and its
+ * arguments (or environment).
+ */
+constexpr struct ReturnCloset : Chainable<ReturnCloset> {
+    using Chainable<ReturnCloset>::operator();
+
+    template< class F, class X >
+    constexpr Part<F,X> operator () ( F f, X x ) {
+        return Part<F,X>( move(f), move(x) );
+    }
+} closet{};
+
+constexpr struct ReturnRClosure : Chainable<ReturnRClosure> {
+    using Chainable<ReturnRClosure>::operator();
+
+    template< class F, class X, class P = RPart<F,X> >
+    constexpr P operator () ( F&& f, X&& x ) {
+        return P( forward<F>(f), forward<X>(x) );
+    }
+} rclosure{};
+
+constexpr struct ReturnRCloset : Chainable<ReturnRCloset> {
+    using Chainable<ReturnRCloset>::operator();
+
+    template< class F, class X, class P = RPart<F,X> >
+    constexpr P operator () ( F f, X x ) {
+        return P( move(f), move(x) );
+    }
+} rcloset{};
 
 template< class F, class ...X >
 using Closure = decltype( closure(declval<F>(), declval<X>()...) );
@@ -422,53 +448,6 @@ constexpr struct FanCompose {
 
 template< class X > constexpr X inc( X x ) { return ++x; }
 template< class X > constexpr X dec( X x ) { return --x; }
-
-template< class D > struct Binary {
-    template< class X >
-    constexpr Part<D,X> operator () ( X x ) {
-        return closet( D(), move(x) );
-    }
-
-    template< class X >
-    constexpr RPart<D,X> with( X x ) {
-        return rcloset( D(), move(x) );
-    }
-};
-
-template< class D > struct Chainable : Binary<D> {
-    using Binary<D>::operator();
-
-    template< class X, class Y >
-    using R = typename std::result_of< D(X,Y) >::type;
-
-    // Three arguments: unroll.
-    template< class X, class Y, class Z >
-    constexpr auto operator () ( X&& x, Y&& y, Z&& z )
-        -> R< R<X,Y>, Z >
-    {
-        return D()(
-            D()( std::forward<X>(x), std::forward<Y>(y) ),
-            std::forward<Z>(z)
-        );
-    }
-
-    template< class X, class Y, class ...Z >
-    using Unroll = typename std::result_of <
-        Chainable<D>( Result<X,Y>, Z... )
-    >::type;
-
-    // Any more? recurse.
-    template< class X, class Y, class Z, class H, class ...J >
-    constexpr auto operator () ( X&& x, Y&& y, Z&& z, H&& h, J&& ...j )
-        -> Unroll<X,Y,Z,H,J...>
-    {
-        // Notice how (*this) always gets applied at LEAST three arguments.
-        return (*this)(
-            D()( std::forward<X>(x), std::forward<Y>(y) ),
-            std::forward<Z>(z), std::forward<H>(h), std::forward<J>(j)...
-        );
-    }
-};
 
 constexpr struct Add : Chainable<Add> {
     using Chainable<Add>::operator();
