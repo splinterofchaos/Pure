@@ -423,14 +423,55 @@ constexpr struct FanCompose {
 template< class X > constexpr X inc( X x ) { return ++x; }
 template< class X > constexpr X dec( X x ) { return --x; }
 
-struct Add {
+template< class D > struct Binary {
+    // One argument: curry.
+    template< class X >
+    constexpr auto operator () ( X x ) -> Part<D,X> {
+        return closet( D(), std::move(x) );
+    }
+
+    template< class X, class Y >
+    using R = typename std::result_of< D(X,Y) >::type;
+
+    // Three arguments: unroll.
+    template< class X, class Y, class Z >
+    constexpr auto operator () ( X&& x, Y&& y, Z&& z )
+        -> R< R<X,Y>, Z >
+    {
+        return D()(
+            D()( std::forward<X>(x), std::forward<Y>(y) ),
+            std::forward<Z>(z)
+        );
+    }
+
+    template< class X, class Y, class ...Z >
+    using Unroll = typename std::result_of <
+        Binary<D>( Result<X,Y>, Z... )
+    >::type;
+
+    // Any more? recurse.
+    template< class X, class Y, class Z, class H, class ...J >
+    constexpr auto operator () ( X&& x, Y&& y, Z&& z, H&& h, J&& ...j )
+        -> Unroll<X,Y,Z,H,J...>
+    {
+        // Notice how (*this) always gets applied at LEAST three arguments.
+        return (*this)(
+            D()( std::forward<X>(x), std::forward<Y>(y) ),
+            std::forward<Z>(z), std::forward<H>(h), std::forward<J>(j)...
+        );
+    }
+};
+
+constexpr struct Add : public Binary<Add> {
+    using Binary<Add>::operator();
+
     template< class X, class Y >
     constexpr auto operator() ( X&& x, Y&& y ) 
         -> decltype( declval<X>() + declval<Y>() )
     {
         return forward<X>(x) + forward<Y>(y);
     }
-};
+} add;
 
 struct Subtract {
     template< class X, class Y >
@@ -453,11 +494,6 @@ struct Mult {
 template< class X >
 constexpr Closet<Mult,X> times( X x ) {
     return closet( Mult(), move(x) );
-}
-
-template< class X > 
-constexpr auto plus( X x ) -> Closet<Add,X> {
-    return closet( Add(), move(x) );
 }
 
 struct NotEq {

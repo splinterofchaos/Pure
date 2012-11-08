@@ -210,7 +210,7 @@ unique_ptr<int> addM( const unique_ptr<int>& a, const unique_ptr<int>& b ) {
 };
 
 unique_ptr<int> addM2( const unique_ptr<int>& a, const unique_ptr<int>& b ) {
-    return fmap( std::plus<int>(), a, b );
+    return fmap( add, a, b );
 };
 
 void print_xyz( int x, int y, int z ) {
@@ -380,8 +380,8 @@ int main()
     printf( "(+2) <$> (Right 5)     = %s\n",
             show( plus_two ^ Right<string>(5) ).c_str() );
     printf( "\t(+) <$> Pair 1 2 <*> Pair 3 4 = %s\n", 
-            show( fmap(std::plus<int>(), std::make_pair(1,2),
-                                         std::make_pair(3,4)) ).c_str() );
+            show( fmap(add, std::make_pair(1,2),
+                            std::make_pair(3,4)) ).c_str() );
 
     puts("");
     puts("add3 x y z = x + y + z");
@@ -432,7 +432,7 @@ int main()
         printf( "Nothing <|> Nothing  = %s\n",
                 show( Nothing<int>() || Nothing<int>() ).c_str() );
 
-        std::vector<Closure<Add,int>> fs = { pure::plus(1), pure::plus(5), pure::plus(3) };
+        std::vector<Part<Add,int>> fs = { add(1), add(5), add(3) };
         puts( "fs = [(+1),(+5),(+3)]" );
         printf( "\tfs <*> pure 1 = %s\n",
                 show( fs*apure<std::vector>(1) ).c_str() );

@@ -72,7 +72,7 @@ struct ToInt {
 vector<int> multiples_less_than_1000( int x ) {
     return take (
         999 / x, // x goes into 1000 (999/x) times.
-        iterate( pure::plus(x), x )
+        iterate( add(x), x )
     );
 }
 
@@ -369,7 +369,7 @@ Vec operator- ( const Vec& a, const Vec& b ) {
 }
 
 Vec operator* ( Vec a, int x ) {
-    return map( pure::plus(x), move(a) );
+    return map( add(x), move(a) );
 }
 
 #include <cstdio>
