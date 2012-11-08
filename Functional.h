@@ -423,7 +423,7 @@ constexpr struct FanCompose {
 template< class X > constexpr X inc( X x ) { return ++x; }
 template< class X > constexpr X dec( X x ) { return --x; }
 
-template< class D > struct CurriedBinary {
+template< class D > struct Binary {
     template< class X >
     constexpr Part<D,X> operator () ( X x ) {
         return closet( D(), move(x) );
@@ -435,8 +435,8 @@ template< class D > struct CurriedBinary {
     }
 };
 
-template< class D > struct Binary : CurriedBinary<D> {
-    using CurriedBinary<D>::operator();
+template< class D > struct Chainable : Binary<D> {
+    using Binary<D>::operator();
 
     template< class X, class Y >
     using R = typename std::result_of< D(X,Y) >::type;
@@ -454,7 +454,7 @@ template< class D > struct Binary : CurriedBinary<D> {
 
     template< class X, class Y, class ...Z >
     using Unroll = typename std::result_of <
-        Binary<D>( Result<X,Y>, Z... )
+        Chainable<D>( Result<X,Y>, Z... )
     >::type;
 
     // Any more? recurse.
@@ -470,8 +470,8 @@ template< class D > struct Binary : CurriedBinary<D> {
     }
 };
 
-constexpr struct Add : Binary<Add> {
-    using Binary<Add>::operator();
+constexpr struct Add : Chainable<Add> {
+    using Chainable<Add>::operator();
 
     template< class X, class Y >
     constexpr auto operator() ( X&& x, Y&& y ) 
@@ -481,8 +481,8 @@ constexpr struct Add : Binary<Add> {
     }
 } add{};
 
-constexpr struct Sub : Binary<Sub> {
-    using Binary<Sub>::operator();
+constexpr struct Sub : Chainable<Sub> {
+    using Chainable<Sub>::operator();
 
     template< class X, class Y >
     constexpr auto operator() ( X&& x, Y&& y ) 
@@ -492,8 +492,8 @@ constexpr struct Sub : Binary<Sub> {
     }
 } sub{};
 
-constexpr struct Mult : Binary<Mult> {
-    using Binary<Mult>::operator();
+constexpr struct Mult : Chainable<Mult> {
+    using Chainable<Mult>::operator();
 
     template< class X, class Y >
     constexpr auto operator() ( X&& x, Y&& y ) 
@@ -503,8 +503,8 @@ constexpr struct Mult : Binary<Mult> {
     }
 } mult{};
 
-constexpr struct NotEq : CurriedBinary<NotEq> {
-    using CurriedBinary<NotEq>::operator();
+constexpr struct NotEq : Binary<NotEq> {
+    using Binary<NotEq>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -512,8 +512,8 @@ constexpr struct NotEq : CurriedBinary<NotEq> {
     }
 } notExqualTo{};
 
-constexpr struct Eq : CurriedBinary<Eq> {
-    using CurriedBinary<Eq>::operator();
+constexpr struct Eq : Binary<Eq> {
+    using Binary<Eq>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -521,8 +521,8 @@ constexpr struct Eq : CurriedBinary<Eq> {
     }
 } equalTo{};
 
-constexpr struct Less : CurriedBinary<Less> {
-    using CurriedBinary<Less>::operator();
+constexpr struct Less : Binary<Less> {
+    using Binary<Less>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -530,8 +530,8 @@ constexpr struct Less : CurriedBinary<Less> {
     }
 } less{};
 
-constexpr struct LessEq : CurriedBinary<LessEq> {
-    using CurriedBinary<LessEq>::operator();
+constexpr struct LessEq : Binary<LessEq> {
+    using Binary<LessEq>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -539,8 +539,8 @@ constexpr struct LessEq : CurriedBinary<LessEq> {
     }
 } lessEq{};
 
-constexpr struct Greater : CurriedBinary<Greater> {
-    using CurriedBinary<Greater>::operator();
+constexpr struct Greater : Binary<Greater> {
+    using Binary<Greater>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -548,8 +548,8 @@ constexpr struct Greater : CurriedBinary<Greater> {
     }
 } greater{};
 
-constexpr struct GreaterEq : CurriedBinary<GreaterEq> {
-    using CurriedBinary<GreaterEq>::operator();
+constexpr struct GreaterEq : Binary<GreaterEq> {
+    using Binary<GreaterEq>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -569,8 +569,8 @@ constexpr auto fnot( F f ) -> decltype( compose(BinaryNot(),declval<F>()) ) {
     return compose( BinaryNot(), move(f) );
 }
 
-constexpr struct Mod : Binary<Mod> {
-    using Binary<Mod>::operator();
+constexpr struct Mod : Chainable<Mod> {
+    using Chainable<Mod>::operator();
 
     template< class X, class Y >
     constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
