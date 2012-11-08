@@ -423,12 +423,20 @@ constexpr struct FanCompose {
 template< class X > constexpr X inc( X x ) { return ++x; }
 template< class X > constexpr X dec( X x ) { return --x; }
 
-template< class D > struct Binary {
-    // One argument: curry.
+template< class D > struct CurriedBinary {
     template< class X >
-    constexpr auto operator () ( X x ) -> Part<D,X> {
-        return closet( D(), std::move(x) );
+    constexpr Part<D,X> operator () ( X x ) {
+        return closet( D(), move(x) );
     }
+
+    template< class X >
+    constexpr RPart<D,X> with( X x ) {
+        return rcloset( D(), move(x) );
+    }
+};
+
+template< class D > struct Binary : CurriedBinary<D> {
+    using CurriedBinary<D>::operator();
 
     template< class X, class Y >
     using R = typename std::result_of< D(X,Y) >::type;
@@ -495,20 +503,8 @@ constexpr struct Mult : Binary<Mult> {
     }
 } mult{};
 
-template< class D > struct ClosedBinary {
-    template< class X >
-    constexpr Part<D,X> operator () ( X x ) {
-        return closet( D(), move(x) );
-    }
-
-    template< class X >
-    constexpr RPart<D,X> with( X x ) {
-        return rcloset( D(), move(x) );
-    }
-};
-
-constexpr struct NotEq : ClosedBinary<NotEq> {
-    using ClosedBinary<NotEq>::operator();
+constexpr struct NotEq : CurriedBinary<NotEq> {
+    using CurriedBinary<NotEq>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -516,8 +512,8 @@ constexpr struct NotEq : ClosedBinary<NotEq> {
     }
 } notExqualTo{};
 
-constexpr struct Eq : ClosedBinary<Eq> {
-    using ClosedBinary<Eq>::operator();
+constexpr struct Eq : CurriedBinary<Eq> {
+    using CurriedBinary<Eq>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -525,8 +521,8 @@ constexpr struct Eq : ClosedBinary<Eq> {
     }
 } equalTo{};
 
-constexpr struct Less : ClosedBinary<Less> {
-    using ClosedBinary<Less>::operator();
+constexpr struct Less : CurriedBinary<Less> {
+    using CurriedBinary<Less>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -534,8 +530,8 @@ constexpr struct Less : ClosedBinary<Less> {
     }
 } less{};
 
-constexpr struct LessEq : ClosedBinary<LessEq> {
-    using ClosedBinary<LessEq>::operator();
+constexpr struct LessEq : CurriedBinary<LessEq> {
+    using CurriedBinary<LessEq>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -543,8 +539,8 @@ constexpr struct LessEq : ClosedBinary<LessEq> {
     }
 } lessEq{};
 
-constexpr struct Greater : ClosedBinary<Greater> {
-    using ClosedBinary<Greater>::operator();
+constexpr struct Greater : CurriedBinary<Greater> {
+    using CurriedBinary<Greater>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -552,8 +548,8 @@ constexpr struct Greater : ClosedBinary<Greater> {
     }
 } greater{};
 
-constexpr struct GreaterEq : ClosedBinary<GreaterEq> {
-    using ClosedBinary<GreaterEq>::operator();
+constexpr struct GreaterEq : CurriedBinary<GreaterEq> {
+    using CurriedBinary<GreaterEq>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
