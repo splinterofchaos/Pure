@@ -224,13 +224,7 @@ constexpr E enclosure( F&& f ) {
  *      h(z,y...) = f( g(z), y... )
  *
  */
-
-template< class F, class ...G >
-struct Composition;
-
-template< class F, class G >
-struct Composition<F,G>
-{
+template< class F, class G > struct Composition {
     F f; G g;
 
     constexpr Composition( F f, G g) 
@@ -238,38 +232,22 @@ struct Composition<F,G>
 
     template< class X, class ...Y >
     constexpr decltype( f(g(declval<X>()), declval<Y>()...) )
-    operator() ( X&& x, Y&& ...y ) {
+    operator () ( X&& x, Y&& ...y ) {
         return f( g( forward<X>(x) ), forward<Y>(y)... );
     }
 };
 
-template< class F, class G, class ...H >
-struct Composition<F,G,H...> : Composition<F,Composition<G,H...>>
-{
-    typedef Composition<G,H...> Comp;
+constexpr struct Compose : Chainable<Compose> {
+    using Chainable<Compose>::operator();
 
-    template< class _F, class _G, class ..._H >
-    constexpr Composition( _F&& f, _G&& g, _H&& ...h )
-        : Composition<_F,Composition<_G,_H...>> ( 
-            forward<_F>(f), 
-            Comp( forward<_G>(g), forward<_H>(h)... )
-        )
-    {
+    template< class F, class G, class C = Composition<F,G> >
+    constexpr C operator () ( F f, G g ) {
+        return C( move(f), move(g) );
     }
-};
-
-template< class F, class ...G, class C = Composition<F,G...> >
-constexpr C compose( F f, G ...g ) {
-    return C( move(f), move(g)... );
-}
+} compose{};
 
 /* A const composition for when g is a constant function. */
-template< class F, class ...G >
-struct CComposition;
-
-template< class F, class G >
-struct CComposition<F,G>
-{
+template< class F, class G > struct CComposition {
     F f; G g;
 
     template< class _F, class _G >
@@ -283,34 +261,17 @@ struct CComposition<F,G>
     }
 };
 
-template< class F, class G, class ...H >
-struct CComposition<F,G,H...> : CComposition<Composition<F,G>,H...>
-{
-    typedef Composition<F,G> Then;
-    typedef CComposition<Then,H...> CComp;
+constexpr struct CCompose : Chainable<CCompose> {
+    using Chainable<CCompose>::operator();
 
-    template< class _F, class _G, class ..._H >
-    constexpr CComposition( _F&& f, _G&& g, _H&& ...h )
-        : CComp ( 
-            Then( forward<_F>(f), forward<_G>(g) ),
-            forward<_H>(h)...
-        )
-    {
+    template< class F, class G, class C = CComposition<F,G> >
+    constexpr C operator () ( F f, G g ) {
+        return C( move(f), move(g) );
     }
-};
-
-template< class F, class ...G, class C = CComposition<F,G...> >
-constexpr C ccompose( F f, G ...g ) {
-    return C( move(f), move(g)... );
-}
+} ccompose{};
 
 /* N-ary composition assumes a unary f and N-ary g. */
-template< class F, class ...G >
-struct NCompoposition;
-
-template< class F, class G >
-struct NCompoposition<F,G>
-{
+template< class F, class G > struct NCompoposition {
     F f; G g;
 
     template< class _F, class _G >
@@ -324,26 +285,14 @@ struct NCompoposition<F,G>
     }
 };
 
-template< class F, class G, class ...H >
-struct NCompoposition<F,G,H...> : NCompoposition<Composition<F,G>,H...>
-{
-    typedef Composition<F,G> Then;
-    typedef NCompoposition<Then,H...> NComp;
+constexpr struct NCompose : Chainable<NCompose> {
+    using Chainable<NCompose>::operator();
 
-    template< class _F, class _G, class ..._H >
-    constexpr NCompoposition( _F&& f, _G&& g, _H&& ...h )
-        : NComp ( 
-            Then( forward<_F>(f), forward<_G>(g) ),
-            forward<_H>(h)...
-        )
-    {
+    template< class F, class ...G, class C = NCompoposition<F,G...> >
+    constexpr C operator ()( F f, G ...g ) {
+        return C( move(f), move(g)... );
     }
-};
-
-template< class F, class ...G, class C = NCompoposition<F,G...> >
-constexpr C ncompose( F f, G ...g ) {
-    return C( move(f), move(g)... );
-}
+} ncompose{};
 
 /*
  * Binary composition 
@@ -402,7 +351,9 @@ template< class F, class G > struct PairComposition {
     }
 };
 
-constexpr struct PairCompose {
+constexpr struct PairCompose : Binary<PairCompose> {
+    using Binary<PairCompose>::operator();
+
     template< class F, class G >
     using result = PairComposition<F,G>;
 
@@ -436,7 +387,9 @@ template< class F, class G > struct FanComposition {
     }
 };
 
-constexpr struct FanCompose {
+constexpr struct FanCompose : Binary<FanCompose> {
+    using Binary<FanCompose>::operator();
+
     template< class F, class G >
     using Fn = FanComposition<F,G>;
 
