@@ -5,7 +5,7 @@
 
 namespace pure {
 
-namespace cata {
+namespace category {
 
 /* 
  * CATEGORIES:
@@ -22,6 +22,13 @@ namespace cata {
  */
 
 struct other {};
+
+/*
+ * []
+ * Any type that:
+ *      Has a defined begin(s) and end(s).
+ */
+struct sequence {};
 
 /*
  * Maybe 
@@ -58,25 +65,23 @@ auto cat( const S& s ) -> decltype( begin(s), end(s), sequence() );
 template< class M >
 auto cat( const M& m ) -> decltype( *m, (bool)m, maybe() );
 
-template< class T > struct Cat {
+template< class T > struct CatImpl {
     using type = decltype( cat<Decay<T>>(declval<T>()) );
 };
 
 // Prevent function pointers from being deduced as maybe types.
-template< class R, class ...X > struct Cat< R(&)(X...) > {
+template< class R, class ...X > struct CatImpl< R(&)(X...) > {
     typedef R(&type)(X...);
 };
 
-} // namespace cata
-
 template< class X >
-using Cat = typename cata::Cat<X>::type;
+using Cat = typename CatImpl<X>::type;
 
 template< class ... > struct Category;
 
-template< class X, class C = Category<X> >
-auto cid( X&& x ) -> decltype( C::id( declval<X>() ) ) {
-    return C::id( forward<X>(x) );
+template< class F, class X, class C = Category< Cat<F> > >
+auto cid( X&& x ) -> decltype( C::template id< Cat<F> >( declval<X>() ) ) {
+    return C::template id< Cat<F> >( forward<X>(x) );
 }
 
 struct CId {
@@ -84,18 +89,37 @@ struct CId {
     constexpr X operator() ( X&& x ) { return cid( forward<X>(x) ); }
 };
 
-/* 
- * Let comp be a generalization of compose. 
- */
-template< class F, class ...G, class C = Category<F> > 
-constexpr decltype( Category<F>::comp( declval<F>(), declval<G>()... ) )
+/* Let comp be a generalization of compose. */
+template< class F, class ...G, class C = Category< Cat<F> > >
+constexpr decltype( C::comp( declval<F>(), declval<G>()... ) )
 comp( F&& f, G&& ...g ) {
     return C::comp( forward<F>(f), forward<G>(g)... );
+}
+
+/* comp reversed. */
+template< class F, class G >
+constexpr auto fcomp( F&& f, G&& g )
+    -> decltype( comp(declval<G>(), declval<F>()) )
+{
+    return comp( forward<G>(g), forward<F>(f) );
+}
+
+template< class F, class G, class H, class ...I>
+constexpr decltype( comp( fcomp(declval<G>(),declval<H>(),declval<I>()...),
+                          declval<F>() ) )
+fcomp( F&& f, G&& g, H&& h, I&& ...i ) {
+    return comp( fcomp( forward<G>(g), forward<H>(h), forward<I>(i)... ),
+                 forward<F>(f) );
 }
 
 /* Default category: function. */
 template< class F > struct Category<F> {
     static constexpr Id id = Id();
+
+    template< class G >
+    static constexpr G io( G&& g ) {
+        return std::forward<G>(g);
+    }
 
     template< class _F, class ..._G > static
     constexpr decltype( compose(declval<_F>(),declval<_G>()...) )
@@ -104,24 +128,23 @@ template< class F > struct Category<F> {
     }
 };
 
-/*
- * fcomp (forward compose): the reverse of comp.
- * Haskell's >>>.
- */
+
+/* f > g = g . f (Haskell's >>>.) */
 template< class F, class G >
-constexpr auto fcomp( F&& f, G&& g ) 
-    -> decltype( comp(declval<G>(), declval<F>()) ) 
+constexpr auto operator > ( F&& f, G&& g )
+    -> decltype( comp(declval<G>(),declval<F>()) )
 {
-    return comp( forward<G>(g), forward<F>(f) ); 
+    return comp( forward<G>(g), forward<F>(f) );
 }
 
-template< class F, class G, class H, class ...I>
-constexpr decltype( comp( fcomp(declval<G>(),declval<H>(),declval<I>()...), 
-                          declval<F>() ) )
-fcomp( F&& f, G&& g, H&& h, I&& ...i ) {
-    return comp( fcomp( forward<G>(g), forward<H>(h), forward<I>(i)... ),
-                 forward<F>(f) );
+/* f < g = f . g (Haskell's <<<.) */
+template< class F, class G >
+constexpr auto operator < ( F&& f, G&& g )
+    -> decltype( comp(declval<F>(),declval<G>()) )
+{
+    return comp( forward<F>(f), forward<G>(g) );
 }
 
+} // namespace cata
 
 } // namespace pure

@@ -9,6 +9,8 @@ namespace pure {
 
 namespace monad {
 
+using namespace pure::category;
+
 /* 
  * Functor F:
  *      fmap f (F a) -> F (f a)
@@ -33,7 +35,7 @@ constexpr auto fmap( F&& f, G&& g, H&& ...h )
 }
 
 template< class F, class X,
-          class Fn = Functor< cata::sequence > >
+          class Fn = Functor< category::sequence > >
 constexpr auto fmap( F&& f, const std::initializer_list<X>& l )
     -> decltype( Fn::fmap(declval<F>(),l) ) 
 {
@@ -88,7 +90,7 @@ struct Functor< std::pair<X,Y> > {
 };
 
 template<>
-struct Functor< cata::maybe > {
+struct Functor< maybe > {
     template< class M > 
     static constexpr bool each( const M& m ) {
         return (bool)m;
@@ -113,7 +115,7 @@ struct Functor< cata::maybe > {
 };
 
 template<>
-struct Functor< cata::sequence > {
+struct Functor< category::sequence > {
     /* f <$> [x0,x1,...] = [f x0, f x1, ...] */
     template< class F, class ...S >
     static constexpr decltype( list::map(declval<F>(),declval<S>()...) )
@@ -177,6 +179,15 @@ constexpr auto mreturn() -> decltype( Mo::mreturn() ) {
     return Mo::mreturn();
 }
 
+template< template<class...> class M > struct MReturn {
+    template< class X >
+    constexpr auto operator () ( X&& x )
+        -> decltype( mreturn<M>(std::declval<X>()) )
+    {
+        return mreturn<M>( std::forward<X>(x) );
+    }
+};
+
 template< class M > struct Return {
     template< class X >
     constexpr auto operator() ( X&& x ) 
@@ -204,7 +215,7 @@ operator >> ( X&& x, Y&& y ) {
     return mdo( forward<X>(x), forward<Y>(y) );
 }
 
-template<> struct Monad< cata::sequence > {
+template<> struct Monad< category::sequence > {
     template< class S, class X >
     constexpr static S mreturn( X&& x ) { 
         return S{ forward<X>(x) }; 
@@ -243,8 +254,8 @@ template< class P > struct IsPointerImpl {
     using bool_type = decltype( (bool)declval<P>() );
 };
 
-template<> struct Monad< cata::maybe > {
-    template< class M > using traits = cata::maybe_traits<M>;
+template<> struct Monad< maybe > {
+    template< class M > using traits = maybe_traits<M>;
     template< class M > using value_type = typename traits<M>::value_type;
     template< class M > using smart_ptr  = typename traits<M>::smart_ptr;
 

@@ -17,13 +17,7 @@ using std::next;
 using std::prev;
 using std::get;
 
-namespace cata {
-    /*
-     * []
-     * Any type that:
-     *      Has a defined begin(s) and end(s).
-     */
-    struct sequence {};
+namespace category {
 
     template< class I >
     auto _dist( const I& i ) -> decltype( i - i );
@@ -42,13 +36,13 @@ namespace cata {
 namespace list {
 
 template< class S >
-using SeqRef = typename cata::sequence_traits<S>::reference;
+using SeqRef = typename category::sequence_traits<S>::reference;
 template< class S >
-using SeqVal = typename cata::sequence_traits<S>::value_type;
+using SeqVal = typename category::sequence_traits<S>::value_type;
 template< class S >
-using SeqIter = typename cata::sequence_traits<S>::iterator;
+using SeqIter = typename category::sequence_traits<S>::iterator;
 template< class S >
-using SeqDist = typename cata::sequence_traits<S>::distance_type;
+using SeqDist = typename category::sequence_traits<S>::distance_type;
 
 template< class I >
 using ItDist = decltype( declval<I>() - declval<I>() );
@@ -605,7 +599,7 @@ constexpr Decay<X> foldl( F&& f, X&& x, std::initializer_list<Y> s ) {
 }
 
 template< class F, class S, 
-          class X = typename cata::sequence_traits<S>::value_type >
+          class X = typename category::sequence_traits<S>::value_type >
 constexpr X foldl( F&& f, S&& s ) {
     return list::foldl( forward<F>(f), 
                         head(forward<S>(s)), tail_wrap(forward<S>(s)) );
@@ -630,7 +624,7 @@ constexpr Decay<X> foldr( F&& f, X&& x, std::initializer_list<Y> s ) {
 }
 
 template< class F, class S, 
-          class X = typename cata::sequence_traits<S>::value_type >
+          class X = typename category::sequence_traits<S>::value_type >
 constexpr X foldr( F&& f, S&& s ) {
     return list::foldr( forward<F>(f), 
                         last(forward<S>(s)), init_wrap(forward<S>(s)) );
@@ -1184,7 +1178,7 @@ R filtrate( F&& f, P&& p, S&& s ) {
 
 /* find pred xs -> Maybe x */
 template< class F, class S,
-          class Val = typename cata::sequence_traits<S>::value_type >
+          class Val = typename category::sequence_traits<S>::value_type >
 const Val* find( F&& f, S&& s ) {
     auto e = end( forward<S>(s) );
     auto it = std::find_if( begin(forward<S>(s)), e, forward<F>(f) );

@@ -33,8 +33,9 @@ constexpr Flip<F> flip( F&& f ) {
 /* 
  * Partial application.
  * g(y) = f( x, y )
- * partial( f, x ) -> g(y)
- * partial( f, x, y ) -> g()
+ * h()  = f( x, y )
+ * partial( f, x )    = g
+ * partial( f, x, y ) = h
  */
 template< class F, class ...X >
 struct Part;
@@ -353,12 +354,14 @@ using Nth = decltype( std::get<N>( declval<P>() ) );
  * Function Pair.
  * pair_compose( f, g ) = \(x,y) -> (f x, g y) 
  */
-template< class F, class G > struct PairCompose {
+template< class F, class G > struct PairComposition {
     F f; G g;
 
     template< class _F, class _G >
-    constexpr PairCompose( _F&& f, _G&& g ) 
-        : f(forward<_F>(f)), g(forward<_G>(g)) { }
+    constexpr PairComposition( _F&& f, _G&& g )
+        : f(forward<_F>(f)), g(forward<_G>(g))
+    {
+    }
 
     template< class Fn, size_t N, class P >
     using Nth = decltype( declval<Fn>()( declval<Nth<N,P>>() ) );
@@ -373,10 +376,49 @@ template< class F, class G > struct PairCompose {
     }
 };
 
-template< class F, class G, class P = PairCompose<F,G> > 
-constexpr P pairCompose( F f, G g ) {
-    return P( move(f), move(g) );
-}
+constexpr struct PairCompose {
+    template< class F, class G >
+    using result = PairComposition<F,G>;
+
+    template< class F, class G >
+    constexpr result<F,G> operator () ( F f, G g ) {
+        return result<F,G>( move(f), move(g) );
+    }
+} pairCompose{};
+
+template< class F, class G > struct FanComposition {
+    F f = F();
+    G g = G();
+
+    constexpr FanComposition( F f, G g )
+        : f( std::move(f) ), g( std::move(g) )
+    {
+    }
+
+    template< class X >
+    using resultF = Result<F,X>;
+
+    template< class X >
+    using resultG = Result<G,X>;
+
+    template< class X >
+    using result = std::pair< resultF<X>, resultG<X> >;
+
+    template< class X, class R = result<X> >
+    constexpr R operator () ( const X& x ) {
+        return R{ f(x), g(x) };
+    }
+};
+
+constexpr struct FanCompose {
+    template< class F, class G >
+    using Fn = FanComposition<F,G>;
+
+    template< class F, class G >
+    constexpr Fn<F,G> operator () ( F f, G g ) {
+        return Fn<F,G>( std::move(f), std::move(g) );
+    }
+} fanCompose{};
 
 template< class X > constexpr X inc( X x ) { return ++x; }
 template< class X > constexpr X dec( X x ) { return --x; }

@@ -75,6 +75,21 @@ constexpr auto square = squash( Mult() );
 
 float to_float( int x ) { return x; }
 
+string show( bool );
+string show( int  );
+string show( unsigned int );
+string show( unsigned long int );
+string show( unsigned long long );
+string show( char );
+string show( const char* );
+string show( string );
+string show( float );
+template< class X, class Y > string show( const pair<X,Y>& p );
+template< class S > auto show( const S& s ) -> decltype( begin(s), string() );
+template< class X > string showJust( const X& );
+template< class X > string show( const unique_ptr<X>& );
+template< class X > string show( X* );
+
 string show( bool b ) {
     return b ? "True" : "False";
 }
@@ -91,7 +106,7 @@ string show( unsigned int x ) {
     return digits;
 }
 
-string show( size_t x ) {
+string show( unsigned long int x ){
     char digits[20];
     sprintf( digits, "%lu", x );
     return digits;
@@ -121,8 +136,6 @@ string show( const char* str ) {
     return show( string(str) );
 }
 
-template< class X, class Y > string show( const pair<X,Y>& p );
-
 template< class S > 
 auto show( const S& s ) -> decltype( begin(s), string() )
 {
@@ -142,7 +155,6 @@ template< class X, class Y > string show( const pair<X,Y>& p ) {
     return "(Pair: " + show(p.first) + ", " + show(p.second) + ")";
 }
 
-template< class X > string showJust( const X& x );
 template< class X > string show( const unique_ptr<X>& m ) {
     return maybe( string("Nothing"), showJust<X>, m );
 }
@@ -319,8 +331,8 @@ int main()
     printf( "quadratic root of x^2 + 4 = 0 : %s\n",
             show( quadratic_root(1,0,4) ).c_str() );
 
-    auto sqrDoublePlus2 = comp( plus_two, times_two, square );
-    auto rsqrDoublePlus2 = fcomp( square, times_two, plus_two );
+    auto sqrDoublePlus2 = arrow::comp( plus_two, times_two, square );
+    auto rsqrDoublePlus2 = arrow::fcomp( square, times_two, plus_two );
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", sqrDoublePlus2(3) );
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", rsqrDoublePlus2(3) );
 
@@ -391,38 +403,42 @@ int main()
     printf( "find (==9) [1,2,3,4,5,6,7,8] = %s\n", 
             show( find(equalsN, N) ).c_str() );
 
-    // Bring in the operator overloads * (ap) and || (alt).
-    using namespace pure::ap;
+    {
+        puts("");
 
-    puts("");
-    printf( "Just (+2) <*> Just 2  = %s\n",
-            show( Just(plus_two) * Just(2) ).c_str() );
-    printf( "Just (+2) <*> Nothing = %s\n",
-            show( Just(plus_two) * Nothing<int>() ).c_str() );
+        // Bring in the operator overloads * (ap) and || (alt).
+        using namespace pure::ap;
 
-    auto rp2 = Right<int>( plus_two );
-    printf( "Right (+2) <*> Right 1 = %s\n",
-            show( Right<int>(plus_two) * Right<int>(1) ).c_str() );
-    printf( "Right (+2) <*> Left  1 = %s\n",
-            show( Right<int>(plus_two) * Left<int>(1)  ).c_str() );
+        puts("");
+        printf( "Just (+2) <*> Just 2  = %s\n",
+                show( Just(plus_two) * Just(2) ).c_str() );
+        printf( "Just (+2) <*> Nothing = %s\n",
+                show( Just(plus_two) * Nothing<int>() ).c_str() );
 
-    printf( "Nothing <|> Just 2   = %s\n", 
-            show( Nothing<int>() || Just(2) ).c_str() );
-    printf( "Nothing <|> Nothing  = %s\n", 
-            show( Nothing<int>() || Nothing<int>() ).c_str() );
+        auto rp2 = Right<int>( plus_two );
+        printf( "Right (+2) <*> Right 1 = %s\n",
+                show( Right<int>(plus_two) * Right<int>(1) ).c_str() );
+        printf( "Right (+2) <*> Left  1 = %s\n",
+                show( Right<int>(plus_two) * Left<int>(1)  ).c_str() );
 
-    std::vector<Closure<Add,int>> fs = { pure::plus(1), pure::plus(5), pure::plus(3) };
-    puts( "fs = [(+1),(+5),(+3)]" );
-    printf( "\tfs <*> pure 1 = %s\n", 
-            show( fs*apure<std::vector>(1) ).c_str() );
-    printf( "[1,2,3] <|> [4] <|> empty = %s\n",
-            show( std::vector<int>{1,2,3} || std::vector<int>{4} 
-                  || empty<std::vector<int>>() ).c_str() );
-    printf( "pure 5 :: [] = %s\n",
-            show( pure::ap::pure<std::vector>(5) ).c_str() );
-    printf( "([1,2],(+2)) <*> ([3,4],5) = %s\n",
-            show( std::make_pair(std::vector<int>{1,2}, plus_two)
-                  * std::make_pair(std::vector<int>{3,4},5) ).c_str() );
+        printf( "Nothing <|> Just 2   = %s\n",
+                show( Nothing<int>() || Just(2) ).c_str() );
+        printf( "Nothing <|> Nothing  = %s\n",
+                show( Nothing<int>() || Nothing<int>() ).c_str() );
+
+        std::vector<Closure<Add,int>> fs = { pure::plus(1), pure::plus(5), pure::plus(3) };
+        puts( "fs = [(+1),(+5),(+3)]" );
+        printf( "\tfs <*> pure 1 = %s\n",
+                show( fs*apure<std::vector>(1) ).c_str() );
+        printf( "[1,2,3] <|> [4] <|> empty = %s\n",
+                show( std::vector<int>{1,2,3} || std::vector<int>{4}
+                      || empty<std::vector<int>>() ).c_str() );
+        printf( "pure 5 :: [] = %s\n",
+                show( pure::ap::pure<std::vector>(5) ).c_str() );
+        printf( "([1,2],(+2)) <*> ([3,4],5) = %s\n",
+                show( std::make_pair(std::vector<int>{1,2}, plus_two)
+                      * std::make_pair(std::vector<int>{3,4},5) ).c_str() );
+    }
 
     puts("");
     {
@@ -488,7 +504,8 @@ int main()
             show( mplus(vector<int>{1},vector<int>{2}) ).c_str() );
 
     {
-        using namespace pure::arr;
+        using namespace pure::arrow;
+
         pair<int,int> p( 1, 2 );
         using Show = string(int);
         auto showInt = [](int x){ return show(x); };
@@ -499,6 +516,23 @@ int main()
 
         printf( "show &&& (+2) $ 5 = %s\n",
                 show( (showInt && plus_two)( 5 ) ).c_str() );
+
+        constexpr auto plusTwoK = arr<Kleisli<std::unique_ptr>>(
+            plus_two
+        );
+
+        auto subTwoK = arr<Kleisli<std::unique_ptr>>(
+            []( int x ) { return x - 2; }
+        );
+
+        using namespace category;
+        constexpr auto plusFourK = plusTwoK > plusTwoK;
+
+        printf( "plusFourK 10 = %s\n",
+                show( plusFourK(10) ).c_str() );
+        printf( "(plusTwoK &&& subTwoK) 0 = %s\n",
+                show( (plusTwoK && subTwoK)(0) ).c_str() );
+
     }
 
     puts("");

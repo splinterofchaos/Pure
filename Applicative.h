@@ -76,7 +76,7 @@ constexpr auto operator || ( X&& x, std::initializer_list<Y> l )
     return alt( std::forward<X>(x), std::move(l) );
 }
 
-template<> struct Applicative< cata::maybe > {
+template<> struct Applicative< category::maybe > {
     template< template<class...>class Ptr, class X >
     static Ptr<Decay<X>> pure( X&& x ) {
         return Just( std::forward<X>(x) );
@@ -100,7 +100,7 @@ constexpr struct Call {
 } call{};
     
 
-template<> struct Applicative< cata::sequence > {
+template<> struct Applicative< category::sequence > {
     template< template<class...>class S, class X >
     static constexpr S<Decay<X>> pure( X&& x ) {
         return S<Decay<X>>{ std::forward<X>(x) };
@@ -132,7 +132,7 @@ template< class _X, class _Y > struct Applicative< std::pair<_X,_Y> > {
 };
 
 
-template<> struct Alternative< cata::maybe > {
+template<> struct Alternative< category::maybe > {
     template< class Ptr >
     static constexpr Ptr empty() { return nullptr; }
 
@@ -147,7 +147,7 @@ template<> struct Alternative< cata::maybe > {
     }
 };
 
-template<> struct Alternative< cata::sequence > {
+template<> struct Alternative< category::sequence > {
     template< class S >
     static constexpr S empty() { return {}; }
 

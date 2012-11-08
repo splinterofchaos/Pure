@@ -22,6 +22,8 @@
 
 namespace pure {
 
+using category::Cat;
+
 using data::Just;
 using data::Nothing;
 using data::maybe;
@@ -171,7 +173,7 @@ fwd_mappend( XS&& xs, YS&& ys ) {
 template< class M > 
 decltype( mempty<M>() ) fwd_mempty() { return mempty<M>(); }
 
-template<> struct Monoid< cata::sequence > {
+template<> struct Monoid< category::sequence > {
     template< class S >
     static S mempty() { return S{}; }
 
@@ -188,7 +190,7 @@ template<> struct Monoid< cata::sequence > {
 };
 
 /* Monoid (Maybe X) -- where X is a monoid. */
-template<> struct Monoid< cata::maybe > {
+template<> struct Monoid< category::maybe > {
     template< class M >
     static constexpr M mempty() { return nullptr; }
 
@@ -259,7 +261,7 @@ auto mplus( M1&& a, M2&& b )
     return Mo::mplus( forward<M1>(a), forward<M2>(b) );
 }
 
-template<> struct MonadPlus< cata::sequence > {
+template<> struct MonadPlus< category::sequence > {
     template< class S >
     static S mzero() { return S(); }
 
@@ -271,7 +273,7 @@ template<> struct MonadPlus< cata::sequence > {
     }
 };
 
-template<> struct MonadPlus< cata::maybe > {
+template<> struct MonadPlus< category::maybe > {
     template< class M >
     static M mzero() { return nullptr; }
 
