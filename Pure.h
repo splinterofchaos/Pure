@@ -625,5 +625,6 @@ constexpr auto fcompose( F f, G g ) -> NCompoposition<FM,G> {
 template< class F, class G >
 using FCompose = decltype( fcompose(declval<F>(),declval<G>()) );
 
+
 } // namespace pure
 

@@ -566,4 +566,46 @@ constexpr auto divisorOf( X x ) -> Composition<BinaryNot,Closet<Mod,X>> {
     return fnot( closet(Mod(), move(x)) );
 }
 
+constexpr struct Max {
+    template< class X, class Y >
+    constexpr auto operator () ( X&& x, Y&& y ) 
+        -> decltype( declval<X>() + declval<Y>() )
+    {
+        static_assert( std::is_integral<X>::value, "Non-integral x!" );
+        static_assert( std::is_integral<Y>::value, "Non-integral y!" );
+        return x > y ? x : y;
+    }
+
+    template< class X >
+    constexpr const X& operator() ( const X& a, const X& b ) {
+        return a > b ? a : b;
+    }
+
+    template< class X >
+    X& operator() (  X& a,  X& b ) const {
+        return a > b ? a : b;
+    }
+} max{};
+
+constexpr struct Min {
+    template< class X, class Y >
+    constexpr auto operator () ( X&& x, Y&& y ) 
+        -> decltype( declval<X>() + declval<Y>() )
+    {
+        static_assert( std::is_integral<X>::value, "Non-integral x!" );
+        static_assert( std::is_integral<Y>::value, "Non-integral y!" );
+        return x > y ? x : y;
+    }
+
+    template< class X >
+    constexpr const X& operator() ( const X& a, const X& b ) {
+        return a < b ? a : b;
+    }
+
+    template< class X >
+    X& operator() (  X& a,  X& b ) const {
+        return a < b ? a : b;
+    }
+} min{};
+
 } // namespace pure.
