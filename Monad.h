@@ -286,21 +286,52 @@ template<> struct Monad< maybe_type > {
     }
 };
 
-constexpr struct LiftCons {
-    // k m m' = do { x <- m; xs <- m'; return (x:xs) }
-    template< template<class...> class M, class YS, class X >
-    constexpr M<YS> operator () ( const M<YS>& my, const M<X>& mx )
+/*
+ * liftM f m = m >>= return . f
+ * Similar to fmap, but not all Monads are Functors.
+ */
+constexpr struct LiftM {
+    template< class F, class M, class D = Decay<M> >
+    constexpr auto operator () ( F&& f, M&& m )
+        -> decltype( declval<M>() >>= Return<D>()^declval<F>() )
     {
-        return mx >>= [&]( const X& x ) {
-            return my >>= [&]( const YS& ys ) {
-                return mreturn<M>( list::cons(ys,x) );
-            };
-        };
+        return forward<M>(m) >>= Return<D>() ^ forward<F>(f);
+    }
+} liftM{};
+
+/* liftCons my mx = mx >>= (\x -> liftM( cons x, my )) */
+constexpr struct LiftCons {
+    struct Close {
+        template< class M, class X >
+        constexpr auto operator () ( M&& m, X&& x )
+            -> decltype( liftM( rclosure(list::cons,declval<X>()),
+                         declval<M>() ) )
+        {
+            return liftM( rclosure(list::cons,forward<X>(x)), forward<M>(m) );
+        }
+    };
+
+    /*
+     * Haskell says
+     *   k m m' = do { x <- m; xs <- m'; return (x:xs) }
+     *
+     * But this works backwords.
+     */
+    template< class MX, class MY >
+    constexpr auto operator () ( MY&& my, MX&& mx )
+        -> decltype( declval<MX>() >>= closure(Close(),declval<MY>()) )
+    {
+        return forward<MX>(mx) >>= closure( Close(), forward<MY>(my) );
     }
 } liftCons{};
 
+/*
+ * sequence [mx] = m[x]
+ * sequence [Just 1, Just 2] = Just [1,2]
+ * sequence [[1,2],[3,4]] = [[1,3],[2,4]]
+ */
 template< template<class...> class S, template<class...> class M, class X >
-M<S<X>> sequence( const S<M<X>>& smx ) {
+constexpr M<S<X>> sequence( const S<M<X>>& smx ) {
     return list::foldl( liftCons, mreturn<M>(S<X>{}), smx );
 }
 

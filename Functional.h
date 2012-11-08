@@ -25,7 +25,7 @@ template< class F > struct Flip {
     }
 };
 
-template< class F > 
+template< class F >
 constexpr Flip<F> flip( F&& f ) {
     return Flip<F>( forward<F>(f) );
 }

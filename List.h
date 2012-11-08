@@ -658,26 +658,26 @@ struct Append {
 };
 
 template< class XS, class X >
-EBackInsert<XS,XS> cons( XS xs, X&& x ) {
+EBackInsert<XS,XS> _cons( XS xs, X&& x ) {
     xs.push_back( forward<X>(x) );
     return xs;
 }
 
 template< class XS, class X >
-XBackInsert<XS,XS> cons( XS xs, X&& x ) {
+XBackInsert<XS,XS> _cons( XS xs, X&& x ) {
     xs.insert( forward<X>(x) );
     return xs;
 }
 
 template< class S, class X >
 void _consRef( S& s, X&& x ) {
-    s = cons( move(s), forward<X>(x) );
+    s = _cons( move(s), forward<X>(x) );
 }
 
 template< class XS, class X, class Y, class ...Z >
-XS cons( XS xs, X&& x, Y&& y, Z&& ...z ) {
-    return cons (
-        cons( move(xs), forward<X>(x) ),
+XS _cons( XS xs, X&& x, Y&& y, Z&& ...z ) {
+    return _cons (
+        _cons( move(xs), forward<X>(x) ),
         forward<Y>(y), forward<Z>(z)...
     );
 }
@@ -696,12 +696,12 @@ XS rcons( XS xs, X&& x, Y&& y, Z&& ...z ) {
     );
 }
 
-struct Cons {
+constexpr struct Cons {
     template< class S, class ...X >
     S operator() ( S s, X&& ...x ) const {
-        return cons( move(s), forward<X>(x)... );
+        return _cons( move(s), forward<X>(x)... );
     }
-};
+} cons{};
 
 struct RCons {
     template< class S, class ...X >
