@@ -453,6 +453,14 @@ int main()
 
         printf( "[1,2,3] >>= (\\x->[x,-x]) = %s\n",
                 show( vector<int>{1,2,3} >>= pos_neg ).c_str() );
+
+
+        std::vector<std::unique_ptr<int>> v;
+        v.emplace_back(Just(1));
+        v.emplace_back(Just(2));
+        v.emplace_back(Just(3));
+        printf( "sequence [Just 1, Just 2, Just 3] = %s\n",
+                show( sequence(v) ).c_str() );
     }
 
     printf( "Just [1,2] <> Just [3,4] = %s\n",

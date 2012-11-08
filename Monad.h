@@ -166,9 +166,9 @@ M mreturn( X&& x ) {
     return Monad< Cat<M> >::template mreturn<M>( forward<X>(x) );
 }
 
-template< template<class...>class M, class X > 
-M<X> mreturn( X&& x ) {
-    return Monad< Cat<M<X>> >::template mreturn<M<X>>( forward<X>(x) );
+template< template<class...>class M, class X, class _X = Decay<X> >
+M<_X> mreturn( X&& x ) {
+    return Monad< Cat<M<_X>> >::template mreturn<M<_X>>( forward<X>(x) );
 }
 
 /* mreturn () = (\x -> return x) */
@@ -249,8 +249,8 @@ template<> struct Monad< cata::maybe > {
     template< class M > using smart_ptr  = typename traits<M>::smart_ptr;
 
     template< class M, class X, class P = smart_ptr<M> >
-    static P mreturn( X&& x ) { 
-        return P( new X(forward<X>(x)) ); 
+    static P mreturn( X&& x ) {
+        return P( new Decay<X>(forward<X>(x)) );
     }
 
     template< class M >
@@ -274,6 +274,18 @@ template<> struct Monad< cata::maybe > {
         return x ? forward<F>(f)( *forward<M>(x) ) : nullptr;
     }
 };
+
+template< template<class...> class S, template<class...> class M, class X >
+M<S<X>> sequence( const S<M<X>>& smx ) {
+    S<X> r;
+
+    for( const auto& mx : smx ) mx >>= [&]( const X& x ) {
+        r.push_back( x );
+        return mreturn<M>(x); // Dummy return value for type correctness.
+    };
+
+    return mreturn<M>( std::move(r) );
+}
 
 } // namespace monad
 
