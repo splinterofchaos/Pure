@@ -35,7 +35,7 @@ constexpr auto fmap( F&& f, G&& g, H&& ...h )
 }
 
 template< class F, class X,
-          class Fn = Functor< category::sequence > >
+          class Fn = Functor< category::sequence_type > >
 constexpr auto fmap( F&& f, const std::initializer_list<X>& l )
     -> decltype( Fn::fmap(declval<F>(),l) ) 
 {
@@ -90,7 +90,7 @@ struct Functor< std::pair<X,Y> > {
 };
 
 template<>
-struct Functor< maybe > {
+struct Functor< maybe_type > {
     template< class M > 
     static constexpr bool each( const M& m ) {
         return (bool)m;
@@ -115,7 +115,7 @@ struct Functor< maybe > {
 };
 
 template<>
-struct Functor< category::sequence > {
+struct Functor< category::sequence_type > {
     /* f <$> [x0,x1,...] = [f x0, f x1, ...] */
     template< class F, class ...S >
     static constexpr decltype( list::map(declval<F>(),declval<S>()...) )
@@ -215,7 +215,7 @@ operator >> ( X&& x, Y&& y ) {
     return mdo( forward<X>(x), forward<Y>(y) );
 }
 
-template<> struct Monad< category::sequence > {
+template<> struct Monad< category::sequence_type > {
     template< class S, class X >
     constexpr static S mreturn( X&& x ) { 
         return S{ forward<X>(x) }; 
@@ -254,7 +254,7 @@ template< class P > struct IsPointerImpl {
     using bool_type = decltype( (bool)declval<P>() );
 };
 
-template<> struct Monad< maybe > {
+template<> struct Monad< maybe_type > {
     template< class M > using traits = maybe_traits<M>;
     template< class M > using value_type = typename traits<M>::value_type;
     template< class M > using smart_ptr  = typename traits<M>::smart_ptr;

@@ -173,7 +173,7 @@ fwd_mappend( XS&& xs, YS&& ys ) {
 template< class M > 
 decltype( mempty<M>() ) fwd_mempty() { return mempty<M>(); }
 
-template<> struct Monoid< category::sequence > {
+template<> struct Monoid< category::sequence_type > {
     template< class S >
     static S mempty() { return S{}; }
 
@@ -190,7 +190,7 @@ template<> struct Monoid< category::sequence > {
 };
 
 /* Monoid (Maybe X) -- where X is a monoid. */
-template<> struct Monoid< category::maybe > {
+template<> struct Monoid< category::maybe_type > {
     template< class M >
     static constexpr M mempty() { return nullptr; }
 
@@ -261,7 +261,7 @@ auto mplus( M1&& a, M2&& b )
     return Mo::mplus( forward<M1>(a), forward<M2>(b) );
 }
 
-template<> struct MonadPlus< category::sequence > {
+template<> struct MonadPlus< category::sequence_type > {
     template< class S >
     static S mzero() { return S(); }
 
@@ -273,7 +273,7 @@ template<> struct MonadPlus< category::sequence > {
     }
 };
 
-template<> struct MonadPlus< category::maybe > {
+template<> struct MonadPlus< category::maybe_type > {
     template< class M >
     static M mzero() { return nullptr; }
 

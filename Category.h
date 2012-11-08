@@ -28,7 +28,7 @@ struct other {};
  * Any type that:
  *      Has a defined begin(s) and end(s).
  */
-struct sequence {};
+struct sequence_type {};
 
 /*
  * Maybe 
@@ -37,7 +37,7 @@ struct sequence {};
  *      Can be converted to a boolean. (isJust/isNothing)
  *      But is not a function
  */
-struct maybe {};
+struct maybe_type {};
 
 // If we want to return a pointer that defines ownership, we want a smart
 // pointer. Consider any non-raw pointer good 'nuff.
@@ -60,16 +60,16 @@ template< class X >
 X cat( ... );
 
 template< class S >
-auto cat( const S& s ) -> decltype( begin(s), end(s), sequence() );
+auto cat( const S& s ) -> decltype( begin(s), end(s), sequence_type() );
 
 template< class M >
-auto cat( const M& m ) -> decltype( *m, (bool)m, maybe() );
+auto cat( const M& m ) -> decltype( *m, (bool)m, maybe_type() );
 
 template< class T > struct CatImpl {
     using type = decltype( cat<Decay<T>>(declval<T>()) );
 };
 
-// Prevent function pointers from being deduced as maybe types.
+// Prevent function pointers from being deduced as maybe_type types.
 template< class R, class ...X > struct CatImpl< R(&)(X...) > {
     typedef R(&type)(X...);
 };
