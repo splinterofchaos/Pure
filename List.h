@@ -17,17 +17,7 @@ using std::next;
 using std::prev;
 using std::get;
 
-// Used by group.
-// TODO: Return<sequence> should be implemented by a function in THIS file.
-template< class M > struct Return;
-
-namespace cata {
-    /*
-     * []
-     * Any type that:
-     *      Has a defined begin(s) and end(s).
-     */
-    struct sequence {};
+namespace category {
 
     template< class I >
     auto _dist( const I& i ) -> decltype( i - i );
@@ -46,13 +36,13 @@ namespace cata {
 namespace list {
 
 template< class S >
-using SeqRef = typename cata::sequence_traits<S>::reference;
+using SeqRef = typename category::sequence_traits<S>::reference;
 template< class S >
-using SeqVal = typename cata::sequence_traits<S>::value_type;
+using SeqVal = typename category::sequence_traits<S>::value_type;
 template< class S >
-using SeqIter = typename cata::sequence_traits<S>::iterator;
+using SeqIter = typename category::sequence_traits<S>::iterator;
 template< class S >
-using SeqDist = typename cata::sequence_traits<S>::distance_type;
+using SeqDist = typename category::sequence_traits<S>::distance_type;
 
 template< class I >
 using ItDist = decltype( declval<I>() - declval<I>() );
@@ -612,7 +602,7 @@ constexpr Decay<X> foldl( F&& f, X&& x, std::initializer_list<Y> s ) {
 }
 
 template< class F, class S, 
-          class X = typename cata::sequence_traits<S>::value_type >
+          class X = typename category::sequence_traits<S>::value_type >
 constexpr X foldl( F&& f, S&& s ) {
     return list::foldl( forward<F>(f), 
                         head(forward<S>(s)), tail_wrap(forward<S>(s)) );
@@ -637,7 +627,7 @@ constexpr Decay<X> foldr( F&& f, X&& x, std::initializer_list<Y> s ) {
 }
 
 template< class F, class S, 
-          class X = typename cata::sequence_traits<S>::value_type >
+          class X = typename category::sequence_traits<S>::value_type >
 constexpr X foldr( F&& f, S&& s ) {
     return list::foldr( forward<F>(f), 
                         last(forward<S>(s)), init_wrap(forward<S>(s)) );
@@ -693,20 +683,20 @@ constexpr struct Cons_ {
 } cons_{};
 
 template< class XS, class X >
-XS cons( XS xs, X&& x ) {
+XS _cons( XS xs, X&& x ) {
     cons_( xs, forward<X>(x) );
     return xs;
 }
 
 template< class S, class X >
 void _consRef( S& s, X&& x ) {
-    s = cons( move(s), forward<X>(x) );
+    s = _cons( move(s), forward<X>(x) );
 }
 
 template< class XS, class X, class Y, class ...Z >
-XS cons( XS xs, X&& x, Y&& y, Z&& ...z ) {
-    return cons (
-        cons( move(xs), forward<X>(x) ),
+XS _cons( XS xs, X&& x, Y&& y, Z&& ...z ) {
+    return _cons (
+        _cons( move(xs), forward<X>(x) ),
         forward<Y>(y), forward<Z>(z)...
     );
 }
@@ -725,12 +715,12 @@ XS rcons( XS xs, X&& x, Y&& y, Z&& ...z ) {
     );
 }
 
-struct Cons {
+constexpr struct Cons {
     template< class S, class ...X >
     S operator() ( S s, X&& ...x ) const {
-        return cons( move(s), forward<X>(x)... );
+        return _cons( move(s), forward<X>(x)... );
     }
-};
+} cons{};
 
 struct RCons {
     template< class S, class ...X >
@@ -1111,8 +1101,7 @@ constexpr S intersparse( const X& x, const S& s ) {
 
 template< class S, class SS, class R >
 constexpr R _everyOther_append( const S& s, const SS& ss, R r ) {
-    using F = R (*)( R, const S&, SeqRef<SS> );
-    return foldl( middleClosure((F)append,s), move(r), ss );
+    return foldl( middleClosure(Append(),s), move(r), ss );
 }
 
 template< class S, class SS >
@@ -1207,7 +1196,7 @@ R filtrate( F&& f, P&& p, S&& s ) {
 
 /* find pred xs -> Maybe x */
 template< class F, class S,
-          class Val = typename cata::sequence_traits<S>::value_type >
+          class Val = typename category::sequence_traits<S>::value_type >
 const Val* find( F&& f, S&& s ) {
     auto e = end( forward<S>(s) );
     auto it = std::find_if( begin(forward<S>(s)), e, forward<F>(f) );
@@ -1637,18 +1626,15 @@ V group( S&& s, P&& p = P() ) {
 
     for( ; it != e; it = next) {
         auto adj = std::adjacent_find( it, e, forward<P>(p) );
-        v = maybeConsRange ( 
-            // First, cons all the non-adjacent members.
-            list::foldl (
-                // \v s -> cons v (return s)
-                flip( compose(flip(Cons()), Return<_S>()) ),
-                move(v), range<S>( it, adj ) 
-            ),
-            // Then cons the adjacent members.
-            _S( adj, 
-                next = cfindNot( *adj, range<S>(adj,e),
-                                  forward<P>(p) ) ) 
-        );
+
+        // First, cons all the non-adjacent members.
+        for( const auto& x : range<S>(it,adj) )
+            v.push_back(_S{x});
+
+        // Then cons the adjacent members.
+        next = cfindNot( *adj, range<S>(adj,e), forward<P>(p) );
+        if( next != adj )
+            v.emplace_back( adj, next ); 
     }
 
     return v;

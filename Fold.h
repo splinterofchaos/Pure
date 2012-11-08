@@ -54,7 +54,7 @@ auto foldr( F&& f, X&& x, Y&& y, Z&& ...z )
                       forward<X>(x), forward<Y>(y), forward<Z>(z)... );
 }
 
-template<> struct Foldable< cata::sequence > {
+template<> struct Foldable< category::sequence_type > {
     template< class S > using Val = list::SeqVal<S>;
     template< class S > using Ref = list::SeqRef<S>;
 
@@ -99,7 +99,7 @@ template<> struct Foldable< cata::sequence > {
     }
 };
 
-template<> struct Foldable< cata::maybe > {
+template<> struct Foldable< category::maybe_type > {
     template< class F, class X, class M >
     static Decay<X> foldr( F&& f, X&& x, M&& m ) {
         return not m ? forward<X>(x)

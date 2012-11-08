@@ -1,12 +1,14 @@
 
+#pragma once
+
 #include "Pure.h"
 #include "Arrow.h"
-
-#pragma once
 
 namespace pure {
 
 namespace state {
+
+using namespace arrow;
 
 template< class S, class A, template<class...>class M, class F > 
 struct StateT { 
@@ -81,6 +83,8 @@ constexpr auto exec = fcompose( snd, run );
 
 } // namespace state
 
+namespace monad {
+
 template< class S, class A, template<class...>class M, class F > 
 struct Functor< state::StateT<S,A,M,F> > {
     /* 
@@ -89,9 +93,11 @@ struct Functor< state::StateT<S,A,M,F> > {
      */
     template< class G > static
     auto fmap( G g, state::StateT<S,A,M,F> s ) 
-        -> state::StateT< S, A, M, FCompose<arr::First::template type<G>,F> >
+        -> state::StateT< S, A, M,
+            decltype( fcompose( arrow::first(move(g)), move(s.f) ) )
+        >
     {
-        return { fcompose( arr::first(move(g)), move(s.f) ) };
+        return { fcompose( arrow::first(move(g)), move(s.f) ) };
     }
 };
 
@@ -115,12 +121,12 @@ struct Monad< state::StateT<S,A,M,F> > {
     template< class K >
     static constexpr auto mbind( State m, K k ) 
         -> state::StateT< S, A, M, decltype (
-            mcompose( compose(arr::unsplit(state::run),arr::first(move(k))), 
-                      closet(state::run,m) )
+            mcompose( compose(arrow::uncurry(state::run),arrow::first(move(k))),
+                      closet(state::run,move(m)) )
         ) >
     {
         return { mcompose ( 
-            compose( arr::unsplit(state::run), arr::first(move(k)) ),
+            compose( arrow::uncurry(state::run), arrow::first(move(k)) ),
             closet( state::run, move(m) ) 
         ) };
     }
@@ -132,6 +138,8 @@ struct Monad< state::StateT<S,A,M,F> > {
         return mbind( forward<SA>(sa), pure(forward<SB>(sb)) );
     }
 };
+
+} // namespace monad
 
 namespace state {
 
@@ -205,19 +213,18 @@ struct SPut {
 
 template< class S, template<class...>class M = Identity, class F >
 constexpr auto modify( F f ) 
-    -> decltype( get<S,M>() >>= compose( SPut<S,M>(), f ) )
+    -> decltype( get<S,M>()>>=compose(SPut<S,M>(),f) )
 {
     return get<S,M>() >>= compose( SPut<S,M>(), f );
 }
 
 template< class S, template<class...>class M = Identity, class F,
-          class Fst = typename arr::First::template type<F>,
-          class G = Composition< Fst, arr::Splitter > >
+          class Fst = decltype( arrow::first(std::declval<F>()) ),
+          class G = Composition< Fst, Duplicate > >
 constexpr auto gets( F f ) 
-    //-> decltype( get<S,M>() >>= compose( R(), move(f) ) )
     -> decltype( stateT<S,M>( declval<G>() ) )
 {
-    return stateT<S,M>( compose( arr::first(move(f)), arr::splitter ) );
+    return stateT<S,M>( compose( arrow::first(move(f)), duplicate ) );
 }
 
 template< class S, template<class...>class M, class _F >
@@ -231,13 +238,13 @@ struct MonadState< StateT<S,S,M,_F> > {
 
     using RetM  = pure::Return< Monad >;
 
-    using GetF = Composition< RetM, arr::Splitter >;
+    using GetF = Composition< RetM, Duplicate >;
     using SetF = Composition< RetM, RCloset<ReturnPair,S> >;
 
 
-    //static constexpr State<GetF> getter = state<S,S>( splitter );
+    //static constexpr State<GetF> getter = state<S,S>( duplicate );
 
-    static constexpr State<GetF> get() { return stateT<S,M>( arr::splitter ); }
+    static constexpr State<GetF> get() { return stateT<S,M>( duplicate ); }
 
     static constexpr State<SetF> put( S s ) {
         return stateT<S,M>( rcloset(returnPair,move(s)) );
