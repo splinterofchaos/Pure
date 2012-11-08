@@ -1936,30 +1936,30 @@ namespace taking {
 
 template< class S >
 auto operator < ( S&& s, unsigned long long x ) 
-    -> decltype( takeWhile(lessThan(x),declval<S>()) )
+    -> decltype( takeWhile(less.with(x),declval<S>()) )
 {
-    return takeWhile( lessThan(x), forward<S>(s) );
+    return takeWhile( less.with(x), forward<S>(s) );
 }
 
 template< class S >
 auto operator > ( S&& s, unsigned long long x ) 
-    -> decltype( takeWhile(greaterThan(x),declval<S>()) )
+    -> decltype( takeWhile(greater.with(x),declval<S>()) )
 {
-    return takeWhile( greaterThan(x), forward<S>(s) );
+    return takeWhile( greater.with(x), forward<S>(s) );
 }
                       
 template< class S >
 auto operator >= ( S&& s, unsigned long long x ) 
-    -> decltype( takeWhile(greaterEqualTo(x),declval<S>()) )
+    -> decltype( takeWhile(greaterEq.with(x),declval<S>()) )
 {
-    return takeWhile( greaterEqualTo(x), forward<S>(s) );
+    return takeWhile( greaterEq.with(x), forward<S>(s) );
 }
 
 template< class S >
 auto operator <= ( S&& s, unsigned long long x ) 
-    -> decltype( takeWhile(lessEqualTo(x),declval<S>()) )
+    -> decltype( takeWhile(lessEq.with(x),declval<S>()) )
 {
-    return takeWhile( lessEqualTo(x), forward<S>(s) );
+    return takeWhile( lessEq.with(x), forward<S>(s) );
 }
 
 template< class S, class F >

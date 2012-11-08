@@ -93,14 +93,14 @@ constexpr unsigned long long operator "" _M ( unsigned long long x ) {
     return x * 1000000;
 }
 
-auto fibs = biIterate( Add(), 1ull, 2ull );
+auto fibs = biIterate( add, 1ull, 2ull );
 
 void problem2() {
     using namespace pure::list::misc;
     using namespace pure::list::taking;
     cout << "The sum of every even Fibonacci number below 4-million: "
          << flush << sum (
-             (biIterate( Add(), 1u, 2u ) < 4_M) / even 
+             (biIterate( Add(), 1u, 2u ) < 4_M) / even
          ) << endl;
 }
 
@@ -249,7 +249,7 @@ void problem4() {
                 return maximum (
                     // Multiply the init of r by its last; filter for
                     // palindromes.
-                    times(-r) * (++r) / palindrome | A(0) // And append zero.
+                    pure::mult(-r) * (++r) / palindrome | A(0) // And append zero.
                 );
             },
             // We remove the first three values: {} {100}, and {100,101}.
@@ -361,11 +361,11 @@ int& get_x( Vec& v ) { return get<0>(v); }
 int& get_y( Vec& v ) { return get<1>(v); }
 
 Vec operator+ ( const Vec& a, const Vec& b ) {
-    return zipWith( Add(), a, b );
+    return zipWith( add, a, b );
 }
 
 Vec operator- ( const Vec& a, const Vec& b ) {
-    return zipWith( Subtract(), a, b );
+    return zipWith( sub, a, b );
 }
 
 Vec operator* ( Vec a, int x ) {
@@ -373,8 +373,7 @@ Vec operator* ( Vec a, int x ) {
 }
 
 #include <cstdio>
-Vec operator "" _v ( const char* const str, 
-                                              size_t ) 
+Vec operator "" _v ( const char* const str, size_t )
 {
     Vec v;
     sscanf( str, "%dx%d", &get_x(v), &get_y(v) );
@@ -821,7 +820,7 @@ void problem23() {
     for( auto i : enumerate(as) )
         for( auto j : enumerate(i,length(as)-1) ) 
             aSums.push_back( as[i] + as[j] );
-    aSums = filter( lessEqualTo(LARGEST), nub(move(aSums)) );
+    aSums = filter( lessEq(LARGEST), nub(move(aSums)) );
 
     cout << "not the sum of two abundants : " << flush;
 

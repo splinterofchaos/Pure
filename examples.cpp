@@ -66,7 +66,7 @@ unique_ptr<Vec> quadratic_root( float a, float b, float c )
 }
 
 int five() { return 5; }
-constexpr auto times_two = times(2);
+constexpr auto times_two = mult(2);
 constexpr int plus_two(int x) { return x + 2; }
 
 // squash(f) returns a functor that duplicates its first argument.

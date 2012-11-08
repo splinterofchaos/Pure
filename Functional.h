@@ -462,7 +462,7 @@ template< class D > struct Binary {
     }
 };
 
-constexpr struct Add : public Binary<Add> {
+constexpr struct Add : Binary<Add> {
     using Binary<Add>::operator();
 
     template< class X, class Y >
@@ -471,102 +471,95 @@ constexpr struct Add : public Binary<Add> {
     {
         return forward<X>(x) + forward<Y>(y);
     }
-} add;
+} add{};
 
-struct Subtract {
+constexpr struct Sub : Binary<Sub> {
+    using Binary<Sub>::operator();
+
     template< class X, class Y >
     constexpr auto operator() ( X&& x, Y&& y ) 
         -> decltype( declval<X>() - declval<Y>() )
     {
         return forward<X>(x) - forward<Y>(y);
     }
-};
+} sub{};
 
-struct Mult {
+constexpr struct Mult : Binary<Mult> {
+    using Binary<Mult>::operator();
+
     template< class X, class Y >
     constexpr auto operator() ( X&& x, Y&& y ) 
         -> decltype( declval<X>() * declval<Y>() )
     {
         return forward<X>(x) * forward<Y>(y);
     }
+} mult{};
+
+template< class D > struct ClosedBinary {
+    template< class X >
+    constexpr Part<D,X> operator () ( X x ) {
+        return closet( D(), move(x) );
+    }
+
+    template< class X >
+    constexpr RPart<D,X> with( X x ) {
+        return rcloset( D(), move(x) );
+    }
 };
 
-template< class X >
-constexpr Closet<Mult,X> times( X x ) {
-    return closet( Mult(), move(x) );
-}
+constexpr struct NotEq : ClosedBinary<NotEq> {
+    using ClosedBinary<NotEq>::operator();
 
-struct NotEq {
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
         return forward<X>(x) != forward<Y>(y);
     }
-};
+} notExqualTo{};
 
-struct Eq {
+constexpr struct Eq : ClosedBinary<Eq> {
+    using ClosedBinary<Eq>::operator();
+
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
         return forward<X>(x) == forward<Y>(y);
     }
-};
+} equalTo{};
 
-template< class X >
-constexpr Closet<Eq,X> equalTo( X x ) {
-    return closet( Eq(), x );
-}
+constexpr struct Less : ClosedBinary<Less> {
+    using ClosedBinary<Less>::operator();
 
-template< class X >
-constexpr Closet<Eq,X> notEqualTo( X x ) {
-    return closet( NotEq(), x );
-}
-
-struct Less {
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
         return forward<X>(x) < forward<Y>(y);
     }
-};
+} less{};
 
-struct LessEq {
+constexpr struct LessEq : ClosedBinary<LessEq> {
+    using ClosedBinary<LessEq>::operator();
+
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
         return forward<X>(x) <= forward<Y>(y);
     }
-};
+} lessEq{};
 
-template< class X >
-constexpr RCloset<Less,X> lessThan( X x ) {
-    return rcloset(Less(), move(x));
-}
+constexpr struct Greater : ClosedBinary<Greater> {
+    using ClosedBinary<Greater>::operator();
 
-template< class X >
-constexpr RCloset<LessEq,X> lessEqualTo( X x ) {
-    return rcloset(LessEq(), move(x));
-}
-
-struct Greater {
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
-        return forward<X>(x) < forward<Y>(y);
+        return forward<X>(x) > forward<Y>(y);
     }
-};
+} greater{};
 
-struct GreaterEq {
+constexpr struct GreaterEq : ClosedBinary<GreaterEq> {
+    using ClosedBinary<GreaterEq>::operator();
+
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
-        return forward<X>(x) <= forward<Y>(y);
+        return forward<X>(x) >= forward<Y>(y);
     }
-};
-
-template< class X >
-constexpr RCloset<Greater,X> greaterThan( X x ) {
-    return rcloset(Greater(), move(x));
-}
-
-template< class X >
-constexpr Closet<GreaterEq,X> greaterEqualTo( X x ) {
-    return closet(GreaterEq(), move(x));
-}
+} greaterEq{};
 
 struct BinaryNot {
     template< class B >
@@ -580,12 +573,14 @@ constexpr auto fnot( F f ) -> decltype( compose(BinaryNot(),declval<F>()) ) {
     return compose( BinaryNot(), move(f) );
 }
 
-struct Mod {
+constexpr struct Mod : Binary<Mod> {
+    using Binary<Mod>::operator();
+
     template< class X, class Y >
     constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
         return forward<X>(x) % forward<Y>(y);
     }
-};
+} mod{};
 
 template< class X >
 constexpr auto divisibleBy( X x ) -> Composition<BinaryNot,RCloset<Mod,X>> {
