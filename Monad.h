@@ -275,16 +275,22 @@ template<> struct Monad< cata::maybe > {
     }
 };
 
+constexpr struct LiftCons {
+    // k m m' = do { x <- m; xs <- m'; return (x:xs) }
+    template< template<class...> class M, class YS, class X >
+    constexpr M<YS> operator () ( const M<YS>& my, const M<X>& mx )
+    {
+        return mx >>= [&]( const X& x ) {
+            return my >>= [&]( const YS& ys ) {
+                return mreturn<M>( list::cons(ys,x) );
+            };
+        };
+    }
+} liftCons{};
+
 template< template<class...> class S, template<class...> class M, class X >
 M<S<X>> sequence( const S<M<X>>& smx ) {
-    S<X> r;
-
-    for( const auto& mx : smx ) mx >>= [&]( const X& x ) {
-        r.push_back( x );
-        return mreturn<M>(x); // Dummy return value for type correctness.
-    };
-
-    return mreturn<M>( std::move(r) );
+    return list::foldl( liftCons, mreturn<M>(S<X>{}), smx );
 }
 
 } // namespace monad

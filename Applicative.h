@@ -106,7 +106,14 @@ template<> struct Applicative< cata::sequence > {
         return S<Decay<X>>{ std::forward<X>(x) };
     }
 
-    static constexpr auto ap = fmap(call);
+//    static constexpr auto ap = fmap(call);
+
+    template< class XS, class YS >
+    static constexpr auto ap( XS&& xs, YS&& ys )
+        -> decltype( fmap( call, std::declval<XS>(), std::declval<YS>() ) )
+    {
+        return fmap( call, std::forward<XS>(xs), std::forward<YS>(ys) );
+    }
 };
 
 template< class _X, class _Y > struct Applicative< std::pair<_X,_Y> > {

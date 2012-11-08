@@ -461,6 +461,11 @@ int main()
         v.emplace_back(Just(3));
         printf( "sequence [Just 1, Just 2, Just 3] = %s\n",
                 show( sequence(v) ).c_str() );
+
+        std::vector<std::vector<int>> vv = { {1,2,3}, {4,5}, {6,7} };
+        printf( "sequence [[1,2,3],[4,5],[6,7]] = %s\n",
+                        show( sequence(vv) ).c_str() );
+
     }
 
     printf( "Just [1,2] <> Just [3,4] = %s\n",
