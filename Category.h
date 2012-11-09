@@ -89,28 +89,38 @@ struct CId {
     constexpr X operator() ( X&& x ) { return cid( forward<X>(x) ); }
 };
 
-/* Let comp be a generalization of compose. */
-template< class F, class ...G, class C = Category< Cat<F> > >
-constexpr decltype( C::comp( declval<F>(), declval<G>()... ) )
-comp( F&& f, G&& ...g ) {
-    return C::comp( forward<F>(f), forward<G>(g)... );
-}
+constexpr struct Comp : Chainable<Comp> {
+    using Chainable<Comp>::operator();
 
-/* comp reversed. */
-template< class F, class G >
-constexpr auto fcomp( F&& f, G&& g )
-    -> decltype( comp(declval<G>(), declval<F>()) )
-{
-    return comp( forward<G>(g), forward<F>(f) );
-}
+    /* Let comp be a generalization of compose. */
+    template< class F, class G, class C = Category< Cat<F> > >
+    constexpr auto operator () ( F&& f, G&& g )
+        -> decltype( C::comp( declval<F>(), declval<G>() ) )
+    {
+        return C::comp( forward<F>(f), forward<G>(g) );
+    }
+} comp{};
 
-template< class F, class G, class H, class ...I>
-constexpr decltype( comp( fcomp(declval<G>(),declval<H>(),declval<I>()...),
-                          declval<F>() ) )
-fcomp( F&& f, G&& g, H&& h, I&& ...i ) {
-    return comp( fcomp( forward<G>(g), forward<H>(h), forward<I>(i)... ),
-                 forward<F>(f) );
-}
+constexpr struct FComp : Binary<FComp> {
+    using Binary<FComp>::operator();
+
+    /* comp reversed. */
+    template< class F, class G >
+    constexpr auto operator () ( F&& f, G&& g )
+        -> decltype( comp(declval<G>(), declval<F>()) )
+    {
+        return comp( forward<G>(g), forward<F>(f) );
+    }
+
+    template< class F, class G, class H, class ...I>
+    constexpr auto operator () ( F&& f, G&& g, H&& h, I&& ...i )
+        -> decltype( comp( (*this)(declval<G>(),declval<H>(),declval<I>()...),
+                     declval<F>() ) )
+    {
+        return comp( (*this)( forward<G>(g), forward<H>(h), forward<I>(i)... ),
+                     forward<F>(f) );
+    }
+} fcomp{};
 
 /* Default category: function. */
 template< class F > struct Category<F> {
@@ -121,11 +131,7 @@ template< class F > struct Category<F> {
         return std::forward<G>(g);
     }
 
-    template< class _F, class ..._G > static
-    constexpr decltype( compose(declval<_F>(),declval<_G>()...) )
-    comp( _F&& f, _G&& ...g ) {
-        return compose( forward<_F>(f), forward<_G>(g)... );
-    }
+    static constexpr auto comp = compose;
 };
 
 
