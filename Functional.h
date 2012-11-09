@@ -53,7 +53,7 @@ struct Part {
      * supplied. Part otherwise has no idea whether f takes 1 or 10 xs.
      */
     template< class ... Xs >
-    constexpr auto operator() ( Xs&& ...xs )
+    constexpr auto operator () ( Xs&& ...xs )
         -> decltype( f(x,declval<Xs>()...) )
     {
         return f( x, forward<Xs>(xs)... );
@@ -80,6 +80,11 @@ template< class F, class X > struct RPart {
     }
 };
 
+/*
+ * Given any binary function, f(x,y):
+ *      Let f(x) represent a partial application.
+ *      Left f.with(y) represent a right-oriented application.
+ */
 template< class D > struct Binary {
     template< class X >
     constexpr Part<D,X> operator () ( X x ) {
@@ -92,6 +97,11 @@ template< class D > struct Binary {
     }
 };
 
+/*
+ * Right Associativity
+ * Given a binary function, f(x,y):
+ *      Let f(x,y,z,h) = f( f( f(x,y) ,z ), h ) // Chaining
+ */
 template< class D > struct Chainable : Binary<D> {
     using Binary<D>::operator();
 
@@ -124,6 +134,35 @@ template< class D > struct Chainable : Binary<D> {
             D()( std::forward<X>(x), std::forward<Y>(y) ),
             std::forward<Z>(z), std::forward<H>(h), std::forward<J>(j)...
         );
+    }
+};
+
+
+/*
+ * Transitivity:
+ * Given a transitive function, f(x,y,z), f(x,y) and f(y,z) implies f(x,z).
+ * Let "and" be some function that folds the return of f.
+ */
+template< class F, class Fold > struct Transitive : Binary<F> {
+    using Binary<F>::operator();
+
+    template< class X, class Y, class Z >
+    constexpr auto operator () ( X&& x, Y&& y, Z&& z )
+        -> Result<F,X,Y>
+    {
+        return Fold() (
+            F()( forward<X>(x), forward<Y>(y) ),
+            F()( forward<Y>(y), forward<Z>(z) )
+        );
+    }
+
+    template< class X, class Y, class Z, class A, class ...B >
+    constexpr auto operator () ( X&& x, Y&& y, Z&& z, A&& a, B&& ...b )
+        -> Result<F,X,Y>
+    {
+        return Fold() ( F()( forward<X>(x), forward<Y>(y) ),
+                        F()( forward<Y>(y), forward<Z>(z),
+                             forward<A>(a), forward<B>(b)... ) );
     }
 };
 
@@ -454,30 +493,6 @@ constexpr struct NotEq : Binary<NotEq> {
         return forward<X>(x) != forward<Y>(y);
     }
 } notExqualTo{};
-
-template< class D, class F > struct Transitive : Binary<D> {
-    using Binary<D>::operator();
-
-    template< class X, class Y, class Z >
-    constexpr auto operator () ( X&& x, Y&& y, Z&& z )
-        -> Result<D,X,Y>
-    {
-        return F() (
-            D()( forward<X>(x), forward<Y>(y) ),
-            D()( forward<X>(x), forward<Z>(z) )
-        );
-    }
-
-    template< class X, class Y, class Z, class A, class ...B >
-    constexpr auto operator () ( X&& x, Y&& y, Z&& z, A&& a, B&& ...b )
-        -> Result<D,X,Y>
-    {
-        return F() (
-            D()( forward<X>(x), forward<Y>(y) ),
-            D()( forward<Z>(z), forward<A>(a), forward<B>(b)... )
-        );
-    }
-};
 
 struct And : Chainable<And> {
     using Chainable<And>::operator();
