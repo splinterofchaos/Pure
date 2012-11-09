@@ -413,14 +413,15 @@ void problem11() {
         io::fileContents<Line>( fin ) 
     );
 
+    using pure::ap::spure;
 
     cout << pure::list::foldMap ( 
         [&](int i, int j, const Vec& dir) { 
             return take_dir_prod( dir, {{i,j}}, 4, mat ); 
         }, pure::max, 0ull,
         enumerate(mat), enumerate(mat[0]),  
-        pure::ap::spure<Vec>( "-1x0"_v, " 1x1"_v,
-                              " 0x1"_v, "-1x1"_v )
+        spure( "-1x0"_v, " 1x1"_v,
+               " 0x1"_v, "-1x1"_v )
     ) << endl;
 }
 

@@ -121,7 +121,7 @@ struct Monad< state::StateT<S,A,M,F> > {
     }
 
     template< class K >
-    static constexpr auto mbind( State m, K k ) 
+    static constexpr auto mbind( K k, State m )
         -> state::StateT< S, A, M, decltype (
             mcompose( compose(arrow::uncurry(state::run),arrow::first(move(k))),
                       closet(state::run,move(m)) )
@@ -135,9 +135,9 @@ struct Monad< state::StateT<S,A,M,F> > {
 
     template< class SA, class SB >
     static constexpr auto mdo( SA&& sa, SB&& sb ) 
-        -> decltype( mbind( forward<SA>(sa), pure(forward<SB>(sb)) ) )
+        -> decltype( forward<SA>(sa) >>= pure(forward<SB>(sb)) )
     {
-        return mbind( forward<SA>(sa), pure(forward<SB>(sb)) );
+        return forward<SA>(sa) >>= pure(forward<SB>(sb));
     }
 };
 

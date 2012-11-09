@@ -553,7 +553,7 @@ namespace monad {
         }
 
         template< class I, class F, class X = IdentGet<I> >
-        static auto mbind( I&& i, F&& f ) 
+        static auto mbind( F&& f, I&& i )
             -> decltype( declval<F>()( declval<X>() ) )
         {
             return forward<F>(f)( forward<I>(i).get() );

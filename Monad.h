@@ -146,10 +146,10 @@ mdo( A&& a, B&& b ) {
 /* m >>= k */
 template< class M, class F,
           class Mo = Monad<Cat<M>> >
-auto mbind( M&& m, F&& f ) 
-    -> decltype( Mo::mbind(declval<M>(),declval<F>()) ) 
+auto mbind( F&& f, M&& m )
+    -> decltype( Mo::mbind(declval<F>(),declval<M>()) )
 {
-    return Mo::mbind( forward<M>(m), forward<F>(f) ); 
+    return Mo::mbind( forward<F>(f), forward<M>(m) );
 }
 
 /* return<M> x = M x */
@@ -194,9 +194,10 @@ M mfail( const char* const why ) {
 }
 
 template< class X, class Y >
-decltype( mbind(declval<X>(),declval<Y>()) ) 
-operator >>= ( X&& x, Y&& y ) {
-    return mbind( forward<X>(x), forward<Y>(y) );
+auto operator >>= ( X&& x, Y&& y )
+    -> decltype( mbind(declval<Y>(),declval<X>()) )
+{
+    return mbind( forward<Y>(y), forward<X>(x) );
 }
 
 template< class X, class Y >
@@ -228,15 +229,17 @@ template<> struct Monad< category::sequence_type > {
         return c;
     }
 
+    static constexpr auto mbind = list::concatMap;
+
     /* m >>= k -- where m is a sequence. */
-    template< class S, class F >
-    static decltype( list::concatMap(declval<F>(),declval<S>()) )
-    mbind( S&& xs, F&& f ) { 
-        // xs >>= f = foldr g [] xs 
-        //     where g acc x = acc ++ f(x)
-        //           ++ = append
-        return list::concatMap( f, xs );
-    }
+//    template< class S, class F >
+//    static decltype( list::concatMap(declval<F>(),declval<S>()) )
+//    mbind( S&& xs, F&& f ) {
+//        // xs >>= f = foldr g [] xs
+//        //     where g acc x = acc ++ f(x)
+//        //           ++ = append
+//        return list::concatMap( f, xs );
+//    }
 };
 
 template< class P > struct IsPointerImpl { 
@@ -271,8 +274,8 @@ template<> struct Monad< maybe_type > {
     using Result = Result< F, value_type<M> >;
 
     template< class M, class F >
-    static constexpr Result<M,F> mbind( M&& x, F&& f ) {
-        return x ? forward<F>(f)( *forward<M>(x) ) : nullptr;
+    static constexpr Result<M,F> mbind( F&& f, M&& m ) {
+        return m ? forward<F>(f)( *forward<M>(m) ) : nullptr;
     }
 };
 
