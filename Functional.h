@@ -317,10 +317,12 @@ struct BComposition
     }
 };
 
-template< class F, class G, class H, class C = BComposition<F,G,H> >
-constexpr C bcompose( F f, G g, H h ) {
-    return C( move(f), move(g), move(h) );
-}
+constexpr struct BCompose {
+    template< class F, class G, class H, class C = BComposition<F,G,H> >
+    constexpr C operator () ( F f, G g, H h ) {
+        return C( move(f), move(g), move(h) );
+    }
+} bcompose{};
 
 template< size_t N, class P >
 using Nth = decltype( std::get<N>( declval<P>() ) );
