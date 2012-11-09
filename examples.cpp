@@ -42,7 +42,7 @@ Vec operator + ( const Vec& a, const Vec& b )
 
 Vec operator * ( Vec a, float x )
 {
-    return map( closure(Mult(),x), a ); 
+    return mult(x) ^ a;
 }
 Vec operator * ( float x, Vec a ) { return move(a) * x; }
 
@@ -66,11 +66,9 @@ unique_ptr<Vec> quadratic_root( float a, float b, float c )
 }
 
 int five() { return 5; }
-constexpr auto times_two = mult(2);
-constexpr int plus_two(int x) { return x + 2; }
 
 // squash(f) returns a functor that duplicates its first argument.
-constexpr auto square = squash( Mult() );
+constexpr auto square = squash( mult );
 // square(x) = x * x
 
 float to_float( int x ) { return x; }
@@ -229,7 +227,7 @@ int main()
     printf( "\ttail es = %s\n\tinit es = %s\n",
             show( tail(evens) ).c_str(), show( init(evens) ).c_str() );
     printf( "\tinits es = %s\n", show( inits(evens) ).c_str() );
-    printf( "\treverse es = %s\n", show( reverse(evens) ).c_str() );
+    printf( "\treverse es = %s\n", show( pure::list::reverse(evens) ).c_str() );
     printf( "\tisPrefixOf [2,4] es = %s\n", show( prefix({2,4},evens) ).c_str() );
     printf( "\telem 2 es = %s\n",   show( elem(  2,evens) ).c_str() );
     printf( "\tdelete 4 es = %s\n", show( erase( 4,evens) ).c_str() );
@@ -273,7 +271,7 @@ int main()
 
     puts("");
     printf( "take 10 $ iterate (+2) 1 = %s\n",
-            show( take( 10, iterate(plus_two,1) ) ).c_str() );
+            show( take( 10, iterate(add(2),1) ) ).c_str() );
     printf( "replicate 10 1 = %s\n",
             show( replicate(10, 1) ).c_str() );
     puts("");
@@ -293,7 +291,7 @@ int main()
     printf( "\"footo\" `intersect` \"onopor\" = %s\n",
             show( intersect(string("footo"),string("onopor")) ).c_str() );
     printf( "intersectBy (<) \"footo\" \"onopor\" = %s\n",
-            show( intersectIf(std::greater<char>(),string("footo"),string("onopor")) ).c_str() );
+            show( intersectIf(pure::greater,string("footo"),string("onopor")) ).c_str() );
 
     // isspace is a macro, so we need to wrap it to pass it.
     auto is_space = [](char c){ return isspace(c); };
@@ -337,8 +335,8 @@ int main()
     printf( "quadratic root of x^2 + 4 = 0 : %s\n",
             show( quadratic_root(1,0,4) ).c_str() );
 
-    auto sqrDoublePlus2 = arrow::comp( plus_two, times_two, square );
-    auto rsqrDoublePlus2 = arrow::fcomp( square, times_two, plus_two );
+    auto sqrDoublePlus2 = arrow::comp( add(2), mult(2), square );
+    auto rsqrDoublePlus2 = arrow::fcomp( square, mult(2), add(2) );
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", sqrDoublePlus2(3) );
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", rsqrDoublePlus2(3) );
 
@@ -349,36 +347,33 @@ int main()
     printf( "addM2 (Just 2) (Just 4) = %s\n\n",
             show( addM2(Just(2), Just(4)) ).c_str() );
 
-    printf( "5 * 2 = %d\n", closet(Mult(),5)(2) );
-    printf( "5 * 2 = %d\n", closet(Mult(),5,2)() );
-
     puts("");
     puts("p2M = fmap (+2)");
-    auto plus_twoM = fmap( plus_two );
+    auto plus_twoM = fmap( add(2) );
     printf( "\tp2M (1,2) = %s\n\tp2M [1,2] = %s\n",
             show( plus_twoM(make_pair(1,2)) ).c_str(),
             show( plus_twoM(std::list<int>{1,2}) ).c_str() );
     puts("");
 
-    printf( "(+2) <$> (pure 1) (100) = %d\n", fmap(plus_two, pure::pure(1))(100) );
-    printf( "\tccomp (+2) (pure 1) $ () = %d\n", ccompose(plus_two,pure::pure(1))() );
-    printf( "(+2) <$> (+2) 1 = %d\n", fmap(plus_two, plus_two)(1) );
+    printf( "(+2) <$> (pure 1) (100) = %d\n", fmap(add(2), pure::pure(1))(100) );
+    printf( "\tccomp (+2) (pure 1) $ () = %d\n", ccompose(add(2),pure::pure(1))() );
+    printf( "(+2) <$> (+2) 1 = %d\n", fmap(add(2), add(2))(1) );
 
     printf( "(+2) <$> (Pair 1 2) = %s\n", 
-            show( plus_two ^ std::make_pair(1,2) ).c_str() );
+            show( add(2) ^ std::make_pair(1,2) ).c_str() );
 
     printf( "(+2) <$> [1,2] = %s\n", 
-            show( plus_two ^ std::list<int>{1,2} ).c_str() );
+            show( add(2) ^ std::list<int>{1,2} ).c_str() );
 
     printf( "(+2) <$> (Just 2)  = %s\n", 
-            show( plus_two ^ Just(2) ).c_str() );
+            show( add(2) ^ Just(2) ).c_str() );
     printf( "(+2) <$> (Nothing) = %s\n", 
-            show( plus_two ^ Nothing<int>() ).c_str() );
+            show( add(2) ^ Nothing<int>() ).c_str() );
 
     printf( "(+2) <$> (Left \"yawn\") = %s\n", 
-            show( plus_two ^ Left<int>("yawn") ).c_str() );
+            show( add(2) ^ Left<int>("yawn") ).c_str() );
     printf( "(+2) <$> (Right 5)     = %s\n",
-            show( plus_two ^ Right<string>(5) ).c_str() );
+            show( add(2) ^ Right<string>(5) ).c_str() );
     printf( "\t(+) <$> Pair 1 2 <*> Pair 3 4 = %s\n", 
             show( fmap(add, std::make_pair(1,2),
                             std::make_pair(3,4)) ).c_str() );
@@ -417,15 +412,15 @@ int main()
 
         puts("");
         printf( "Just (+2) <*> Just 2  = %s\n",
-                show( Just(plus_two) * Just(2) ).c_str() );
+                show( Just(add(2)) * Just(2) ).c_str() );
         printf( "Just (+2) <*> Nothing = %s\n",
-                show( Just(plus_two) * Nothing<int>() ).c_str() );
+                show( Just(add(2)) * Nothing<int>() ).c_str() );
 
-        auto rp2 = Right<int>( plus_two );
+        auto rp2 = Right<int>( add(2) );
         printf( "Right (+2) <*> Right 1 = %s\n",
-                show( Right<int>(plus_two) * Right<int>(1) ).c_str() );
+                show( Right<int>(add(2)) * Right<int>(1) ).c_str() );
         printf( "Right (+2) <*> Left  1 = %s\n",
-                show( Right<int>(plus_two) * Left<int>(1)  ).c_str() );
+                show( Right<int>(add(2)) * Left<int>(1)  ).c_str() );
 
         printf( "Nothing <|> Just 2   = %s\n",
                 show( Nothing<int>() || Just(2) ).c_str() );
@@ -442,7 +437,7 @@ int main()
         printf( "pure 5 :: [] = %s\n",
                 show( pure::ap::pure<std::vector>(5) ).c_str() );
         printf( "([1,2],(+2)) <*> ([3,4],5) = %s\n",
-                show( std::make_pair(std::vector<int>{1,2}, plus_two)
+                show( std::make_pair(std::vector<int>{1,2}, add(2))
                       * std::make_pair(std::vector<int>{3,4},5) ).c_str() );
     }
 
@@ -477,17 +472,18 @@ int main()
                 show( vector<int>{1,2,3} >>= pos_neg ).c_str() );
 
 
-        std::vector<std::unique_ptr<int>> v;
+        std::vector< std::unique_ptr<int> > v;
         v.emplace_back(Just(1));
         v.emplace_back(Just(2));
         v.emplace_back(Just(3));
         printf( "sequence [Just 1, Just 2, Just 3] = %s\n",
                 show( sequence(v) ).c_str() );
 
-        std::vector<std::vector<int>> vv = { {1,2,3}, {4,5}, {6,7} };
-        printf( "sequence [[1,2,3],[4,5],[6,7]] = %s\n",
+        std::vector<std::vector<int>> vv = { {1}, {2,3}, {4} };
+        printf( "sequence [[1],[2,3],[4]] = %s\n",
                         show( sequence(vv) ).c_str() );
 
+        puts("");
     }
 
     printf( "Just [1,2] <> Just [3,4] = %s\n",
@@ -516,19 +512,19 @@ int main()
         using Show = string(int);
         auto showInt = [](int x){ return show(x); };
         printf( "first show >>> second (+2) $ (1,2) = %s\n", 
-                show( (first(showInt) > second(plus_two))( p ) ).c_str() );
+                show( (first(showInt) > second(add(2)))( p ) ).c_str() );
         printf( "show *** (+2) $ (1,2) = %s\n",
-                show( (showInt * plus_two)( p ) ).c_str() );
+                show( (showInt * add(2))( p ) ).c_str() );
 
         printf( "show &&& (+2) $ 5 = %s\n",
-                show( (showInt && plus_two)( 5 ) ).c_str() );
+                show( (showInt && add(2))( 5 ) ).c_str() );
 
         constexpr auto plusTwoK = arr<Kleisli<std::unique_ptr>>(
-            plus_two
+            add(2)
         );
 
-        auto subTwoK = arr<Kleisli<std::unique_ptr>>(
-            []( int x ) { return x - 2; }
+        constexpr auto subTwoK = arr<Kleisli<std::unique_ptr>>(
+            sub.with(2) // (-2)
         );
 
         using namespace category;
@@ -552,7 +548,7 @@ int main()
         printf( "evalState s 5 = %s\n", show( eval(s,5).get() ).c_str() );
         printf( "execState s 5 = %s\n", show( exec(s,5).get() ).c_str() );
         printf( "runState (fmap (\\x->x*2) s) 10 = %s\n",
-                show( fmap(times_two, s).runState(10).get() ).c_str() );
+                show( fmap(mult(2), s).runState(10).get() ).c_str() );
 
         printf( "runState (s >>= (\\x->return x)) 10 = %s\n",
                 show( (s >>= state::Return<int>()).runState(10).get() ).c_str() );
@@ -565,12 +561,12 @@ int main()
                 show( exec( tick, 5 ).get() ).c_str() );
 
         puts("tick2 = modify (+2) >> get");
-        auto tick2 = modify<int>( plus_two ) >> state::get<int>();
+        auto tick2 = modify<int>( add(2) ) >> state::get<int>();
         printf( "execState tick2 5 = %s\n",
                 show( exec( tick2, 5 ).get() ).c_str() );
 
         printf( "runState (gets (+2)) 5 = %s\n",
-                show( gets<int>(plus_two).runState(5).get() ).c_str() );
+                show( gets<int>(add(2)).runState(5).get() ).c_str() );
     }
 }
 

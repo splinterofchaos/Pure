@@ -355,10 +355,12 @@ Dup<S> init( const S& s ) {
     return dup( init_wrap(s) );
 }
 
-template< class S >
-Dup<S> reverse( S&& s ) {
-    return dup( reverse_wrap(forward<S>(s)) );
-}
+constexpr struct Reverse {
+    template< class S >
+    Dup<S> operator () ( S&& s ) const {
+        return dup( reverse_wrap(forward<S>(s)) );
+    }
+} reverse{};
 
 template< class F, class RI, class XS >
 void _map( F&& f, RI&& ri, XS&& xs ) {
@@ -1610,11 +1612,15 @@ R difference( XS&& xs, const YS& ys ) {
     );
 }
 
-template< class XS, class YS >
-XS sunion( XS xs, YS&& ys ) {
-    using F = XS(*)( XS, SeqRef<YS> );
-    return foldl( (F)consSet, move(xs), forward<YS>(ys) );
-}
+constexpr struct Union : Chainable<Union> {
+    using Chainable<Union>::operator();
+
+    template< class XS, class YS >
+    XS operator () ( XS xs, YS&& ys ) const {
+        using F = XS(*)( XS, SeqRef<YS> );
+        return foldl( (F)consSet, move(xs), forward<YS>(ys) );
+    }
+} sunion{};
 
 template< class XS, class YS, class R = Decay<XS> >
 R intersect( XS&& xs, const YS& ys ) {
@@ -1643,10 +1649,12 @@ constexpr SeqVal<S> product( const S& s ) {
     return list::foldl( Mult(), SeqVal<S>(1), s );
 }
 
-template< class S >
-SeqRef<S> maximum( S&& s ) {
-    return *std::max_element( begin(forward<S>(s)), end(forward<S>(s)) );
-}
+constexpr struct Maximum {
+    template< class S >
+    SeqRef<S> operator () ( S&& s ) const {
+        return *std::max_element( begin(forward<S>(s)), end(forward<S>(s)) );
+    }
+} maximum{};
 
 template< class F, class S >
 bool all( F&& f, const S& s ) {

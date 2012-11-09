@@ -79,12 +79,12 @@ vector<int> multiples_less_than_1000( int x ) {
 void problem1() {
     cout << "The sum of every multiple of 3 or 5 between 1 and 1000: "
          << flush <<
-         sum( sunion( multiples_less_than_1000(3), 
+         sum( sunion( multiples_less_than_1000(3),
                       multiples_less_than_1000(5) ) )
          << endl;
 }
 
-constexpr auto even = fnot( rcloset( Mod(), 2 ) );
+constexpr auto even = divisibleBy(2);
 
 constexpr unsigned long long operator "" _K ( unsigned long long x ) {
     return x * 1000;
@@ -100,7 +100,7 @@ void problem2() {
     using namespace pure::list::taking;
     cout << "The sum of every even Fibonacci number below 4-million: "
          << flush << sum (
-             (biIterate( Add(), 1u, 2u ) < 4_M) / even
+             (fibs < 4_M) / even
          ) << endl;
 }
 

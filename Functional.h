@@ -489,12 +489,12 @@ constexpr struct GreaterEq : Binary<GreaterEq> {
     }
 } greaterEq{};
 
-struct BinaryNot {
+constexpr struct BinaryNot {
     template< class B >
     constexpr bool operator() ( B&& b ) {
         return not (bool)forward<B>(b);
     }
-};
+} binaryNot{};
 
 constexpr struct FNot {
     template< class F >
@@ -512,8 +512,8 @@ constexpr struct Mod : Chainable<Mod> {
     }
 } mod{};
 
-constexpr auto divisorOf = ncompose( fnot, mod );
-constexpr auto divisibleBy = ncompose( fnot, flip(mod) );
+constexpr auto divisorOf = compose( fnot, mod );
+constexpr auto divisibleBy = compose( fnot, rcloset(mod) );
 constexpr auto multipleOf = divisibleBy;
 
 constexpr struct Max {
