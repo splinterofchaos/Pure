@@ -463,67 +463,66 @@ template< template<class...> class _R, class F, class ...S,
 constexpr R mapTo( F&& f, S&& ...s ) {
     return mapExactly<R>( forward<F>(f), forward<S>(s)... );
 }
-
-/* map f {1,2,3} -> { f(1), f(2), f(3) } */
-template< class S, class X = SeqVal<S>,
-          class F, class FX = Result<F,X>, class R = Remap<S,FX> > 
-constexpr R map( F&& f, S&& xs ) 
-{
-    return mapExactly<R>( forward<F>(f), forward<S>(xs) );
-}
-
 template< template<class...> class R, class F, class ...S >
 using ResultMapTo = decltype( mapTo<R>(declval<F>(),declval<S>()...) );
 
-template< class F, class ...X >
-auto map( F&& f, const std::initializer_list<X>& ...l ) 
-    -> ResultMapTo< std::vector, F, std::initializer_list<X>... >
-{
-    return mapTo<std::vector>( forward<F>(f), l... );
-}
+constexpr struct Map : Binary<Map> {
+    using Binary<Map>::operator();
 
-/*
- * Variadic map.
- * In Haskell, one might write with Control.Applicative...
- *      (+) <$> [1,2] <*> [3,4]
- * but if we make map variadic to begin with, we can duplicate this behaviour
- * without Control.Applicative and just write
- *      map( (+), [1,2], [3,4] )
- *
- * map f xs ys = concatMap (\x -> map (f x) ys) xs
- * map is, however, more efficient because it does not construct a new sequence
- * for every x.
- */
-template< class F, class XS, class YS, class ...ZS, 
-          class R = Remap <
-              XS, 
-              decltype (
-                  declval<F>()( declval<SeqVal<XS>>(), declval<SeqVal<YS>>(), 
-                                declval<SeqVal<ZS>>()... )
-              ) > > 
-R map( F&& f, XS&& xs, YS&& ys, ZS&& ...zs ) {
-    return mapExactly<R>( forward<F>(f), 
-                          forward<XS>(xs), forward<YS>(ys), forward<ZS>(zs)... );
-}
-
-
-struct Map {
-    template< class ...Args >
-    constexpr auto operator () ( Args&& ...args ) 
-        -> decltype( map(declval<Args>()...) ) 
+    /* map f {1,2,3} -> { f(1), f(2), f(3) } */
+    template< class S, class X = SeqVal<S>,
+              class F, class FX = Result<F,X>, class R = Remap<S,FX> >
+    constexpr R operator () ( F&& f, S&& xs ) const
     {
-        return map( std::forward<Args>(args)... );
+        return mapExactly<R>( forward<F>(f), forward<S>(xs) );
     }
-};
 
-template< class F, class S >
-Dup<S> mapSquared( F&& f, const S& s ) {
-    Dup<S> r;
-    for( auto i = begin(s); i != end(s); i++ )
-        for( auto j=i; j != end(s); j++ )
-            r.emplace_back( forward<F>(f)( *i, *j ) );
-    return r;
-}
+    template< class F, class ...X >
+    auto operator () ( F&& f, const std::initializer_list<X>& ...l ) const
+        -> ResultMapTo< std::vector, F, std::initializer_list<X>... >
+    {
+        return mapTo<std::vector>( forward<F>(f), l... );
+    }
+
+    /*
+     * Variadic map.
+     * In Haskell, one might write with Control.Applicative...
+     *      (+) <$> [1,2] <*> [3,4]
+     * but if we make map variadic to begin with, we can duplicate this
+     * behaviour without Control.Applicative and just write
+     *      map( (+), [1,2], [3,4] )
+     *
+     * map f xs ys = concatMap (\x -> map (f x) ys) xs
+     * map is, however, more efficient because it does not construct a new
+     * sequence for every x.
+     */
+    template< class F, class XS, class YS, class ...ZS,
+              class R = Remap <
+                  XS,
+                  decltype (
+                      declval<F>()( declval<SeqVal<XS>>(),
+                                    declval<SeqVal<YS>>(),
+                                    declval<SeqVal<ZS>>()... )
+                  ) > >
+    R operator () ( F&& f, XS&& xs, YS&& ys, ZS&& ...zs ) const {
+        return mapExactly<R>( forward<F>(f),
+                              forward<XS>(xs),
+                              forward<YS>(ys), forward<ZS>(zs)... );
+    }
+} map{};
+
+constexpr struct MapSquared : Binary<MapSquared> {
+    using Binary<MapSquared>::operator();
+
+    template< class F, class S >
+    Dup<S> operator () ( F&& f, const S& s ) const {
+        Dup<S> r;
+        for( auto i = begin(s); i != end(s); i++ )
+            for( auto j=i; j != end(s); j++ )
+                r.emplace_back( forward<F>(f)( *i, *j ) );
+        return r;
+    }
+} mapSquared{};
 
 template< class F, class ...S >
 using ResultMap = decltype( map(declval<F>(), declval<S>()...) );
@@ -560,17 +559,21 @@ V map_iter( F&& f, const std::initializer_list<X>& l ) {
     return v;
 }
 
-/* each f a b c... = all f [a,b,c...] */
-template< class F, class X >
-bool each( F&& f, X&& x ) {
-    return forward<F>(f)( forward<X>(x) );
-}
+constexpr struct Each : Binary<Each> {
+    using Binary<Each>::operator();
 
-template< class F, class X, class Y, class ...Z >
-bool each( F&& f, X&& x, Y&& y, Z&& ...z ) {
-    return each( forward<F>(f), forward<X>(x) ) and 
-        each( forward<F>(f), forward<Y>(y), forward<Z>(z)... );
-}
+    /* each f a b c... = all f [a,b,c...] */
+    template< class F, class X >
+    constexpr bool operator () ( F&& f, X&& x ) {
+        return forward<F>(f)( forward<X>(x) );
+    }
+
+    template< class F, class X, class Y, class ...Z >
+    constexpr bool operator () ( F&& f, X&& x, Y&& y, Z&& ...z ) {
+        return (*this)( forward<F>(f), forward<X>(x) ) and
+            (*this)( forward<F>(f), forward<Y>(y), forward<Z>(z)... );
+    }
+} each{};
 
 /* accuml -- foldl implementaton */
 template< class F, class X, class ...XS >
@@ -659,27 +662,19 @@ constexpr struct Append_ {
     }
 } append_{};
 
-/* 
- * append({1},{2,3},{4}) -> {1,2,3,4} 
- * Similar to [1]++[2,3]++[4]
- */
-template< typename A, typename B = A >
-A append( A a, const B& b ) {
-    append_( a, b );
-    return a;
-}
+constexpr struct Append : Chainable<Append> {
+    using Chainable<Append>::operator();
 
-template< typename A, typename B, typename C, typename ...D >
-Decay<A> append( A&& a, const B& b, const C& c, const D& ... d ) {
-    return append( append(forward<A>(a), b), c, d... );
-}
-
-struct Append {
-    template< class R, class ...S >
-    constexpr R operator() ( R r, S&& ...s ) {
-        return append( move(r), forward<S>(s)... );
+    /*
+     * append({1},{2,3},{4}) -> {1,2,3,4}
+     * Similar to [1]++[2,3]++[4]
+     */
+    template< typename A, typename B = A >
+    A operator () ( A a, const B& b ) const {
+        append_( a, b );
+        return a;
     }
-};
+} append{};
 
 constexpr struct Cons_ {
     template< class XS, class X >
@@ -714,33 +709,24 @@ XS _cons( XS xs, X&& x, Y&& y, Z&& ...z ) {
     );
 }
 
-template< class XS, class X >
-XS rcons( XS xs, X&& x ) {
-    xs.push_front( forward<X>(x) );
-    return xs;
-}
+struct RCons : Chainable<RCons> {
+    using Chainable<RCons>::operator();
 
-template< class XS, class X, class Y, class ...Z >
-XS rcons( XS xs, X&& x, Y&& y, Z&& ...z ) {
-    return rcons (
-        rcons( move(xs), forward<X>(x) ),
-        forward<Y>(y), forward<Z>(z)...
-    );
-}
-
-constexpr struct Cons {
-    template< class S, class ...X >
-    S operator() ( S s, X&& ...x ) const {
-        return _cons( move(s), forward<X>(x)... );
-    }
-} cons{};
-
-struct RCons {
-    template< class S, class ...X >
-    S operator() ( S s, X&& ...x ) const {
-        return rcons( move(s), forward<X>(x)... );
+    template< class XS, class X >
+    XS operator () ( XS xs, X&& x ) const {
+        xs.push_front( forward<X>(x) );
+        return xs;
     }
 };
+
+constexpr struct Cons : Chainable<Cons> {
+    using Chainable<Cons>::operator();
+
+    template< class S, class X >
+    S operator() ( S s, X&& x ) const {
+        return _cons( move(s), forward<X>(x) );
+    }
+} cons{};
 
 
 template< class F, class Acc, class S >
@@ -927,35 +913,43 @@ std::vector<X> dup( Remember<F,X> c, size_t n ) {
     return dupTo<std::vector>( move(c), n );
 }
 
-template< class F, class X, class ...Y, class R = Remember<F,X> >
-constexpr R memorize( F f, X x, Y&& ...y ) {
-    return R( move(f), move(x), forward<Y>(y)... );
-}
+constexpr struct Memorize {
+    template< class F, class X, class ...Y, class R = Remember<F,X> >
+    constexpr R operator () ( F f, X x, Y&& ...y ) {
+        return R( move(f), move(x), forward<Y>(y)... );
+    }
+} memorize{};
 
 template< class F, class X >
 using Iterate = Remember< Composition<F,Last>, X >;
 
-template< class F, class X, class I = Iterate<F,X> >
-constexpr I iterate( F f, X x ) {
-    return memorize ( 
-        compose( move(f), Last() ), 
-        move(x) 
-    );
-}
+struct ReturnIterate : Binary<ReturnIterate> {
+    using Binary<ReturnIterate>::operator();
 
-template< class X, class I = Iterate<Id,X> >
-constexpr I repeat( X x ) {
-    return iterate( Id(), move(x) );
-}
+    template< class F, class X, class I = Iterate<F,X> >
+    constexpr I operator () ( F f, X x ) {
+        return memorize (
+            compose( move(f), Last() ),
+            move(x)
+        );
+    }
+} iterate{};
 
-template< class F, class X,
-          class I = Remember< BComposition<F,Last,Last>, X > >
-constexpr I biIterate( F f, X a, X b ) {
-    return I (
-        bcompose( move(f), Last(1), Last() ),
-        move(a), move(b)
-    );
-}
+constexpr auto repeat = iterate( Id() );
+
+constexpr struct BiIterate {
+    using L1 = decltype( last.with(1) );
+    using L2 = Last;
+
+    template< class F, class X,
+              class I = Remember< BComposition<F,L1,L2>, X > >
+    I operator () ( F f, X a, X b ) const {
+        return I (
+            bcompose( move(f), last.with(1), last ),
+            move(a), move(b)
+        );
+    }
+} biIterate{};
 
 template< class I > struct XRange {
     using value_type = I;
@@ -1066,11 +1060,6 @@ constexpr IRange enumerate( const S& s ) {
     return IRange( 0, length(s) );
 }
 
-template< class X >
-std::vector<Decay<X>> replicate( size_t n, X&& x ) {
-    return take( n, repeat(forward<X>(x)) );
-}
-
 template< class F, class Y > struct PartMiddle {
     F f;
     Y y;
@@ -1122,36 +1111,48 @@ constexpr S everyOther_append( const S& s, const SS& ss ) {
     return _everyOther_append( s, ss, S() );
 }
 
-/* intercalcate "--" {"ab","cd","ef"} */
-template< class S, class SS >
-S intercalcate( const S& s, const SS& ss ) {
-    return not null(ss) ? 
-        _everyOther_append( s, tail_wrap(ss), S{head(ss)} )
-        : S();
-}
+constexpr struct Intercalcate : Binary<Intercalcate> {
+    using Binary<Intercalcate>::operator();
 
-/* concat {{1},{2,3},{4}} = {1,2,3,4} */
-template< class SS, class S = typename SS::value_type >
-S concat( const SS& ss ) {
-    return foldl( append<S,S>, S(), ss );
-}
+    /* intercalcate "--" {"ab","cd","ef"} */
+    template< class S, class SS >
+    S operator () ( const S& s, const SS& ss ) const {
+        return not null(ss) ?
+            _everyOther_append( s, tail_wrap(ss), S{head(ss)} )
+            : S();
+    }
+} intercalcate{};
 
-template< class S >
-S sort( S s ) {
-    std::sort( begin(s), end(s) );
-    return s;
-}
+constexpr struct Concat {
+    /* concat {{1},{2,3},{4}} = {1,2,3,4} */
+    template< class SS, class S = typename SS::value_type >
+    S operator () ( const SS& ss ) const {
+        return foldl( append, S(), ss );
+    }
+} concat{};
 
-template< typename Container >
-bool ordered( const Container& c )
-{
-    return length(c) <= 1
-        or mismatch ( 
-            begin(c), prev(end(c)), 
-            next(begin(c)), 
-            std::less_equal<int>() 
-        ).second == end(c);
-}
+constexpr struct Sort_ {
+    template< class S >
+    S& operator () ( S& s ) const {
+        std::sort( begin(s), end(s) );
+        return s;
+    }
+} sort_{};
+
+constexpr struct Sort {
+    template< class S >
+    S operator () ( S s ) const {
+        std::sort( begin(s), end(s) );
+        return s;
+    }
+} sort{};
+
+constexpr struct Ordered {
+    template< typename Container >
+    bool operator () ( const Container& c ) const {
+        return std::is_sorted( begin(c), end(c) );
+    }
+} ordered{};
 
 template< class I >
 using ItTraits = std::iterator_traits<I>;
@@ -1159,9 +1160,11 @@ using ItTraits = std::iterator_traits<I>;
 template< class I >
 using ItCata = typename ItTraits<I>::iterator_category;
 
-struct Filter {
+constexpr struct Filter : Binary<Filter> {
+    using Binary<Filter>::operator();
+
     template< typename S, typename F >
-    Dup<S> operator() ( F&& f, S s, std::output_iterator_tag ) const {
+    static Dup<S> filt( F&& f, S s, std::output_iterator_tag ) {
         s.erase ( 
             remove_if( begin(s), end(s), 
                        fnot( forward<F>(f) ) ),
@@ -1171,41 +1174,38 @@ struct Filter {
     }
 
     template< typename S, typename F >
-    Dup<S> operator() ( F&& f, S s, std::input_iterator_tag ) const {
+    static Dup<S> filt( F&& f, S s, std::input_iterator_tag ) {
         return dupIf( forward<F>(f), move(s) );
     }
 
     /* filter f C -> { x for x in C such that f(x) is true. } */
     template< typename S, typename F >
-    Dup<S> operator() ( F&& f, S s ) const {
+    Dup<S> operator () ( F&& f, S s ) const {
         using I = decltype( begin(s) );
-        return Filter()( forward<F>(f), move(s), ItCata<I>() );
+        return filt( forward<F>(f), move(s), ItCata<I>() );
     }
 
     template< class X, class F, class V = std::vector<X> >
-    V operator() ( F&& f, const std::initializer_list<X>& l ) const {
+    V operator () ( F&& f, const std::initializer_list<X>& l ) const {
         return dupIf( forward<F>(f), l );
     }
+} filter{};
 
-    template< class F >
-    constexpr Closet<Filter,F> operator() ( F f ) {
-        return closet( Filter(), move(f) );
+constexpr struct Filtrate {
+    // TODO: Perhaps this could be implemented with a filterFold...
+    /* filtrate f pred xs = filter pred (map f xs) */
+    template< class F, class P, class S,
+              class R = decltype( map(declval<F>(),declval<S>()) ) >
+    R operator () ( F&& f, P&& p, S&& s ) const {
+        R r;
+        for( auto& x : forward<S>(s) ) {
+            auto y = forward<F>(f)( x );
+            if( forward<P>(p)(y) )
+                _consRef( r, move(y) );
+        }
+        return r;
     }
-} filter;
-
-// TODO: Perhaps this could be implemented with a filterFold...
-/* filtrate f pred xs = filter pred (map f xs) */
-template< class F, class P, class S, 
-          class R = decltype( map(declval<F>(),declval<S>()) ) >
-R filtrate( F&& f, P&& p, S&& s ) {
-    R r;
-    for( auto& x : forward<S>(s) ) {
-        auto y = forward<F>(f)( x );
-        if( forward<P>(p)(y) )
-            _consRef( r, move(y) );
-    }
-    return r;
-}
+} filtrate{};
 
 template< class I, class X = decltype(*declval<I>()) > 
 struct MaybeElem {
@@ -1219,50 +1219,69 @@ struct MaybeElem {
     constexpr X operator * () { return *pos; }
 };
 
+constexpr struct Find : Binary<Find> {
+    using Binary<Find>::operator();
 
-/* find pred xs -> Maybe x */
-template< class F, class S, 
-          class I   = typename category::sequence_traits<S>::iterator,
-          class Val = typename category::sequence_traits<S>::value_type >
-MaybeElem<I> find( F&& f, const S& s ) {
-    const auto& e = end(s);
-    const auto it = find_if( begin(s), e, forward<F>(f) );
-    return MaybeElem<I>( it, e );
-}
+    /* find pred xs -> Maybe x */
+    template< class F, class S,
+              class I   = typename category::sequence_traits<S>::iterator,
+              class Val = typename category::sequence_traits<S>::value_type >
+    MaybeElem<I> operator () ( F&& f, const S& s ) const {
+        const auto& e = end(s);
+        const auto it = find_if( begin(s), e, forward<F>(f) );
+        return MaybeElem<I>( it, e );
+    }
+} find{};
 
-template< class X, class S,
-          class I = typename category::sequence_traits<S>::iterator >
-const MaybeElem<I> findFirst( const X& x, const S& s ) {
-    return MaybeElem<I>( std::find( begin(s), end(s), x ),
-                         end(s) );
-}
+constexpr struct FindFirst : Binary<FindFirst> {
+    using Binary<FindFirst>::operator();
 
-/* cfind x C -> C::iterator */
-template< typename S, typename T >
-constexpr auto cfind( T&& x, S&& s )
-    -> decltype( begin(declval<S>()) )
-{
-    return find( begin(forward<S>(s)), end(forward<S>(s)),
-                 forward<T>(x) );
-}
+    template< class X, class S,
+              class I = typename category::sequence_traits<S>::iterator >
+    const MaybeElem<I> operator () ( const X& x, const S& s ) const {
+        return MaybeElem<I>( std::find( begin(s), end(s), x ),
+                             end(s) );
+    }
+} findFirst{};
 
-template< typename S, typename F >
-constexpr auto cfindIf( F&& f, S&& s )
-    -> decltype( begin(declval<S>()) )
-{
-    return std::find_if( begin(forward<S>(s)), end(forward<S>(s)),
-                         forward<F>(f) );
-}
+constexpr struct CFind : Binary<CFind> {
+    using Binary<CFind>::operator();
 
-template< class S, class T, class F = std::equal_to<T> >
-constexpr auto cfindNot( const T& x, S&& s, F&& f = F() )
-    -> decltype( begin(declval<S>()) )
-{
-    return cfindIf (
-        fnot( closure(forward<F>(f),x) ),
-        forward<S>(s)
-    );
-}
+    /* cfind x C -> C::iterator */
+    template< typename S, typename T >
+    constexpr auto operator () ( T&& x, S&& s )
+        -> decltype( begin(declval<S>()) )
+    {
+        return std::find( begin(forward<S>(s)), end(forward<S>(s)),
+                          forward<T>(x) );
+    }
+} cfind{};
+
+constexpr struct CFindIf : Binary<CFindIf> {
+    using Binary<CFindIf>::operator();
+
+    template< typename S, typename F >
+    constexpr auto operator () ( F&& f, S&& s )
+        -> decltype( begin(declval<S>()) )
+    {
+        return std::find_if( begin(forward<S>(s)), end(forward<S>(s)),
+                             forward<F>(f) );
+    }
+} cfindIf{};
+
+constexpr struct CFindNot : Binary<CFindNot> {
+    using Binary<CFindNot>::operator();
+
+    template< class S, class T, class F = std::equal_to<T> >
+    constexpr auto operator () ( const T& x, S&& s, F&& f = F() )
+        -> decltype( begin(declval<S>()) )
+    {
+        return cfindIf (
+            fnot( closure(forward<F>(f),x) ),
+            forward<S>(s)
+        );
+    }
+} cfindNot{};
 
 struct MaybeIndex {
     size_t i;
@@ -1297,25 +1316,25 @@ V findIndecies( F&& f, const S& s ) {
     return PossibleIndex( cfindIf(forward<F>(f),s), s );
 }
 
-template< class S, class D = Dup<S> >
-D take( size_t n, S&& s ) {
-    return dup( forward<S>(s), n );
-}
+constexpr struct Take : Binary<Take> {
+    using Binary<Take>::operator();
 
-struct Take {
-    template< class S >
-    Dup<S> operator() ( size_t n, S&& s ) const {
+    template< class S, class D = Dup<S> >
+    D operator () ( size_t n, S&& s ) const {
         return dup( forward<S>(s), n );
     }
-};
+} take{};
 
-constexpr Closet<Take,size_t> take( size_t n ) {
-    return closet( Take(), n );
+template< class X >
+std::vector<Decay<X>> replicate( size_t n, X&& x ) {
+    return take( n, repeat(forward<X>(x)) );
 }
 
-struct TakeWhile {
+constexpr struct TakeWhile : Binary<TakeWhile> {
+    using Binary<TakeWhile>::operator();
+
     template< class P, class S, class _S = Dup<S> >
-    XSame<Decay<S>,_S,_S> operator() ( P&& p, S&& s ) const {
+    XSame<Decay<S>,_S,_S> operator () ( P&& p, S&& s ) const {
         auto it = cfindIf( fnot(forward<P>(p)), forward<S>(s) );
 
         // TODO: This is a hack and won't work on non-random iterators, but
@@ -1327,71 +1346,70 @@ struct TakeWhile {
         );
     }
     template< class P, class S, class _S = Dup<S> >
-    ESame<S,_S,S> operator() ( P&& p, S s ) const {
+    ESame<S,_S,S> operator () ( P&& p, S s ) const {
         s.erase ( 
             cfindIf( fnot(forward<P>(p)), forward<S>(s) ),
             end(forward<S>(s)) 
         );
         return s;
     }
+} takeWhile{};
 
-    template< class P >
-    constexpr Closet<TakeWhile,P> operator() ( P p ) {
-        return closet( TakeWhile(), move(p) );
-    }
-} takeWhile;
-
-template< class S >
-S drop( size_t n, const S& s ) {
-    return S( next(begin(s),n), end(s) );
-}
-
-struct DropN {
-    size_t n;
-    constexpr DropN( size_t n ) : n(n) { }
+constexpr struct Drop : Binary<Drop> {
+    using Binary<Drop>::operator();
 
     template< class S >
-    Decay<S> operator() ( S&& s ) const {
-        return drop( n, forward<S>(s) );
+    constexpr S operator () ( size_t n, const S& s ) {
+        return S( next(begin(s),n), end(s) );
     }
-};
+} drop{};
 
-constexpr DropN drop( size_t n ) { return DropN(n); }
+constexpr struct DropWhile : Binary<DropWhile> {
+    using Binary<DropWhile>::operator();
 
-template< class P, class S, class _S = Decay<S> >
-_S dropWhile( P&& p, S&& s ) {
-    return _S ( 
-        cfindIf( fnot(forward<P>(p)), forward<S>(s) ),
-        end( forward<S>(s) )
-    );
-}
+    template< class P, class S, class _S = Dup<S> >
+    constexpr _S operator () ( P&& p, S&& s ) {
+        return _S (
+            cfindIf( fnot(forward<P>(p)), forward<S>(s) ),
+            end( forward<S>(s) )
+        );
+    }
+} dropWhile{};
 
-template< class Pred, class S >
-S dropWhileEnd( Pred p, S s ) {
-    s.erase( cfindIf(p,s), end(s) );
-    return s;
-}
+constexpr struct DropWhileEnd : Binary<DropWhileEnd> {
+    using Binary<DropWhileEnd>::operator();
+
+    template< class Pred, class S >
+    S operator () ( Pred p, S s ) const {
+        s.erase( cfindIf(p,s), end(s) );
+        return s;
+    }
+} dropWhileEnd{};
 
 template< class X, class R > 
 using XInt = typename std::enable_if< !std::is_integral<X>::value, R >::type;
 
-template< class I, class S, class _S = Decay<S>, 
-          class P = std::pair<_S,_S> >
-constexpr XInt<I,P> splitAt( I it, S&& s ) 
-{
-    return { { begin(forward<S>(s)), it },
-             {  it,  end(forward<S>(s)) } };
-}
+constexpr struct SplitAt : Binary<SplitAt> {
+    using Binary<SplitAt>::operator();
 
-template< class S, class _S = Decay<S>, 
-          class P = std::pair<_S,_S> >
-constexpr P splitAt( size_t n, S&& s ) {
-    return splitAt (
-        next( begin(forward<S>(s)), 
-              min(length(s), n) ), // Don't split passed the end!
-        forward<S>(s)
-    );
-}
+    template< class I, class S, class _S = Decay<S>,
+              class P = std::pair<_S,_S> >
+    constexpr XInt<I,P> operator () ( I it, S&& s )
+    {
+        return { { begin(forward<S>(s)), it },
+                 {  it,  end(forward<S>(s)) } };
+    }
+
+    template< class S, class _S = Decay<S>,
+              class P = std::pair<_S,_S> >
+    constexpr P operator () ( size_t n, S&& s ) {
+        return splitAt (
+            next( begin(forward<S>(s)),
+                  min(length(s), n) ), // Don't split passed the end!
+            forward<S>(s)
+        );
+    }
+} splitAt{};
 
 template< class P, class S, class _S = Decay<S> >
 std::pair<_S,_S> sbreak( P&& p, S&& s ) {
@@ -1456,15 +1474,16 @@ bool equal( const XS& xs, const YS& ys ) {
     return length(xs) == length(ys) and prefix( xs, ys );
 }
 
-template< class X, class S >
-bool elem( const X& x, const S& s ) {
-    return std::find( begin(s), end(s), x ) != end(s);
-}
+constexpr struct Elem : Binary<Elem> {
+    using Binary<Elem>::operator();
 
-template< class X, class S >
-bool notElem( const X& x, const S& s ) {
-    return not elem( x, s );
-}
+    template< class X, class S >
+    bool operator () ( const X& x, const S& s ) const {
+        return std::find( begin(s), end(s), x ) != end(s);
+    }
+} elem{};
+
+constexpr auto notElem = fnot( elem );
 
 template< class X, class S >
 MaybeIndex elemIndex( const X& x, const S& s ) {
@@ -1485,16 +1504,6 @@ V elemIndecies( const X& x, const S& s ) {
     return v;
 }
 
-/* insert 3 [1,2,4] = [1,2,3,4] */
-template< class X, class S >
-S insert( X&& x, S s ) {
-    s.insert( 
-        std::upper_bound( begin(s), end(s), forward<X>(x) ),
-        forward<X>(x)
-    );
-    return s;
-}
-
 template< class X, class S >
 S nubInsert( X&& x, S s ) {
     auto it = std::lower_bound( begin(s), end(s), forward<X>(x) );
@@ -1503,38 +1512,56 @@ S nubInsert( X&& x, S s ) {
     return s;
 }
 
-/* insert p y xs -- inserts y into the first place where (p x) == True. */
-template< class P, class X, class S >
-S insert( P&& p, X&& x, S s ) {
-    s.insert( 
-        std::upper_bound( begin(s), end(s), forward<X>(x), forward<P>(p) ),
-        forward<X>(x)
-    );
-    return s;
-}
+constexpr struct Insert : Binary<Insert> {
+    using Binary<Insert>::operator();
 
-template< class X, class S >
-S erase( const X& x, S s ) {
-    auto it = cfind( x, s );
-    if( it != end(s) )
-        s.erase( it );
-    return s;
-}
+    /* insert 3 [1,2,4] = [1,2,3,4] */
+    template< class X, class S >
+    S operator () ( X&& x, S s ) const {
+        s.insert(
+            std::upper_bound( begin(s), end(s), forward<X>(x) ),
+            forward<X>(x)
+        );
+        return s;
+    }
 
-template< class F, class X, class S >
-S erase( F&& f, const X& x, S s ) {
-    auto it = cfindIf( closure(forward<F>(f),x), s );
-    if( it != end(s) )
-        s.erase( it );
-    return s;
-}
+    /* insert p y xs -- inserts y into the first place where (p x) == True. */
+    template< class P, class X, class S >
+    S operator () ( P&& p, X&& x, S s ) const {
+        s.insert(
+            std::upper_bound( begin(s), end(s), forward<X>(x), forward<P>(p) ),
+            forward<X>(x)
+        );
+        return s;
+    }
+} insert{};
+
+constexpr struct Erase : Binary<Erase> {
+    using Binary<Erase>::operator();
+
+    template< class X, class S >
+    S operator () ( const X& x, S s ) const {
+        auto it = cfind( x, s );
+        if( it != end(s) )
+            s.erase( it );
+        return s;
+    }
+
+    template< class F, class X, class S >
+    S operator () ( F&& f, const X& x, S s ) const {
+        auto it = cfindIf( closure(forward<F>(f),x), s );
+        if( it != end(s) )
+            s.erase( it );
+        return s;
+    }
+} erase{};
 
 template< class P, class XS, class YS >
 XS eraseFirst( P&& p, XS xs, YS&& ys ) {
     using F = XS(*)( const P&, SeqRef<YS>, XS );
     return list::foldl (
         // \s x -> erase p x s
-        flip( closure( (F)erase, forward<P>(p) ) ), 
+        flip( erase(forward<P>(p)) ),
         move(xs), forward<YS>(ys) 
     ); 
 }
@@ -1542,8 +1569,8 @@ XS eraseFirst( P&& p, XS xs, YS&& ys ) {
 template< class P, class XS, class Y >
 XS eraseFirst( P&& p, XS xs, std::initializer_list<Y> l ) {
     using F = XS(*)( const P&, const Y&, XS );
-    return list::foldl( flip(closure((F)erase,forward<P>(p))), 
-                  xs, move(l) ); 
+    return list::foldl( flip( erase( forward<P>(p) ) ),
+                        xs, move(l) );
 }
 
 template< class S, class X >
@@ -1582,6 +1609,7 @@ R difference( XS&& xs, const YS& ys ) {
         R(), forward<XS>(xs)
     );
 }
+
 template< class XS, class YS >
 XS sunion( XS xs, YS&& ys ) {
     using F = XS(*)( XS, SeqRef<YS> );
@@ -1597,7 +1625,7 @@ R intersect( XS&& xs, const YS& ys ) {
     );
 }
 
-struct Sum {
+constexpr struct Sum {
     template< class S >
     constexpr SeqVal<S> operator() ( const S& s ) {
         return list::foldl( Add(), SeqVal<S>(0), s );
@@ -1608,7 +1636,7 @@ struct Sum {
         // sum [m,n] = (n + 1 - m)(n + m)/2
         return (*r.e - *r.b) * (*r.e - 1 + *r.b) / 2;
     }
-} sum;
+} sum{};
 
 template< class S >
 constexpr SeqVal<S> product( const S& s ) {
@@ -1680,7 +1708,7 @@ V group( S&& s, P&& p = P() ) {
     return v;
 }
 
-struct Inits {
+constexpr struct Inits {
     template< class S, class V = std::vector<S> >
     static V _inits( const S& s ) {
         V v;
@@ -1693,9 +1721,9 @@ struct Inits {
     V operator() ( const S& s ) const {
         return not null(s) ? _inits(s) : V();
     }
-} inits;
+} inits{};
 
-struct Tails {
+constexpr struct Tails {
     template< class S, class V = std::vector<S> >
     static V _tails( const S& s ) {
         V v{ S() };
@@ -1708,9 +1736,9 @@ struct Tails {
     V operator() ( const S& s ) const {
         return not null(s) ? _tails(s) : V();
     }
-} tails;
+} tails{};
 
-struct Permutations {
+constexpr struct Permutations {
     template< class S >
     static bool _next_p_ref( S& s ) {
         return std::next_permutation( begin(s), end(s) );
@@ -1751,7 +1779,7 @@ struct Permutations {
         return ordered(original) ? sortedPermutations( forward<S>(original) )
             : _permutations( forward<S>(original) );
     }
-} permutations;
+} permutations{};
 
 /* 
  * concatMap f s = concat (map f s)
@@ -1762,43 +1790,52 @@ struct Permutations {
  * concatenated. This is an optimization that should be equivalent to the
  * inlined loop.
  */
-template< class F, class S,
-          class R = Result<F,SeqRef<S>> >
-R concatMap( F&& f, const S& xs ) {
-    // A Haskeller would define concatMap based on foldl, however GCC 4.7
-    // cannot inline f or append_ at that point.
-    R r;
-    for( const auto& x : xs ) {
-        append_( r, forward<F>(f)( x ) );
+constexpr struct ConcatMap : Binary<ConcatMap> {
+    using Binary<ConcatMap>::operator();
+
+    template< class F, class S,
+              class R = Result<F,SeqRef<S>> >
+    R operator () ( F&& f, const S& xs ) const {
+        // A Haskeller would define concatMap based on foldl, however GCC 4.7
+        // cannot inline f or append_ at that point.
+        R r;
+        for( const auto& x : xs ) {
+            append_( r, forward<F>(f)( x ) );
+        }
+        return r;
     }
-    return r;
-}
+} concatMap{};
 
-template< class F, class Fold, class X, class S >
-X foldMap( F&& f, Fold&& fold, X x, const S& s ) {
-    using R = Result<F,SeqRef<S>>;
-    for( const auto& y : s )
-        x = forward<Fold>(fold) (
-            move(x),
-            forward<F>(f)( y )
-        );
-    return x;
-}
+constexpr struct FoldMap : Binary<FoldMap> {
+    using Binary<FoldMap>::operator();
 
-template< class F, class Fold, class X, class XS, class YS, class ...ZS >
-X foldMap( F&& f, Fold&& fold, X x, 
-           const XS& xs, const YS& ys, const ZS& ...zs ) {
-    using R = decltype (
-        declval<F>()( head(xs), head(ys), head(zs)... )
-    );
-    for( const auto& y : xs )
-        x = foldMap (
-            closure( forward<F>(f), y ), forward<Fold>(fold),
-            move(x),
-            ys, zs...
+    template< class F, class Fold, class X, class S >
+    X operator () ( F&& f, Fold&& fold, X x, const S& s ) const {
+        using R = Result<F,SeqRef<S>>;
+        for( const auto& y : s )
+            x = forward<Fold>(fold) (
+                move(x),
+                forward<F>(f)( y )
+            );
+        return x;
+    }
+
+    template< class F, class Fold, class X, class XS, class YS, class ...ZS >
+    X operator () ( F&& f, Fold&& fold, X x,
+                    const XS& xs, const YS& ys, const ZS& ...zs ) const
+    {
+        using R = decltype (
+            declval<F>()( head(xs), head(ys), head(zs)... )
         );
-    return x;
-}
+        for( const auto& y : xs )
+            x = (*this) (
+                closure( forward<F>(f), y ), forward<Fold>(fold),
+                move(x),
+                ys, zs...
+            );
+        return x;
+    }
+} foldMap{};
 
 /* zipWith f A B -> { f(a,b) for a in A and b in B } */
 template< class F, class R, class ...S >
@@ -1833,7 +1870,7 @@ S unlines( const SS& ss ) {
     // Remove the last '\n'.
     return init (
         // Intersperse with '\n'.
-        concatMap( closure(flip(Cons()),'\n'), ss )
+        concatMap( cons.with('\n'), ss )
     );
 }
 
@@ -1848,7 +1885,7 @@ S unwords( const SS& ss ) {
     // Remove the last ' '.
     return init (
         // Intersperse with ' '.
-        concatMap( closure(flip(Cons()),' '), ss )
+        concatMap( cons.with(' '), ss )
     );
 }
 

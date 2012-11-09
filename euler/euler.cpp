@@ -93,7 +93,7 @@ constexpr unsigned long long operator "" _M ( unsigned long long x ) {
     return x * 1000000;
 }
 
-auto fibs = biIterate( add, 1ull, 2ull );
+auto fibs = biIterate( Add(), 1ull, 2ull );
 
 void problem2() {
     using namespace pure::list::misc;
@@ -244,7 +244,7 @@ void problem4() {
     using namespace pure::list::misc;
     cout << "The largest palindrome product of three digit numbers :"
          << flush;
-    cout << foldMap (
+    cout << pure::fold::foldMap (
             []( const IRange& r ) -> Largest<int> {
                 return maximum (
                     // Multiply the init of r by its last; filter for

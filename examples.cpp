@@ -404,10 +404,10 @@ int main()
     int n = 5;
     auto equalsN = closure( equal_to<int>(), n );
     printf( "find (==5) [1,2,3,4,5,6,7,8] = %s\n", 
-            showMaybe( find(equalsN, N) ).c_str() );
+            showMaybe( pure::list::find(equalsN, N) ).c_str() );
     n = 9;
     printf( "find (==9) [1,2,3,4,5,6,7,8] = %s\n", 
-            showMaybe( find(equalsN, N) ).c_str() );
+            showMaybe( pure::list::find(equalsN, N) ).c_str() );
 
     {
         puts("");

@@ -496,10 +496,12 @@ struct BinaryNot {
     }
 };
 
-template< class F >
-constexpr auto fnot( F f ) -> decltype( compose(BinaryNot(),declval<F>()) ) {
-    return compose( BinaryNot(), move(f) );
-}
+constexpr struct FNot {
+    template< class F >
+    constexpr auto operator () ( F f ) -> decltype( ncompose(BinaryNot(),declval<F>()) ) {
+        return ncompose( BinaryNot(), move(f) );
+    }
+} fnot{};
 
 constexpr struct Mod : Chainable<Mod> {
     using Chainable<Mod>::operator();
@@ -510,20 +512,9 @@ constexpr struct Mod : Chainable<Mod> {
     }
 } mod{};
 
-template< class X >
-constexpr auto divisibleBy( X x ) -> Composition<BinaryNot,RCloset<Mod,X>> {
-    return fnot(rcloset( Mod(), move(x) ));
-}
-
-template< class X >
-constexpr auto multipleOf( X x ) -> decltype( divisibleBy(move(x)) ) {
-    return divisibleBy( move(x) );
-}
-
-template< class X >
-constexpr auto divisorOf( X x ) -> Composition<BinaryNot,Closet<Mod,X>> {
-    return fnot( closet(Mod(), move(x)) );
-}
+constexpr auto divisorOf = ncompose( fnot, mod );
+constexpr auto divisibleBy = ncompose( fnot, flip(mod) );
+constexpr auto multipleOf = divisibleBy;
 
 constexpr struct Max {
     template< class X, class Y >
