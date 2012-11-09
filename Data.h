@@ -7,24 +7,23 @@ namespace pure {
 
 namespace data {
 
-constexpr struct _Just {
-    template< class T, class M = std::unique_ptr<T> > 
-    constexpr M operator () ( T t ) {
-        return M( new T(move(t)) );
+constexpr struct ReturnJust {
+    template< class T, class D = Decay<T>, class M = std::unique_ptr<D> >
+    constexpr M operator () ( T&& t ) {
+        return M( new D(forward<T>(t)) );
     }
 } Just{};
-
-struct ReturnJust {
-    template< class X >
-    std::unique_ptr<Decay<X>> operator() ( X&& x ) {
-        return Just( forward<X>(x) );
-    }
-};
 
 template< class T, class M = std::unique_ptr<T> > 
 constexpr M Nothing() {
     return nullptr;
 }
+
+template< class T > struct ReturnNothing {
+    constexpr auto operator () () -> decltype( Nothing<T>() ) {
+        return Nothing<T>();
+    }
+};
 
 /* maybe b (a->b) (Maybe a) -> b */
 template< class R, class F, class P >
