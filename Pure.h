@@ -140,53 +140,32 @@ auto mempty() -> decltype( Mo::template mempty<M>() ) {
     return Mo::template mempty<M>(); 
 }
 
-struct MAppend {
+constexpr struct MAppend : Chainable<MAppend> {
+    using Chainable<MAppend>::operator();
+
     template< class M1, class M2, class Mo = Monoid<Cat<M1>> >
     constexpr auto operator() ( M1&& a, M2&& b ) 
         -> decltype( Mo::mappend(declval<M1>(),declval<M2>()) )
     {
         return Mo::mappend( forward<M1>(a), forward<M2>(b) );
     }
-} mappend;
+} mappend{};
 
-/*
- * mappend const& 
- * The above && version will always be preferred, except in the case of a
- * const&. In other words, this version will NEVER be preferred otherwise.
- */
-
-template< class S, class V = list::SeqVal<S>, class M = Monoid<Cat<V>> >
-auto mconcat( S&& s ) -> decltype( M::mconcat(declval<S>()) ) {
-    return M::mconcat( forward<S>(s) );
-}
-
-
-// When we call mappend from within Monoid<M>, lookup deduction will see its
-// own implementation of mappend. This ensures a recursive mappend gets
-// properly forwarded.
-template< class XS, class YS > 
-decltype( mappend(declval<XS>(),declval<YS>()) )
-fwd_mappend( XS&& xs, YS&& ys ) {
-    return mappend( forward<XS>(xs), forward<YS>(ys) );
-}
-
-template< class M > 
-decltype( mempty<M>() ) fwd_mempty() { return mempty<M>(); }
+constexpr struct MConcat {
+    template< class S, class V = list::SeqVal<S>, class M = Monoid<Cat<V>> >
+    constexpr auto operator () ( S&& s )
+        -> decltype( M::mconcat(declval<S>()) )
+    {
+        return M::mconcat( forward<S>(s) );
+    }
+} mconcat{};
 
 template<> struct Monoid< category::sequence_type > {
     template< class S >
     static S mempty() { return S{}; }
 
-    template< class XS, class YS >
-    static XS mappend( XS xs, YS&& ys ) {
-        return list::append( move(xs), forward<YS>(ys) );
-    }
-
-    template< class SS >
-    static auto mconcat( SS&& ss ) -> decltype( concat(declval<SS>()) )
-    {
-        return concat( forward<SS>(ss) ); 
-    }
+    static constexpr auto mappend = list::append;
+    static constexpr auto mconcat = list::concat;
 };
 
 /* Monoid (Maybe X) -- where X is a monoid. */
@@ -213,15 +192,14 @@ template<> struct Monoid< category::maybe_type > {
      */
     template< class M >
     static constexpr Decay<M> mappend( M&& x, M&& y ) {
-        return x and y ? Just( fwd_mappend(*forward<M>(x), *forward<M>(y)) )
+        return x and y ? Just( pure::mappend(*forward<M>(x), *forward<M>(y)) )
             : x ? dup(forward<M>(x)) : dup(forward<M>(y));
     }
 
-    /* mconcat [Just x, Just y, Nothing] = Just (x <> y <> Nothing)*/
+    /* mconcat [Just x, Just y, Nothing] = Just (x <> y <> mempty)*/
     template< class S, class M = list::SeqRef<S>, class R = Decay<M> > 
     static R mconcat( S&& s ) {
-        using F = R (*) ( const M&, const M& );
-        return list::foldl( (F)mappend, mempty<R>(), forward<S>(s) );
+        return list::foldl( MAppend(), mempty<R>(), forward<S>(s) );
     }
 };
 
@@ -229,11 +207,11 @@ template<> struct Monoid< category::maybe_type > {
 template< class X, class Y > struct Monoid< std::pair<X,Y> > {
     typedef std::pair<X,Y> P;
 
-    static P mempty() { return P( fwd_mempty<X>(), fwd_mempty<Y>() ); }
+    static P mempty() { return P( pure::mempty<X>(), pure::mempty<Y>() ); }
 
     static P mappend( const P& a, const P& b ) {
-        return P( fwd_mappend(a.first,b.first), 
-                  fwd_mappend(a.second,b.second) );
+        return P( pure::mappend(a.first,b.first),
+                  pure::mappend(a.second,b.second) );
     }
 
     template< class S > static P mconcat( const S& s ) {
@@ -253,24 +231,23 @@ template< class ...F > struct MonadPlus;
 template< class M, class Mo = MonadPlus<Cat<M>> >
 decltype( Mo::mzero() ) mzero() { return Mo::mzero(); }
 
-template< class M1, class M2, 
-          class Mo = MonadPlus<Cat<M1>> >
-auto mplus( M1&& a, M2&& b ) 
-    -> decltype( Mo::mplus(declval<M1>(),declval<M2>()) )
-{
-    return Mo::mplus( forward<M1>(a), forward<M2>(b) );
-}
+constexpr struct MPlus : Chainable<MPlus> {
+    using Chainable<MPlus>::operator();
+
+    template< class M1, class M2,
+              class Mo = MonadPlus<Cat<M1>> >
+    constexpr auto operator () ( M1&& a, M2&& b )
+        -> decltype( Mo::mplus(declval<M1>(),declval<M2>()) )
+    {
+        return Mo::mplus( forward<M1>(a), forward<M2>(b) );
+    }
+} mplus{};
 
 template<> struct MonadPlus< category::sequence_type > {
     template< class S >
     static S mzero() { return S(); }
 
-    template< class SX, class SY >
-    static auto mplus( SX&& sx, SY&& sy ) 
-        -> decltype( list::append(declval<SX>(),declval<SY>()) )
-    {
-        return list::append( forward<SX>(sx), forward<SY>(sy) );
-    }
+    static constexpr auto mplus = list::append;
 };
 
 template<> struct MonadPlus< category::maybe_type > {
@@ -281,8 +258,8 @@ template<> struct MonadPlus< category::maybe_type > {
     using Result = decltype( declval<A>() || declval<B>() );
 
     template< class A, class B >
-    static constexpr Result<A,B> mplus( A&& a, B&& b ) { 
-        return forward<A>(a) || forward<B>(b); 
+    static constexpr Result<A,B> mplus( A&& a, B&& b ) {
+        return forward<A>(a) || forward<B>(b);
     }
 };
 
@@ -466,9 +443,8 @@ struct Squash
     }
 };
 
-    template< class F >
-constexpr Squash<F> squash( F f )
-{
+template< class F >
+constexpr Squash<F> squash( F f ) {
     return Squash<F>( move(f) );
 }
 
@@ -506,7 +482,7 @@ struct Join
     }
 };
 
-    template< class F, class L, class R >
+template< class F, class L, class R >
 constexpr Join<F,L,R> join( F&& f, L&& l, R&& r ) {
     return Join<F,L,R>( forward<F>(f), forward<L>(l), forward<R>(r) );
 }
@@ -596,12 +572,12 @@ namespace monad {
     };
 } // namespace monad
 
-template< class F, class G > struct  MCompose {
+template< class F, class G > struct  MComposition {
     F f;
     G g;
 
 
-    constexpr MCompose( F f, G g ) : f(move(f)), g(move(g)) { }
+    constexpr MComposition( F f, G g ) : f(move(f)), g(move(g)) { }
 
     template< class ...X >
     constexpr auto operator () ( X&& ...x )
@@ -611,19 +587,26 @@ template< class F, class G > struct  MCompose {
     }
 };
 
-template< class G, class F >
-constexpr MCompose<G,F> mcompose( G g, F f ) {
-    return { move(g), move(f) };
-}
+// TODO: Chainable?
+constexpr struct MCompose : Binary<MCompose> {
+    using Binary<MCompose>::operator();
 
-template< class F, class G, 
-          class FM = decltype( fmap(declval<F>()) ) >
-constexpr auto fcompose( F f, G g ) -> NCompoposition<FM,G> {
-    return { fmap( move(f) ), move(g) };
-}
+    template< class G, class F >
+    constexpr MComposition<G,F> operator () ( G g, F f ) {
+        return { move(g), move(f) };
+    }
+} mcompose{};
 
-template< class F, class G >
-using FCompose = decltype( fcompose(declval<F>(),declval<G>()) );
+
+constexpr struct FCompose : Binary<FCompose> {
+    using Binary<FCompose>::operator();
+
+    template< class F, class G,
+              class FM = decltype( fmap(declval<F>()) ) >
+    constexpr auto operator () ( F f, G g ) -> NCompoposition<FM,G> {
+        return { fmap( move(f) ), move(g) };
+    }
+} fcompose{};
 
 
 } // namespace pure

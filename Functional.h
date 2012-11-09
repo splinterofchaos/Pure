@@ -327,6 +327,15 @@ constexpr struct BCompose {
 template< size_t N, class P >
 using Nth = decltype( std::get<N>( declval<P>() ) );
 
+constexpr struct ReturnPair : Chainable<ReturnPair> {
+    using Chainable<ReturnPair>::operator();
+
+    template< class X, class Y >
+    constexpr std::pair<X,Y> operator () ( X x, Y y ) {
+        return { move(x), move(y) };
+    }
+} returnPair{};
+
 /*
  * Function Pair.
  * pair_compose( f, g ) = \(x,y) -> (f x, g y) 
