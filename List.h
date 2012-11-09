@@ -49,68 +49,74 @@ template< class I >
 using ItDist = decltype( declval<I>() - declval<I>() );
 
 template< class S >
-constexpr auto length( S&& s ) -> decltype( declval<S>().size() )
+constexpr auto _length( S&& s ) -> decltype( declval<S>().size() )
 {
     return forward<S>(s).size();
 }
 
 template< class S >
-constexpr size_t length( const S& s ) {
+constexpr size_t _length( const S& s ) {
     return std::distance( begin(s), end(s) );
-} 
+}
 
 template< class X, unsigned N >
-constexpr size_t length( X (&)[N] ) {
+constexpr size_t _length( X (&)[N] ) {
     return N;
 }
 
 template< size_t N >
-constexpr size_t length( const char (&)[N] ) {
+constexpr size_t _length( const char (&)[N] ) {
     return N - 1;
 }
 
-template< class S >
-constexpr bool null( const S& s ) {
-    return begin(s) == end(s);
-}
 
-template< class S >
-constexpr bool notNull( const S& s ) {
-    return begin(s) != end(s);
-}
+constexpr struct Length {
+    template< class S >
+    constexpr size_t operator () ( S&& s ) {
+        return _length( forward<S>(s) );
+    }
+} length{};
 
-template< class S >
-constexpr SeqRef<S> head( S&& s, size_t n = 0 ) {
-    return *next( begin(forward<S>(s)), n );
-}
+constexpr struct Null {
+    template< class S >
+    constexpr bool operator () ( const S& s ) {
+        return begin(s) == end(s);
+    }
+} null{};
 
-template< class X > 
-constexpr X head( const std::initializer_list<X>& l, size_t n = 0 ) {
-    return *next( begin(l), n );
-}
+constexpr auto notNull = fnot( null );
 
-template< class S >
-constexpr SeqRef<S> last( S&& s, size_t n = 0 ) {
-    return *prev( end(forward<S>(s)), n+1 );
-}
-
-template< class X >
-constexpr X last( const std::initializer_list<X>& l, size_t n = 0 ) {
-    return *prev( end(l), n+1 );
-}
-
-struct Last {
-    size_t N;
-
-    constexpr Last( size_t N=0 ) : N(N) { }
+constexpr struct Head {
+    template< class S >
+    constexpr SeqRef<S> operator () ( S&& s, size_t n = 0 ) {
+        return *next( begin(forward<S>(s)), n );
+    }
 
     template< class X >
-    constexpr auto operator() ( X&& x ) 
-        -> decltype( last(declval<X>()) )
-    {
-        return last( forward<X>(x), N );
+    constexpr X operator () ( const std::initializer_list<X>& l, size_t n = 0 ) {
+        return *next( begin(l), n );
     }
-};
+
+    constexpr RPart<Head,size_t> with( size_t n ) {
+        return rcloset( Head(), n );
+    }
+} head{};
+
+constexpr struct Last {
+    template< class S >
+    constexpr SeqRef<S> operator () ( S&& s, size_t n = 0 ) {
+        return *prev( end(forward<S>(s)), n+1 );
+    }
+
+    template< class X >
+    constexpr X operator () ( const std::initializer_list<X>& l, size_t n = 0 ) {
+        return *prev( end(l), n+1 );
+    }
+
+    constexpr RPart<Last,size_t> with( size_t n ) {
+        return rcloset( Last(), n );
+    }
+} last{};
 
 template< class S, class I = typename S::iterator > struct Range {
     I b, e;
@@ -258,7 +264,7 @@ R dupExactly( const S& s ) {
 template< class R, class S >
 R dupExactly( const S& s, size_t n, size_t off = 0 ) {
     R r;
-    copy_n( next( begin(s), off ), 
+    copy_n( next( begin(s), off ),
             std::min( n+1, length(s) ) - 1,
             tailInserter(r) );
     return r;
@@ -297,18 +303,22 @@ std::vector<X> dup( const std::initializer_list<X>& l ) {
 
 template< class S > using Dup = decltype( dup(declval<S>()) );
 
-template< class S, class I, class R = Range<S,I>, 
+template< class S, class I, class R = Range<S,I>,
           class RS = typename R::sequence_type >
 RS dup( const Range<S,I>& r ) {
     return dupExactly<RS>( r );
 }
 
-template< class P, class S, class R = Dup<S> >
-R dupIf( P&& p, const S& s ) {
-    R r;
-    std::copy_if( begin(s), end(s), tailInserter(r), forward<P>(p) );
-    return r;
-}
+constexpr struct DupIf : Binary<DupIf> {
+    using Binary<DupIf>::operator();
+
+    template< class P, class S, class R = Dup<S> >
+    R operator () ( P&& p, const S& s ) const {
+        R r;
+        std::copy_if( begin(s), end(s), tailInserter(r), forward<P>(p) );
+        return r;
+    }
+} dupIf{};
 
 template< class... > struct ReMapT;
 
@@ -562,17 +572,10 @@ bool each( F&& f, X&& x, Y&& y, Z&& ...z ) {
         each( forward<F>(f), forward<Y>(y), forward<Z>(z)... );
 }
 
-struct NotNull {
-    template< class X >
-    bool operator() ( X&& x ) {
-        return notNull( forward<X>(x) );
-    }
-};
-
 /* accuml -- foldl implementaton */
 template< class F, class X, class ...XS >
 constexpr Decay<X> accuml( F&& f, X&& x, const XS& ...xs ) {
-    return each( NotNull(), xs... ) ?
+    return each( notNull, xs... ) ?
         accuml( forward<F>(f), 
                 forward<F>(f)( forward<X>(x), 
                                head(xs)... ),
@@ -910,7 +913,7 @@ template< class F, class X > struct Remember {
 };
 
 template< class F, class X >
-constexpr size_t length( const Remember<F,X>& ) {
+constexpr size_t _length( const Remember<F,X>& ) {
     return std::numeric_limits<size_t>::max();
 }
 
@@ -1800,7 +1803,7 @@ X foldMap( F&& f, Fold&& fold, X x,
 /* zipWith f A B -> { f(a,b) for a in A and b in B } */
 template< class F, class R, class ...S >
 R _zipWith( F&& f, R r, const S& ...s ) {
-    return each( NotNull(), s... ) ?
+    return each( notNull, s... ) ?
         _zipWith( forward<F>(f),
                    cons( move(r), forward<F>(f)( head(s)... ) ),
                    tail_wrap( s )... )
