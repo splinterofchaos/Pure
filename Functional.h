@@ -37,12 +37,8 @@ constexpr Flip<F> flip( F&& f ) {
  * partial( f, x )    = g
  * partial( f, x, y ) = h
  */
-template< class F, class ...X >
-struct Part;
-
 template< class F, class X >
-struct Part< F, X >
-{
+struct Part {
     F f;
     X x;
 
@@ -64,62 +60,12 @@ struct Part< F, X >
     }
 };
 
-/* Recursive, variadic version. */
-template< class F, class X1, class ...Xs >
-struct Part< F, X1, Xs... > 
-    : public Part< Part<F,X1>, Xs... >
-{
-    template< class _F, class _X1, class ..._Xs >
-    constexpr Part( _F&& f, _X1&& x1, _Xs&& ...xs )
-        : Part< Part<F,X1>, Xs... > (
-            Part<F,X1>( forward<_F>(f), forward<_X1>(x1) ),
-            forward<_Xs>(xs)...
-        )
-    {
-    }
-};
-
-/* 
- * Some languages implement partial application through closures, which hold
- * references to the function's arguments. But they also often use reference
- * counting. We must consider the scope of the variables we want to apply. If
- * we apply references and then return the applied function, its references
- * will dangle.
- *
- * See: 
- * upward funarg problem http://en.wikipedia.org/wiki/Upward_funarg_problem
- */
-
-/*
- * closure http://en.wikipedia.org/wiki/Closure_%28computer_science%29
- * Here, closure forwards the arguments, which may be references or rvalues--it
- * does not matter. A regular closure works for passing functions down.
- */
-template< class F, class ...X >
-constexpr Part<F,X...> closure( F&& f, X&& ...x ) {
-    return Part<F,X...>( forward<F>(f), forward<X>(x)... );
-}
-
-/*
- * Thinking as closures as open (having references to variables outside of
- * itself), let's refer to a closet as closed. It contains a function and its
- * arguments (or environment).
- */
-template< class F, class ...X >
-constexpr Part<F,X...> closet( F f, X ...x ) {
-    return Part<F,X...>( move(f), move(x)... );
-}
-
 /*
  * Reverse partial application. 
  * g(z) = f( x, y, z )
  * rpartial( f, y, z ) -> g(x)
  */
-template< class F, class ...X >
-struct RPart;
-
-template< class F, class X >
-struct RPart< F, X > {
+template< class F, class X > struct RPart {
     F f;
     X x;
 
@@ -134,29 +80,109 @@ struct RPart< F, X > {
     }
 };
 
-template< class F, class X1, class ...Xs >
-struct RPart< F, X1, Xs... > 
-    : public RPart< RPart<F,Xs...>, X1 >
-{
-    template< class _F, class _X1, class ..._Xs >
-    constexpr RPart( _F&& f, _X1&& x1, _Xs&& ...xs )
-        : RPart< RPart<F,Xs...>, X1 > (
-            RPart<F,Xs...>( forward<_F>(f), forward<_Xs>(xs)... ),
-            forward<_X1>(x1)
-        )
-    {
+template< class D > struct Binary {
+    template< class X >
+    constexpr Part<D,X> operator () ( X x ) {
+        return Part<D,X>( D(), move(x) );
+    }
+
+    template< class X >
+    constexpr RPart<D,X> with( X x ) {
+        return RPart<D,X>( D(), move(x) );
     }
 };
 
-template< class F, class ...X, class P = RPart<F,X...> >
-constexpr P rclosure( F&& f, X&& ...x ) {
-    return P( forward<F>(f), forward<X>(x)... );
-}
+template< class D > struct Chainable : Binary<D> {
+    using Binary<D>::operator();
 
-template< class F, class ...X, class P = RPart<F,X...> >
-constexpr P rcloset( F f, X ...x ) {
-    return P( move(f), move(x)... );
-}
+    template< class X, class Y >
+    using R = typename std::result_of< D(X,Y) >::type;
+
+    // Three arguments: unroll.
+    template< class X, class Y, class Z >
+    constexpr auto operator () ( X&& x, Y&& y, Z&& z )
+        -> R< R<X,Y>, Z >
+    {
+        return D()(
+            D()( std::forward<X>(x), std::forward<Y>(y) ),
+            std::forward<Z>(z)
+        );
+    }
+
+    template< class X, class Y, class ...Z >
+    using Unroll = typename std::result_of <
+        Chainable<D>( Result<X,Y>, Z... )
+    >::type;
+
+    // Any more? recurse.
+    template< class X, class Y, class Z, class H, class ...J >
+    constexpr auto operator () ( X&& x, Y&& y, Z&& z, H&& h, J&& ...j )
+        -> Unroll<X,Y,Z,H,J...>
+    {
+        // Notice how (*this) always gets applied at LEAST three arguments.
+        return (*this)(
+            D()( std::forward<X>(x), std::forward<Y>(y) ),
+            std::forward<Z>(z), std::forward<H>(h), std::forward<J>(j)...
+        );
+    }
+};
+
+/*
+ * Some languages implement partial application through closures, which hold
+ * references to the function's arguments. But they also often use reference
+ * counting. We must consider the scope of the variables we want to apply. If
+ * we apply references and then return the applied function, its references
+ * will dangle.
+ *
+ * See:
+ * upward funarg problem http://en.wikipedia.org/wiki/Upward_funarg_problem
+ */
+
+/*
+ * closure http://en.wikipedia.org/wiki/Closure_%28computer_science%29
+ * Here, closure forwards the arguments, which may be references or rvalues--it
+ * does not matter. A regular closure works for passing functions down.
+ */
+constexpr struct ReturnClosure : Chainable<ReturnClosure> {
+    using Chainable<ReturnClosure>::operator();
+
+    template< class F, class X >
+    constexpr Part<F,X> operator () ( F&& f, X&& x ) {
+        return Part<F,X>( forward<F>(f), forward<X>(x) );
+    }
+} closure{};
+
+/*
+ * Thinking as closures as open (having references to variables outside of
+ * itself), let's refer to a closet as closed. It contains a function and its
+ * arguments (or environment).
+ */
+constexpr struct ReturnCloset : Chainable<ReturnCloset> {
+    using Chainable<ReturnCloset>::operator();
+
+    template< class F, class X >
+    constexpr Part<F,X> operator () ( F f, X x ) {
+        return Part<F,X>( move(f), move(x) );
+    }
+} closet{};
+
+constexpr struct ReturnRClosure : Chainable<ReturnRClosure> {
+    using Chainable<ReturnRClosure>::operator();
+
+    template< class F, class X, class P = RPart<F,X> >
+    constexpr P operator () ( F&& f, X&& x ) {
+        return P( forward<F>(f), forward<X>(x) );
+    }
+} rclosure{};
+
+constexpr struct ReturnRCloset : Chainable<ReturnRCloset> {
+    using Chainable<ReturnRCloset>::operator();
+
+    template< class F, class X, class P = RPart<F,X> >
+    constexpr P operator () ( F f, X x ) {
+        return P( move(f), move(x) );
+    }
+} rcloset{};
 
 template< class F, class ...X >
 using Closure = decltype( closure(declval<F>(), declval<X>()...) );
@@ -198,13 +224,7 @@ constexpr E enclosure( F&& f ) {
  *      h(z,y...) = f( g(z), y... )
  *
  */
-
-template< class F, class ...G >
-struct Composition;
-
-template< class F, class G >
-struct Composition<F,G>
-{
+template< class F, class G > struct Composition {
     F f; G g;
 
     constexpr Composition( F f, G g) 
@@ -212,38 +232,22 @@ struct Composition<F,G>
 
     template< class X, class ...Y >
     constexpr decltype( f(g(declval<X>()), declval<Y>()...) )
-    operator() ( X&& x, Y&& ...y ) {
+    operator () ( X&& x, Y&& ...y ) {
         return f( g( forward<X>(x) ), forward<Y>(y)... );
     }
 };
 
-template< class F, class G, class ...H >
-struct Composition<F,G,H...> : Composition<F,Composition<G,H...>>
-{
-    typedef Composition<G,H...> Comp;
+constexpr struct Compose : Chainable<Compose> {
+    using Chainable<Compose>::operator();
 
-    template< class _F, class _G, class ..._H >
-    constexpr Composition( _F&& f, _G&& g, _H&& ...h )
-        : Composition<_F,Composition<_G,_H...>> ( 
-            forward<_F>(f), 
-            Comp( forward<_G>(g), forward<_H>(h)... )
-        )
-    {
+    template< class F, class G, class C = Composition<F,G> >
+    constexpr C operator () ( F f, G g ) {
+        return C( move(f), move(g) );
     }
-};
-
-template< class F, class ...G, class C = Composition<F,G...> >
-constexpr C compose( F f, G ...g ) {
-    return C( move(f), move(g)... );
-}
+} compose{};
 
 /* A const composition for when g is a constant function. */
-template< class F, class ...G >
-struct CComposition;
-
-template< class F, class G >
-struct CComposition<F,G>
-{
+template< class F, class G > struct CComposition {
     F f; G g;
 
     template< class _F, class _G >
@@ -257,34 +261,17 @@ struct CComposition<F,G>
     }
 };
 
-template< class F, class G, class ...H >
-struct CComposition<F,G,H...> : CComposition<Composition<F,G>,H...>
-{
-    typedef Composition<F,G> Then;
-    typedef CComposition<Then,H...> CComp;
+constexpr struct CCompose : Chainable<CCompose> {
+    using Chainable<CCompose>::operator();
 
-    template< class _F, class _G, class ..._H >
-    constexpr CComposition( _F&& f, _G&& g, _H&& ...h )
-        : CComp ( 
-            Then( forward<_F>(f), forward<_G>(g) ),
-            forward<_H>(h)...
-        )
-    {
+    template< class F, class G, class C = CComposition<F,G> >
+    constexpr C operator () ( F f, G g ) {
+        return C( move(f), move(g) );
     }
-};
-
-template< class F, class ...G, class C = CComposition<F,G...> >
-constexpr C ccompose( F f, G ...g ) {
-    return C( move(f), move(g)... );
-}
+} ccompose{};
 
 /* N-ary composition assumes a unary f and N-ary g. */
-template< class F, class ...G >
-struct NCompoposition;
-
-template< class F, class G >
-struct NCompoposition<F,G>
-{
+template< class F, class G > struct NCompoposition {
     F f; G g;
 
     template< class _F, class _G >
@@ -298,26 +285,14 @@ struct NCompoposition<F,G>
     }
 };
 
-template< class F, class G, class ...H >
-struct NCompoposition<F,G,H...> : NCompoposition<Composition<F,G>,H...>
-{
-    typedef Composition<F,G> Then;
-    typedef NCompoposition<Then,H...> NComp;
+constexpr struct NCompose : Chainable<NCompose> {
+    using Chainable<NCompose>::operator();
 
-    template< class _F, class _G, class ..._H >
-    constexpr NCompoposition( _F&& f, _G&& g, _H&& ...h )
-        : NComp ( 
-            Then( forward<_F>(f), forward<_G>(g) ),
-            forward<_H>(h)...
-        )
-    {
+    template< class F, class ...G, class C = NCompoposition<F,G...> >
+    constexpr C operator ()( F f, G ...g ) {
+        return C( move(f), move(g)... );
     }
-};
-
-template< class F, class ...G, class C = NCompoposition<F,G...> >
-constexpr C ncompose( F f, G ...g ) {
-    return C( move(f), move(g)... );
-}
+} ncompose{};
 
 /*
  * Binary composition 
@@ -342,13 +317,24 @@ struct BComposition
     }
 };
 
-template< class F, class G, class H, class C = BComposition<F,G,H> >
-constexpr C bcompose( F f, G g, H h ) {
-    return C( move(f), move(g), move(h) );
-}
+constexpr struct BCompose {
+    template< class F, class G, class H, class C = BComposition<F,G,H> >
+    constexpr C operator () ( F f, G g, H h ) {
+        return C( move(f), move(g), move(h) );
+    }
+} bcompose{};
 
 template< size_t N, class P >
 using Nth = decltype( std::get<N>( declval<P>() ) );
+
+constexpr struct ReturnPair : Chainable<ReturnPair> {
+    using Chainable<ReturnPair>::operator();
+
+    template< class X, class Y >
+    constexpr std::pair<X,Y> operator () ( X x, Y y ) {
+        return { move(x), move(y) };
+    }
+} returnPair{};
 
 /*
  * Function Pair.
@@ -376,7 +362,9 @@ template< class F, class G > struct PairComposition {
     }
 };
 
-constexpr struct PairCompose {
+constexpr struct PairCompose : Binary<PairCompose> {
+    using Binary<PairCompose>::operator();
+
     template< class F, class G >
     using result = PairComposition<F,G>;
 
@@ -410,7 +398,9 @@ template< class F, class G > struct FanComposition {
     }
 };
 
-constexpr struct FanCompose {
+constexpr struct FanCompose : Binary<FanCompose> {
+    using Binary<FanCompose>::operator();
+
     template< class F, class G >
     using Fn = FanComposition<F,G>;
 
@@ -423,55 +413,8 @@ constexpr struct FanCompose {
 template< class X > constexpr X inc( X x ) { return ++x; }
 template< class X > constexpr X dec( X x ) { return --x; }
 
-template< class D > struct CurriedBinary {
-    template< class X >
-    constexpr Part<D,X> operator () ( X x ) {
-        return closet( D(), move(x) );
-    }
-
-    template< class X >
-    constexpr RPart<D,X> with( X x ) {
-        return rcloset( D(), move(x) );
-    }
-};
-
-template< class D > struct Binary : CurriedBinary<D> {
-    using CurriedBinary<D>::operator();
-
-    template< class X, class Y >
-    using R = typename std::result_of< D(X,Y) >::type;
-
-    // Three arguments: unroll.
-    template< class X, class Y, class Z >
-    constexpr auto operator () ( X&& x, Y&& y, Z&& z )
-        -> R< R<X,Y>, Z >
-    {
-        return D()(
-            D()( std::forward<X>(x), std::forward<Y>(y) ),
-            std::forward<Z>(z)
-        );
-    }
-
-    template< class X, class Y, class ...Z >
-    using Unroll = typename std::result_of <
-        Binary<D>( Result<X,Y>, Z... )
-    >::type;
-
-    // Any more? recurse.
-    template< class X, class Y, class Z, class H, class ...J >
-    constexpr auto operator () ( X&& x, Y&& y, Z&& z, H&& h, J&& ...j )
-        -> Unroll<X,Y,Z,H,J...>
-    {
-        // Notice how (*this) always gets applied at LEAST three arguments.
-        return (*this)(
-            D()( std::forward<X>(x), std::forward<Y>(y) ),
-            std::forward<Z>(z), std::forward<H>(h), std::forward<J>(j)...
-        );
-    }
-};
-
-constexpr struct Add : Binary<Add> {
-    using Binary<Add>::operator();
+constexpr struct Add : Chainable<Add> {
+    using Chainable<Add>::operator();
 
     template< class X, class Y >
     constexpr auto operator() ( X&& x, Y&& y ) 
@@ -481,8 +424,8 @@ constexpr struct Add : Binary<Add> {
     }
 } add{};
 
-constexpr struct Sub : Binary<Sub> {
-    using Binary<Sub>::operator();
+constexpr struct Sub : Chainable<Sub> {
+    using Chainable<Sub>::operator();
 
     template< class X, class Y >
     constexpr auto operator() ( X&& x, Y&& y ) 
@@ -492,8 +435,8 @@ constexpr struct Sub : Binary<Sub> {
     }
 } sub{};
 
-constexpr struct Mult : Binary<Mult> {
-    using Binary<Mult>::operator();
+constexpr struct Mult : Chainable<Mult> {
+    using Chainable<Mult>::operator();
 
     template< class X, class Y >
     constexpr auto operator() ( X&& x, Y&& y ) 
@@ -503,8 +446,8 @@ constexpr struct Mult : Binary<Mult> {
     }
 } mult{};
 
-constexpr struct NotEq : CurriedBinary<NotEq> {
-    using CurriedBinary<NotEq>::operator();
+constexpr struct NotEq : Binary<NotEq> {
+    using Binary<NotEq>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -512,8 +455,43 @@ constexpr struct NotEq : CurriedBinary<NotEq> {
     }
 } notExqualTo{};
 
-constexpr struct Eq : CurriedBinary<Eq> {
-    using CurriedBinary<Eq>::operator();
+template< class D, class F > struct Transitive : Binary<D> {
+    using Binary<D>::operator();
+
+    template< class X, class Y, class Z >
+    constexpr auto operator () ( X&& x, Y&& y, Z&& z )
+        -> Result<D,X,Y>
+    {
+        return F() (
+            D()( forward<X>(x), forward<Y>(y) ),
+            D()( forward<X>(x), forward<Z>(z) )
+        );
+    }
+
+    template< class X, class Y, class Z, class A, class ...B >
+    constexpr auto operator () ( X&& x, Y&& y, Z&& z, A&& a, B&& ...b )
+        -> Result<D,X,Y>
+    {
+        return F() (
+            D()( forward<X>(x), forward<Y>(y) ),
+            D()( forward<Z>(z), forward<A>(a), forward<B>(b)... )
+        );
+    }
+};
+
+struct And : Chainable<And> {
+    using Chainable<And>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator () ( X&& x, Y&& y )
+        -> decltype( declval<X>() && declval<Y>() )
+    {
+        return forward<X>(x) && forward<Y>(y);
+    }
+};
+
+constexpr struct Eq : Transitive<Eq,And> {
+    using Transitive<Eq,And>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -521,8 +499,8 @@ constexpr struct Eq : CurriedBinary<Eq> {
     }
 } equalTo{};
 
-constexpr struct Less : CurriedBinary<Less> {
-    using CurriedBinary<Less>::operator();
+constexpr struct Less : Transitive<Less,And> {
+    using Transitive<Less,And>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -530,8 +508,8 @@ constexpr struct Less : CurriedBinary<Less> {
     }
 } less{};
 
-constexpr struct LessEq : CurriedBinary<LessEq> {
-    using CurriedBinary<LessEq>::operator();
+constexpr struct LessEq : Transitive<LessEq,And> {
+    using Transitive<LessEq,And>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -539,8 +517,8 @@ constexpr struct LessEq : CurriedBinary<LessEq> {
     }
 } lessEq{};
 
-constexpr struct Greater : CurriedBinary<Greater> {
-    using CurriedBinary<Greater>::operator();
+constexpr struct Greater : Transitive<Greater,And> {
+    using Transitive<Greater,And>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -548,8 +526,8 @@ constexpr struct Greater : CurriedBinary<Greater> {
     }
 } greater{};
 
-constexpr struct GreaterEq : CurriedBinary<GreaterEq> {
-    using CurriedBinary<GreaterEq>::operator();
+constexpr struct GreaterEq : Transitive<GreaterEq,And> {
+    using Transitive<GreaterEq,And>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -557,20 +535,17 @@ constexpr struct GreaterEq : CurriedBinary<GreaterEq> {
     }
 } greaterEq{};
 
-struct BinaryNot {
+constexpr struct BinaryNot {
     template< class B >
     constexpr bool operator() ( B&& b ) {
         return not (bool)forward<B>(b);
     }
-};
+} binaryNot{};
 
-template< class F >
-constexpr auto fnot( F f ) -> decltype( compose(BinaryNot(),declval<F>()) ) {
-    return compose( BinaryNot(), move(f) );
-}
+constexpr auto fnot = ncompose( binaryNot );
 
-constexpr struct Mod : Binary<Mod> {
-    using Binary<Mod>::operator();
+constexpr struct Mod : Chainable<Mod> {
+    using Chainable<Mod>::operator();
 
     template< class X, class Y >
     constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
@@ -578,22 +553,13 @@ constexpr struct Mod : Binary<Mod> {
     }
 } mod{};
 
-template< class X >
-constexpr auto divisibleBy( X x ) -> Composition<BinaryNot,RCloset<Mod,X>> {
-    return fnot(rcloset( Mod(), move(x) ));
-}
+constexpr auto divisorOf = compose( fnot, mod );
+constexpr auto divisibleBy = compose( fnot, rcloset(mod) );
+constexpr auto multipleOf = divisibleBy;
 
-template< class X >
-constexpr auto multipleOf( X x ) -> decltype( divisibleBy(move(x)) ) {
-    return divisibleBy( move(x) );
-}
+constexpr struct Max : Chainable<Max> {
+    using Chainable<Max>::operator();
 
-template< class X >
-constexpr auto divisorOf( X x ) -> Composition<BinaryNot,Closet<Mod,X>> {
-    return fnot( closet(Mod(), move(x)) );
-}
-
-constexpr struct Max {
     template< class X, class Y >
     constexpr auto operator () ( X&& x, Y&& y ) 
         -> decltype( declval<X>() + declval<Y>() )
@@ -614,7 +580,9 @@ constexpr struct Max {
     }
 } max{};
 
-constexpr struct Min {
+constexpr struct Min : Chainable<Min> {
+    using Chainable<Min>::operator();
+
     template< class X, class Y >
     constexpr auto operator () ( X&& x, Y&& y ) 
         -> decltype( declval<X>() + declval<Y>() )

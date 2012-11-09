@@ -33,7 +33,9 @@ template< class A > struct Arr {
 };
 
 /* (f *** g) (x,y) = (f x, g y) */
-constexpr struct Split {
+constexpr struct Split : Chainable<Split> {
+    using Chainable<Split>::operator();
+
     template< class F, class G, class A = Arrow<Cat<F>> >
     constexpr auto operator () ( F&& f, G&& g )
         -> decltype( A::split(declval<F>(), declval<G>()) )
@@ -43,7 +45,9 @@ constexpr struct Split {
 } split{};
 
 /* (f &&& g) x = (f x, g x) */
-constexpr struct Fan {
+constexpr struct Fan : Chainable<Fan> {
+    using Chainable<Fan>::operator();
+
     template< class F, class G, class A = Arrow<Cat<F>> >
     constexpr auto operator () ( F&& f, G&& g )
         -> decltype( A::fan(declval<F>(),declval<G>()) )
@@ -94,10 +98,6 @@ constexpr struct Duplicate {
 template< class Func > struct Arrow<Func> {
     static constexpr Func arr( Func f ) { return f; }
 
-    // Same decltype expression used many times. Save typing.
-    template< class F, class G >
-    using Split = decltype( pairCompose(declval<F>(), declval<G>()) );
-
     /*
      * Note: It would seem that an easier way to define this class might be to
      * have it define only split, and define first, second, and fan in terms
@@ -112,11 +112,20 @@ template< class Func > struct Arrow<Func> {
      * first(f)(x,y)  = { f(x), y }
      * second(f)(x,y) = { x, f(y) }
      */
-    static constexpr auto first  = rcloset( split, Id() );
-    static constexpr auto second = closet ( split, Id() );
+    static constexpr auto first  = arrow::split.with( id );
+    static constexpr auto second = arrow::split( id );
 
     /* fan(f,g)(x) = { f(x), g(x) } */
     static constexpr auto fan = fanCompose;
+};
+
+template< unsigned int N > struct Nth {
+    template< class X >
+    constexpr auto operator () ( X&& x )
+        -> decltype( std::get<N>(declval<X>()) )
+    {
+        return std::get<N>( forward<X>(x) );
+    }
 };
 
 template< class Binary > struct Uncurrier {
@@ -131,7 +140,7 @@ template< class Binary > struct Uncurrier {
 };
 
 constexpr struct Uncurry {
-    template< class B > 
+    template< class B >
     constexpr Uncurrier<B> operator () ( B b ) {
         return { move(b) };
     }
@@ -142,6 +151,7 @@ constexpr struct Uncurry {
 template< template<class...> class M, class F = Id > struct Kleisli {
     F f = F();
 
+    constexpr Kleisli() {};
     constexpr Kleisli( F f ) : f(std::move(f)) { }
 
     template< class X >
@@ -180,7 +190,10 @@ struct KleisliComposition {
     }
 };
 
-template< template<class...> class M > struct KleisliCompose {
+template< template<class...> class M >
+struct KleisliCompose : Chainable<KleisliCompose<M>> {
+    using Chainable<KleisliCompose<M>>::operator();
+
     template< class F, class G,
               class Komp = KleisliComposition<M,F,G>,
               class K = Kleisli<M,Komp> >
@@ -189,11 +202,11 @@ template< template<class...> class M > struct KleisliCompose {
     }
 };
 
-template< template<class...> class M, class F, class G >
-constexpr auto kleisliCompose( F&& f, G&& g )
-    -> decltype( KleisliCompose<M>()(std::declval<F>(),std::declval<G>()) )
+template< template<class...> class M, class ...F >
+constexpr auto kleisliCompose( F&& ...f )
+    -> decltype( KleisliCompose<M>()(std::declval<F>()...) )
 {
-    return KleisliCompose<M>()( std::forward<F>(f), std::forward<G>(g) );
+    return KleisliCompose<M>()( std::forward<F>(f)... );
 }
 
 template< template<class...> class M, class X, class Y >
@@ -205,7 +218,10 @@ constexpr auto mreturnPair( X x, Y y )
     );
 }
 
-template< template<class...> class M > struct MReturnPair {
+template< template<class...> class M >
+struct MReturnPair : Binary<MReturnPair<M>> {
+    using Binary<MReturnPair<M>>::operator();
+
     template< class X, class Y >
     constexpr auto operator () ( X&& x, Y&& y )
         -> decltype( mreturnPair<M>( declval<X>(),declval<Y>() ) )
@@ -226,9 +242,9 @@ struct KleisliFirst {
 
     template< class X, class Y >
     constexpr auto operator () ( const std::pair<X,Y>& p )
-        -> decltype( f( p.first ) >>= rcloset( MReturnPair<M>(), p.second ) )
+        -> decltype( f( p.first ) >>= MReturnPair<M>().with( p.second ) )
     {
-         return f( p.first ) >>= rcloset( MReturnPair<M>(), p.second );
+         return f( p.first ) >>= MReturnPair<M>().with( p.second );
     }
 };
 
@@ -249,9 +265,9 @@ struct KleisliSecond {
 
     template< class X, class Y >
     constexpr auto operator () ( const std::pair<X,Y>& p )
-        -> decltype( f( p.second ) >>= closet( MReturnPair<M>(), p.first ) )
+        -> decltype( f(p.second) >>= MReturnPair<M>()(p.first) )
     {
-         return f( p.second ) >>= closet( MReturnPair<M>(), p.first );
+         return f( p.second ) >>= MReturnPair<M>()( p.first );
     }
 };
 

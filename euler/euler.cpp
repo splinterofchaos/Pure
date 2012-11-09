@@ -79,12 +79,12 @@ vector<int> multiples_less_than_1000( int x ) {
 void problem1() {
     cout << "The sum of every multiple of 3 or 5 between 1 and 1000: "
          << flush <<
-         sum( sunion( multiples_less_than_1000(3), 
+         sum( sunion( multiples_less_than_1000(3),
                       multiples_less_than_1000(5) ) )
          << endl;
 }
 
-constexpr auto even = fnot( rcloset( Mod(), 2 ) );
+constexpr auto even = divisibleBy(2);
 
 constexpr unsigned long long operator "" _K ( unsigned long long x ) {
     return x * 1000;
@@ -93,14 +93,14 @@ constexpr unsigned long long operator "" _M ( unsigned long long x ) {
     return x * 1000000;
 }
 
-auto fibs = biIterate( add, 1ull, 2ull );
+auto fibs = biIterate( Add(), 1ull, 2ull );
 
 void problem2() {
     using namespace pure::list::misc;
     using namespace pure::list::taking;
     cout << "The sum of every even Fibonacci number below 4-million: "
          << flush << sum (
-             (biIterate( Add(), 1u, 2u ) < 4_M) / even
+             (fibs < 4_M) / even
          ) << endl;
 }
 
@@ -244,7 +244,7 @@ void problem4() {
     using namespace pure::list::misc;
     cout << "The largest palindrome product of three digit numbers :"
          << flush;
-    cout << foldMap (
+    cout << pure::fold::foldMap (
             []( const IRange& r ) -> Largest<int> {
                 return maximum (
                     // Multiply the init of r by its last; filter for
@@ -413,14 +413,15 @@ void problem11() {
         io::fileContents<Line>( fin ) 
     );
 
+    using pure::ap::spure;
 
     cout << pure::list::foldMap ( 
         [&](int i, int j, const Vec& dir) { 
             return take_dir_prod( dir, {{i,j}}, 4, mat ); 
         }, pure::max, 0ull,
         enumerate(mat), enumerate(mat[0]),  
-        pure::ap::spure<Vec>( "-1x0"_v, " 1x1"_v,
-                              " 0x1"_v, "-1x1"_v )
+        spure( "-1x0"_v, " 1x1"_v,
+               " 0x1"_v, "-1x1"_v )
     ) << endl;
 }
 
