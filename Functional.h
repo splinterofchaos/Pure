@@ -446,8 +446,43 @@ constexpr struct NotEq : Binary<NotEq> {
     }
 } notExqualTo{};
 
-constexpr struct Eq : Binary<Eq> {
-    using Binary<Eq>::operator();
+template< class D, class F > struct Transitive : Binary<D> {
+    using Binary<D>::operator();
+
+    template< class X, class Y, class Z >
+    constexpr auto operator () ( X&& x, Y&& y, Z&& z )
+        -> Result<D,X,Y>
+    {
+        return F() (
+            D()( forward<X>(x), forward<Y>(y) ),
+            D()( forward<X>(x), forward<Z>(z) )
+        );
+    }
+
+    template< class X, class Y, class Z, class A, class ...B >
+    constexpr auto operator () ( X&& x, Y&& y, Z&& z, A&& a, B&& ...b )
+        -> Result<D,X,Y>
+    {
+        return F() (
+            D()( forward<X>(x), forward<Y>(y) ),
+            D()( forward<Z>(z), forward<A>(a), forward<B>(b)... )
+        );
+    }
+};
+
+struct And : Chainable<And> {
+    using Chainable<And>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator () ( X&& x, Y&& y )
+        -> decltype( declval<X>() && declval<Y>() )
+    {
+        return forward<X>(x) && forward<Y>(y);
+    }
+};
+
+constexpr struct Eq : Transitive<Eq,And> {
+    using Transitive<Eq,And>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -455,8 +490,8 @@ constexpr struct Eq : Binary<Eq> {
     }
 } equalTo{};
 
-constexpr struct Less : Binary<Less> {
-    using Binary<Less>::operator();
+constexpr struct Less : Transitive<Less,And> {
+    using Transitive<Less,And>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -464,8 +499,8 @@ constexpr struct Less : Binary<Less> {
     }
 } less{};
 
-constexpr struct LessEq : Binary<LessEq> {
-    using Binary<LessEq>::operator();
+constexpr struct LessEq : Transitive<LessEq,And> {
+    using Transitive<LessEq,And>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -473,8 +508,8 @@ constexpr struct LessEq : Binary<LessEq> {
     }
 } lessEq{};
 
-constexpr struct Greater : Binary<Greater> {
-    using Binary<Greater>::operator();
+constexpr struct Greater : Transitive<Greater,And> {
+    using Transitive<Greater,And>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -482,8 +517,8 @@ constexpr struct Greater : Binary<Greater> {
     }
 } greater{};
 
-constexpr struct GreaterEq : Binary<GreaterEq> {
-    using Binary<GreaterEq>::operator();
+constexpr struct GreaterEq : Transitive<GreaterEq,And> {
+    using Transitive<GreaterEq,And>::operator();
 
     template< class X, class Y >
     constexpr bool operator() ( X&& x, Y&& y ) {
@@ -498,12 +533,7 @@ constexpr struct BinaryNot {
     }
 } binaryNot{};
 
-constexpr struct FNot {
-    template< class F >
-    constexpr auto operator () ( F f ) -> decltype( ncompose(BinaryNot(),declval<F>()) ) {
-        return ncompose( BinaryNot(), move(f) );
-    }
-} fnot{};
+constexpr auto fnot = ncompose( binaryNot );
 
 constexpr struct Mod : Chainable<Mod> {
     using Chainable<Mod>::operator();
@@ -518,7 +548,9 @@ constexpr auto divisorOf = compose( fnot, mod );
 constexpr auto divisibleBy = compose( fnot, rcloset(mod) );
 constexpr auto multipleOf = divisibleBy;
 
-constexpr struct Max {
+constexpr struct Max : Chainable<Max> {
+    using Chainable<Max>::operator();
+
     template< class X, class Y >
     constexpr auto operator () ( X&& x, Y&& y ) 
         -> decltype( declval<X>() + declval<Y>() )
@@ -539,7 +571,9 @@ constexpr struct Max {
     }
 } max{};
 
-constexpr struct Min {
+constexpr struct Min : Chainable<Min> {
+    using Chainable<Min>::operator();
+
     template< class X, class Y >
     constexpr auto operator () ( X&& x, Y&& y ) 
         -> decltype( declval<X>() + declval<Y>() )

@@ -116,10 +116,12 @@ template<> struct Applicative< category::maybe_type > {
     }
 };
 
-constexpr struct Call {
-    template< class F, class X >
-    constexpr auto operator () ( F&& f, X&& x ) -> Result<F,X> {
-        return std::forward<F>(f)( std::forward<X>(x) );
+constexpr struct Call : Binary<Call> {
+    using Binary<Call>::operator();
+
+    template< class F, class ...X >
+    constexpr auto operator () ( F&& f, X&& ...x ) -> Result<F,X...> {
+        return std::forward<F>(f)( std::forward<X>(x)... );
     }
 } call{};
     
