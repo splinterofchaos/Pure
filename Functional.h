@@ -40,7 +40,7 @@ template< template<class...> class X > struct ConstructT {
     }
 };
 
-template< template<class...> class X > struct ConstructF {
+template< template<class...> class X > struct ForwardT {
     template< class ...Y, class R = X< Y... > >
     constexpr R operator () ( Y&& ...y ) {
         return R( forward<Y>(y)... );
@@ -202,9 +202,9 @@ struct ConstructChainable : Chainable<ConstructT<X>> {
 };
 
 template< template<class...> class X >
-struct ForwardChainable : Chainable<ConstructF<X>> {
+struct ForwardChainable : Chainable<ForwardT<X>> {
     using Self = ForwardChainable<X>;
-    using Chainable<ConstructF<X>>::operator();
+    using Chainable<ForwardT<X>>::operator();
 
     template< class Y, class Z, class R = X<Y,Z> >
     constexpr R operator () ( Y&& y, Z&& z ) {
