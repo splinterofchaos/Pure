@@ -151,9 +151,9 @@ struct ForwardBinary : Binary<ForwardBinary<X>> {
 };
 
 /*
- * Right Associativity
+ * Left Associativity
  * Given a binary function, f(x,y):
- *      Let f(x,y,z,h) = f( f( f(x,y) ,z ), h ) // Chaining
+ *      Let f(x,y,z,h) = f( f( f(x,y) ,z ), h ) -- Chaining
  */
 template< class D > struct Chainable : Binary<D> {
     using Binary<D>::operator();
@@ -191,36 +191,24 @@ template< class D > struct Chainable : Binary<D> {
 };
 
 template< template<class...> class X >
-struct ConstructChainable : ConstructBinary<X> {
+struct ConstructChainable : Chainable<ConstructT<X>> {
     using Self = ConstructChainable<X>;
-    using ConstructBinary<X>::operator();
+    using Chainable<ConstructT<X>>::operator();
 
-    template< class Y, class Z, class A, class ...B,
-              class R1 = X< Decay<Y>, Decay<Z> >,
-              class R2 = decltype( Self()( declval<R1>(), declval<A>(),
-                                           declval<B>()... ) ) >
-    constexpr R2 operator () ( Y&& y, Z&& z, A&& a, B&& ...b ) {
-        return (*this) (
-            R1( forward<Y>(y), forward<Z>(z) ),
-            forward<A>(a), forward<B>(b)...
-        );
+    template< class Y, class Z, class R = X< Decay<Y>, Decay<Z> > >
+    constexpr R operator () ( Y&& y, Z&& z ) {
+        return R( forward<Y>(y), forward<Z>(z) );
     }
 };
 
 template< template<class...> class X >
-struct ForwardChainable : ForwardBinary<X> {
+struct ForwardChainable : Chainable<ConstructF<X>> {
     using Self = ForwardChainable<X>;
-    using ForwardBinary<X>::operator();
+    using Chainable<ConstructF<X>>::operator();
 
-    template< class Y, class Z, class A, class ...B,
-              class R1 = X< Y, Z >,
-              class R2 = decltype( Self()( declval<R1>(), declval<A>(),
-                                           declval<B>()... ) ) >
-    constexpr R2 operator () ( Y&& y, Z&& z, A&& a, B&& ...b ) {
-        return (*this) (
-            R1( forward<Y>(y), forward<Z>(z) ),
-            forward<A>(a), forward<B>(b)...
-        );
+    template< class Y, class Z, class R = X<Y,Z> >
+    constexpr R operator () ( Y&& y, Z&& z ) {
+        return R( forward<Y>(y), forward<Z>(z) );
     }
 };
 
