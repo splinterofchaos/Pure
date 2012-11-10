@@ -136,21 +136,30 @@ struct Functor< data::Either<L,R> > {
 template< class ...M > struct Monad;
 
 /* m >> k */
-template< class A, class B,
-          class Mo = Monad<Cat<A>> >
-decltype( Mo::mdo(declval<A>(),declval<B>()) ) 
-mdo( A&& a, B&& b ) {
-    return Mo::mdo( forward<A>(a), forward<B>(b) ); 
-}
+constexpr struct Mdo : Chainable<Mdo> {
+    using Chainable<Mdo>::operator();
 
-/* m >>= k */
-template< class M, class F,
-          class Mo = Monad<Cat<M>> >
-auto mbind( F&& f, M&& m )
-    -> decltype( Mo::mbind(declval<F>(),declval<M>()) )
-{
-    return Mo::mbind( forward<F>(f), forward<M>(m) );
-}
+    template< class A, class B,
+              class Mo = Monad<Cat<A>> >
+    constexpr auto operator () ( A&& a, B&& b )
+        -> decltype( Mo::mdo(declval<A>(),declval<B>()) )
+    {
+        return Mo::mdo( forward<A>(a), forward<B>(b) );
+    }
+} mdo{};
+
+constexpr struct Mbind : Chainable<Mbind> {
+    using Chainable<Mbind>::operator();
+
+    /* m >>= k */
+    template< class M, class F,
+              class Mo = Monad<Cat<M>> >
+    constexpr auto operator () ( F&& f, M&& m )
+        -> decltype( Mo::mbind(declval<F>(),declval<M>()) )
+    {
+        return Mo::mbind( forward<F>(f), forward<M>(m) );
+    }
+} mbind{};
 
 /* return<M> x = M x */
 template< class M, class X > 
