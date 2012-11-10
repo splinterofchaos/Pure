@@ -131,8 +131,8 @@ template< class D > struct Binary {
 };
 
 template< template<class...> class X >
-struct BinaryType : Binary<BinaryType<X>> {
-    using Binary<BinaryType<X>>::operator();
+struct ConstructBinary : Binary<ConstructBinary<X>> {
+    using Binary<ConstructBinary<X>>::operator();
 
     template< class Y, class Z, class R = X< Decay<Y>, Decay<Z> > >
     constexpr R operator () ( Y&& y, Z&& z ) {
@@ -141,8 +141,8 @@ struct BinaryType : Binary<BinaryType<X>> {
 };
 
 template< template<class...> class X >
-struct BinaryForward : Binary<BinaryForward<X>> {
-    using Binary<BinaryForward<X>>::operator();
+struct ForwardBinary : Binary<ForwardBinary<X>> {
+    using Binary<ForwardBinary<X>>::operator();
 
     template< class Y, class Z, class R = X< Y, Z > >
     constexpr R operator () ( Y&& y, Z&& z ) {
@@ -191,27 +191,26 @@ template< class D > struct Chainable : Binary<D> {
 };
 
 template< template<class...> class X >
-struct ChainableType : Chainable<BinaryType<X>> {
-    using Self = ChainableType<X>;
-    //using BinaryType<X>::operator();
-    using Chainable<BinaryType<X>>::operator();
+struct ConstructChainable : ConstructBinary<X> {
+    using Self = ConstructChainable<X>;
+    using ConstructBinary<X>::operator();
 
-//    template< class Y, class Z, class A, class ...B,
-//              class R1 = X< Decay<Y>, Decay<Z> >,
-//              class R2 = decltype( Self()( declval<R1>(), declval<A>(),
-//                                           declval<B>()... ) ) >
-//    constexpr R2 operator () ( Y&& y, Z&& z, A&& a, B&& ...b ) {
-//        return (*this) (
-//            R1( forward<Y>(y), forward<Z>(z) ),
-//            forward<A>(a), forward<B>(b)...
-//        );
-//    }
+    template< class Y, class Z, class A, class ...B,
+              class R1 = X< Decay<Y>, Decay<Z> >,
+              class R2 = decltype( Self()( declval<R1>(), declval<A>(),
+                                           declval<B>()... ) ) >
+    constexpr R2 operator () ( Y&& y, Z&& z, A&& a, B&& ...b ) {
+        return (*this) (
+            R1( forward<Y>(y), forward<Z>(z) ),
+            forward<A>(a), forward<B>(b)...
+        );
+    }
 };
 
 template< template<class...> class X >
-struct ChainableForward : BinaryForward<X> {
-    using Self = ChainableForward<X>;
-    using BinaryForward<X>::operator();
+struct ForwardChainable : ForwardBinary<X> {
+    using Self = ForwardChainable<X>;
+    using ForwardBinary<X>::operator();
 
     template< class Y, class Z, class A, class ...B,
               class R1 = X< Y, Z >,
@@ -271,7 +270,7 @@ template< class F, class Fold > struct Transitive : Binary<F> {
  * does not matter. A regular closure works for passing functions down.
  */
 
-constexpr auto closure = ChainableForward<Part>();
+constexpr auto closure = ForwardChainable<Part>();
 
 constexpr struct ReturnClosure : Chainable<ReturnClosure> {
     using Chainable<ReturnClosure>::operator();
@@ -287,7 +286,7 @@ constexpr struct ReturnClosure : Chainable<ReturnClosure> {
  * itself), let's refer to a closet as closed. It contains a function and its
  * arguments (or environment).
  */
-constexpr auto closet = ChainableType<Part>();
+constexpr auto closet = ConstructChainable<Part>();
 
 constexpr struct ReturnCloset : Chainable<ReturnCloset> {
     using Chainable<ReturnCloset>::operator();

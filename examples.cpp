@@ -347,10 +347,6 @@ int main()
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", rsqrDoublePlus2(3) );
 
     puts("");
-    auto ccc = ncompose(closet,ncompose);
-    printf( "ccc $ square add $ 1 2 = %s\n",
-            show( ccc(square,add)(1,2)() ).c_str() );
-    puts("");
 
     puts( "\naddM a b = do\n\tx <- a\n\ty <- b\n\tx + y" );
     printf( "addM (Just 2) (Just 4) = %s\n", 
