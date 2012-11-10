@@ -111,13 +111,11 @@ struct Monad< state::StateT<S,A,M,F> > {
     template< class Pair >
     using Mon = typename State::template monad_type<Pair>;
 
-    static constexpr P _return( A a, S s ) {
-        return { move(a), move(s) }; 
-    }
+    static constexpr auto _return = ConstructBinary<std::pair>();
 
     template< class ST, class X >
     static constexpr Closet<decltype(_return),X> mreturn( X x ) {
-        return closet( _return, move(x) );
+        return _return( move(x) );
     }
 
     template< class K >
@@ -259,7 +257,6 @@ struct MonadState< StateT<S,S,M,_F> > {
     using RetM  = pure::Return< Monad >;
 
     using GetF = Composition< RetM, Duplicate >;
-//    using SetF = Composition< RetM, RCloset<decltype(returnPair),S> >;
 
     static constexpr State<GetF> get() { return stateT<S,M>( duplicate ); }
 

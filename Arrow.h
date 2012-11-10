@@ -144,22 +144,16 @@ constexpr struct Uncurry {
     constexpr Uncurrier<B> operator () ( B b ) {
         return { move(b) };
     }
-} uncurry{};
+} _uncurry{};
+
+constexpr auto uncurry = rcloset( bcompose, Nth<1>(), Nth<0>() );
 
 //template< template<class...>class, class ... > struct Kleisli;
 
-template< template<class...> class M, class F = Id > struct Kleisli {
-    F f = F();
-
-    constexpr Kleisli() {};
-    constexpr Kleisli( F f ) : f(std::move(f)) { }
-
-    template< class X >
-    constexpr auto operator () ( X&& x )
-        -> decltype( f(std::declval<X>()) )
-    {
-        return f( std::forward<X>(x) );
-    }
+template< template<class...> class M, class F = Id >
+struct Kleisli : Forwarder<F> {
+    template< class ...G >
+    constexpr Kleisli( G&& ...g ) : Forwarder<F>(std::forward<G>(g)...) { }
 };
 
 template< template<class...> class M, class F,
