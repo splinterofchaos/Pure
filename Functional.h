@@ -11,6 +11,42 @@ namespace pure {
  * function. 
  */
 
+template< class F > struct Forwarder {
+    using function = F;
+    function f = F();
+
+    template< class ...G >
+    constexpr Forwarder( G&& ...g ) : f( std::forward<G>(g)... ) { }
+
+    template< class ...X >
+    constexpr auto operator() ( X&& ...x )
+        -> decltype( f(declval<X>()...) )
+    {
+        return f( std::forward<X>(x)... );
+    }
+};
+
+template< class X > struct Construct {
+    template< class ...Y >
+    constexpr X operator() ( Y&& ...y ) {
+        return X( forward<Y>(y)... );
+    }
+};
+
+template< template<class...> class X > struct ConstructT {
+    template< class ...Y, class R = X< Decay<Y>... > >
+    constexpr R operator () ( Y&& ...y ) {
+        return R( forward<Y>(y)... );
+    }
+};
+
+template< template<class...> class X > struct ConstructF {
+    template< class ...Y, class R = X< Y... > >
+    constexpr R operator () ( Y&& ...y ) {
+        return R( forward<Y>(y)... );
+    }
+};
+
 /* Flip f : g(x,y) = f(y,x) */
 template< class F > struct Flip {
     F f;
@@ -25,10 +61,7 @@ template< class F > struct Flip {
     }
 };
 
-template< class F >
-constexpr Flip<F> flip( F&& f ) {
-    return Flip<F>( forward<F>(f) );
-}
+constexpr auto flip = ConstructT<Flip>();
 
 /* 
  * Partial application.
@@ -97,6 +130,26 @@ template< class D > struct Binary {
     }
 };
 
+template< template<class...> class X >
+struct BinaryType : Binary<BinaryType<X>> {
+    using Binary<BinaryType<X>>::operator();
+
+    template< class Y, class Z, class R = X< Decay<Y>, Decay<Z> > >
+    constexpr R operator () ( Y&& y, Z&& z ) {
+        return R( forward<Y>(y), forward<Z>(z) );
+    }
+};
+
+template< template<class...> class X >
+struct BinaryForward : Binary<BinaryForward<X>> {
+    using Binary<BinaryForward<X>>::operator();
+
+    template< class Y, class Z, class R = X< Y, Z > >
+    constexpr R operator () ( Y&& y, Z&& z ) {
+        return R( forward<Y>(y), forward<Z>(z) );
+    }
+};
+
 /*
  * Right Associativity
  * Given a binary function, f(x,y):
@@ -133,6 +186,41 @@ template< class D > struct Chainable : Binary<D> {
         return (*this)(
             D()( std::forward<X>(x), std::forward<Y>(y) ),
             std::forward<Z>(z), std::forward<H>(h), std::forward<J>(j)...
+        );
+    }
+};
+
+template< template<class...> class X >
+struct ChainableType : Chainable<BinaryType<X>> {
+    using Self = ChainableType<X>;
+    //using BinaryType<X>::operator();
+    using Chainable<BinaryType<X>>::operator();
+
+//    template< class Y, class Z, class A, class ...B,
+//              class R1 = X< Decay<Y>, Decay<Z> >,
+//              class R2 = decltype( Self()( declval<R1>(), declval<A>(),
+//                                           declval<B>()... ) ) >
+//    constexpr R2 operator () ( Y&& y, Z&& z, A&& a, B&& ...b ) {
+//        return (*this) (
+//            R1( forward<Y>(y), forward<Z>(z) ),
+//            forward<A>(a), forward<B>(b)...
+//        );
+//    }
+};
+
+template< template<class...> class X >
+struct ChainableForward : BinaryForward<X> {
+    using Self = ChainableForward<X>;
+    using BinaryForward<X>::operator();
+
+    template< class Y, class Z, class A, class ...B,
+              class R1 = X< Y, Z >,
+              class R2 = decltype( Self()( declval<R1>(), declval<A>(),
+                                           declval<B>()... ) ) >
+    constexpr R2 operator () ( Y&& y, Z&& z, A&& a, B&& ...b ) {
+        return (*this) (
+            R1( forward<Y>(y), forward<Z>(z) ),
+            forward<A>(a), forward<B>(b)...
         );
     }
 };
@@ -182,6 +270,9 @@ template< class F, class Fold > struct Transitive : Binary<F> {
  * Here, closure forwards the arguments, which may be references or rvalues--it
  * does not matter. A regular closure works for passing functions down.
  */
+
+constexpr auto closure = ChainableForward<Part>();
+
 constexpr struct ReturnClosure : Chainable<ReturnClosure> {
     using Chainable<ReturnClosure>::operator();
 
@@ -189,13 +280,15 @@ constexpr struct ReturnClosure : Chainable<ReturnClosure> {
     constexpr Part<F,X> operator () ( F&& f, X&& x ) {
         return Part<F,X>( forward<F>(f), forward<X>(x) );
     }
-} closure{};
+} closure_{};
 
 /*
  * Thinking as closures as open (having references to variables outside of
  * itself), let's refer to a closet as closed. It contains a function and its
  * arguments (or environment).
  */
+constexpr auto closet = ChainableType<Part>();
+
 constexpr struct ReturnCloset : Chainable<ReturnCloset> {
     using Chainable<ReturnCloset>::operator();
 
@@ -203,7 +296,7 @@ constexpr struct ReturnCloset : Chainable<ReturnCloset> {
     constexpr Part<F,X> operator () ( F f, X x ) {
         return Part<F,X>( move(f), move(x) );
     }
-} closet{};
+} closet_{};
 
 constexpr struct ReturnRClosure : Chainable<ReturnRClosure> {
     using Chainable<ReturnRClosure>::operator();
