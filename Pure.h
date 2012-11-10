@@ -603,7 +603,7 @@ constexpr struct FCompose : Binary<FCompose> {
 
     template< class F, class G,
               class FM = decltype( fmap(declval<F>()) ) >
-    constexpr auto operator () ( F f, G g ) -> NCompoposition<FM,G> {
+    constexpr auto operator () ( F f, G g ) -> NComposition<FM,G> {
         return { fmap( move(f) ), move(g) };
     }
 } fcompose{};

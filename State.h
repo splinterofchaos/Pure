@@ -154,7 +154,7 @@ struct ReturnT {
     using state_type = StateT < 
             S, A, M,
             Composition< pure::Return<monad_type>, 
-                         Closet<ReturnPair,A> >
+                         Result<decltype(returnPair),A> >
     >;
 
     constexpr state_type operator () ( A a ) {
@@ -259,11 +259,17 @@ struct MonadState< StateT<S,S,M,_F> > {
     using RetM  = pure::Return< Monad >;
 
     using GetF = Composition< RetM, Duplicate >;
-    using SetF = Composition< RetM, RCloset<ReturnPair,S> >;
+//    using SetF = Composition< RetM, RCloset<decltype(returnPair),S> >;
 
     static constexpr State<GetF> get() { return stateT<S,M>( duplicate ); }
 
-    static constexpr State<SetF> put( S s ) {
+    template< class X >
+    using Set = decltype( returnPair.with(declval<X>()) );
+
+    template< class X >
+    using SetF = Composition< RetM, Set<X> >;
+
+    static constexpr State<SetF<S> > put( S s ) {
         return stateT<S,M>( returnPair.with(move(s)) );
     }
 
