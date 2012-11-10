@@ -5,12 +5,7 @@
 
 namespace pure {
 
-/* 
- * FUNCTION TRANSFORMERS
- * The fallowing are types that contain one or more functions and act like a
- * function. 
- */
-
+/* Forwarder<F>(x...) = f(x...) */
 template< class F > struct Forwarder {
     using function = F;
     function f = F();
@@ -26,24 +21,27 @@ template< class F > struct Forwarder {
     }
 };
 
-template< class X > struct Construct {
-    template< class ...Y >
-    constexpr X operator() ( Y&& ...y ) {
-        return X( forward<Y>(y)... );
+/* Construct<T>(x...) = T(x...) */
+template< class T > struct Construct {
+    template< class ...X >
+    constexpr T operator() ( X&& ...x ) {
+        return T( forward<X>(x)... );
     }
 };
 
-template< template<class...> class X > struct ConstructT {
-    template< class ...Y, class R = X< Decay<Y>... > >
-    constexpr R operator () ( Y&& ...y ) {
-        return R( forward<Y>(y)... );
+/* ConstructT<T>(x) = T<X>(x) */
+template< template<class...> class T > struct ConstructT {
+    template< class ...X, class R = T< Decay<X>... > >
+    constexpr R operator () ( X&& ...x ) {
+        return R( forward<X>(x)... );
     }
 };
 
-template< template<class...> class X > struct ForwardT {
-    template< class ...Y, class R = X< Y... > >
-    constexpr R operator () ( Y&& ...y ) {
-        return R( forward<Y>(y)... );
+/* ForwardT<T>(X&& x) = T<X>(x) */
+template< template<class...> class T > struct ForwardT {
+    template< class ...X, class R = T< X... > >
+    constexpr R operator () ( X&& ...x ) {
+        return R( forward<X>(x)... );
     }
 };
 
@@ -130,23 +128,23 @@ template< class D > struct Binary {
     }
 };
 
-template< template<class...> class X >
-struct ConstructBinary : Binary<ConstructBinary<X>> {
-    using Binary<ConstructBinary<X>>::operator();
+template< template<class...> class T >
+struct ConstructBinary : Binary<ConstructBinary<T>> {
+    using Binary<ConstructBinary<T>>::operator();
 
-    template< class Y, class Z, class R = X< Decay<Y>, Decay<Z> > >
-    constexpr R operator () ( Y&& y, Z&& z ) {
-        return R( forward<Y>(y), forward<Z>(z) );
+    template< class X, class Y, class R = T< Decay<X>, Decay<Y> > >
+    constexpr R operator () ( X&& x, Y&& y ) {
+        return R( forward<X>(x), forward<Y>(y) );
     }
 };
 
-template< template<class...> class X >
-struct ForwardBinary : Binary<ForwardBinary<X>> {
-    using Binary<ForwardBinary<X>>::operator();
+template< template<class...> class T >
+struct ForwardBinary : Binary<ForwardBinary<T>> {
+    using Binary<ForwardBinary<T>>::operator();
 
-    template< class Y, class Z, class R = X< Y, Z > >
-    constexpr R operator () ( Y&& y, Z&& z ) {
-        return R( forward<Y>(y), forward<Z>(z) );
+    template< class X, class Y, class R = T<X,Y> >
+    constexpr R operator () ( X&& x, Y&& y ) {
+        return R( forward<X>(x), forward<Y>(y) );
     }
 };
 
@@ -155,26 +153,26 @@ struct ForwardBinary : Binary<ForwardBinary<X>> {
  * Given a binary function, f(x,y):
  *      Let f(x,y,z,h) = f( f( f(x,y) ,z ), h ) -- Chaining
  */
-template< class D > struct Chainable : Binary<D> {
-    using Binary<D>::operator();
+template< class F > struct Chainable : Binary<F> {
+    using Binary<F>::operator();
 
     template< class X, class Y >
-    using R = typename std::result_of< D(X,Y) >::type;
+    using R = typename std::result_of< F(X,Y) >::type;
 
     // Three arguments: unroll.
     template< class X, class Y, class Z >
     constexpr auto operator () ( X&& x, Y&& y, Z&& z )
         -> R< R<X,Y>, Z >
     {
-        return D()(
-            D()( std::forward<X>(x), std::forward<Y>(y) ),
+        return F()(
+            F()( std::forward<X>(x), std::forward<Y>(y) ),
             std::forward<Z>(z)
         );
     }
 
     template< class X, class Y, class ...Z >
     using Unroll = typename std::result_of <
-        Chainable<D>( Result<X,Y>, Z... )
+        Chainable<F>( Result<X,Y>, Z... )
     >::type;
 
     // Any more? recurse.
@@ -184,31 +182,31 @@ template< class D > struct Chainable : Binary<D> {
     {
         // Notice how (*this) always gets applied at LEAST three arguments.
         return (*this)(
-            D()( std::forward<X>(x), std::forward<Y>(y) ),
+            F()( std::forward<X>(x), std::forward<Y>(y) ),
             std::forward<Z>(z), std::forward<H>(h), std::forward<J>(j)...
         );
     }
 };
 
-template< template<class...> class X >
-struct ConstructChainable : Chainable<ConstructT<X>> {
-    using Self = ConstructChainable<X>;
-    using Chainable<ConstructT<X>>::operator();
+template< template<class...> class T >
+struct ConstructChainable : Chainable<ConstructT<T>> {
+    using Self = ConstructChainable<T>;
+    using Chainable<ConstructT<T>>::operator();
 
-    template< class Y, class Z, class R = X< Decay<Y>, Decay<Z> > >
-    constexpr R operator () ( Y&& y, Z&& z ) {
-        return R( forward<Y>(y), forward<Z>(z) );
+    template< class X, class Y, class R = T< Decay<X>, Decay<Y> > >
+    constexpr R operator () ( X&& x, Y&& y ) {
+        return R( forward<X>(x), forward<Y>(y) );
     }
 };
 
-template< template<class...> class X >
-struct ForwardChainable : Chainable<ForwardT<X>> {
-    using Self = ForwardChainable<X>;
-    using Chainable<ForwardT<X>>::operator();
+template< template<class...> class T >
+struct ForwardChainable : Chainable<ForwardT<T>> {
+    using Self = ForwardChainable<T>;
+    using Chainable<ForwardT<T>>::operator();
 
-    template< class Y, class Z, class R = X<Y,Z> >
-    constexpr R operator () ( Y&& y, Z&& z ) {
-        return R( forward<Y>(y), forward<Z>(z) );
+    template< class X, class Y, class R = T<X,Y> >
+    constexpr R operator () ( X&& x, Y&& y ) {
+        return R( forward<X>(x), forward<Y>(y) );
     }
 };
 
