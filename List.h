@@ -12,10 +12,51 @@
 
 namespace pure { 
 
-using std::begin;
-using std::end;
-using std::next;
-using std::prev;
+constexpr struct Begin {
+    template< class X >
+    constexpr auto operator () ( X&& x )
+        -> decltype( std::begin(declval<X>()) )
+    {
+        return std::begin( std::forward<X>(x) );
+    }
+} begin{};
+
+constexpr struct End {
+    template< class X >
+    constexpr auto operator () ( X&& x )
+        -> decltype( std::end(declval<X>()) )
+    {
+        return std::end( std::forward<X>(x) );
+    }
+} end{};
+
+constexpr struct Next {
+    template< class X >
+    constexpr auto operator () ( X&& x, size_t n=1 )
+        -> decltype( std::next(declval<X>()) )
+    {
+        return std::next( std::forward<X>(x), n );
+    }
+} next{};
+
+constexpr struct Prev {
+    template< class X >
+    constexpr auto operator () ( X&& x, size_t n=1 )
+        -> decltype( std::prev(declval<X>()) )
+    {
+        return std::prev( std::forward<X>(x), n );
+    }
+} prev{};
+
+template< unsigned int N > struct Get {
+    template< class X >
+    constexpr auto operator () ( X&& x )
+        -> decltype( std::get<N>(declval<X>()) )
+    {
+        return std::get<N>( std::forward<X>(x) );
+    }
+};
+
 using std::get;
 
 namespace category {

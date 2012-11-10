@@ -239,16 +239,6 @@ template<> struct Monad< category::sequence_type > {
     }
 
     static constexpr auto mbind = list::concatMap;
-
-    /* m >>= k -- where m is a sequence. */
-//    template< class S, class F >
-//    static decltype( list::concatMap(declval<F>(),declval<S>()) )
-//    mbind( S&& xs, F&& f ) {
-//        // xs >>= f = foldr g [] xs
-//        //     where g acc x = acc ++ f(x)
-//        //           ++ = append
-//        return list::concatMap( f, xs );
-//    }
 };
 
 template< class P > struct IsPointerImpl { 
@@ -308,10 +298,10 @@ constexpr struct LiftCons {
     struct Close {
         template< class M, class X >
         constexpr auto operator () ( M&& m, X&& x )
-            -> decltype( liftM( rclosure(list::cons,declval<X>()),
+            -> decltype( liftM( list::cons.with(declval<X>()),
                          declval<M>() ) )
         {
-            return liftM( rclosure(list::cons,forward<X>(x)), forward<M>(m) );
+            return liftM( list::cons.with(forward<X>(x)), forward<M>(m) );
         }
     };
 

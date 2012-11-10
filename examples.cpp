@@ -17,19 +17,28 @@
 #include <iostream>
 #include <fstream>
 
-using namespace std;
 using namespace pure;
 using namespace pure::list;
+
+using std::cout;
+using std::endl;
+using std::copy;
+
+using std::vector;
+using std::unique_ptr;
+using std::string;
+using std::pair;
+using std::make_pair;
 
 template< typename Container >
 void print( const char* const msg, const Container& v )
 {
     cout << msg << "\n";
-    copy( begin(v), end(v), ostream_iterator<float>(cout, " ") );
+    copy( begin(v), end(v), std::ostream_iterator<float>(cout, " ") );
     cout << endl;
 }
 
-typedef array<float,2> Vec;
+typedef std::array<float,2> Vec;
 
 constexpr int get_x( const Vec& v ) { return v[0]; } 
 constexpr int get_y( const Vec& v ) { return v[1]; }
@@ -49,7 +58,7 @@ Vec operator * ( float x, Vec a ) { return move(a) * x; }
 Vec operator / ( const Vec& v, float x ) { return v * (1/x); }
 
 unique_ptr<float> sqroot( float x ) {
-    return x >= 0 ? Just(sqrt(x)) : Nothing<float>(); 
+    return x >= 0 ? Just(std::sqrt(x)) : Nothing<float>();
 }
 
 /* x +- y = [x+y,x-y] */
@@ -83,7 +92,8 @@ string show( const char* );
 string show( string );
 string show( float );
 template< class X, class Y > string show( const pair<X,Y>& p );
-template< class S > auto show( const S& s ) -> decltype( begin(s), string() );
+template< class S > auto show( const S& s )
+    -> decltype( std::begin(s), string() );
 template< class X > string showJust( const X& );
 template< class X > string show( const unique_ptr<X>& );
 template< class X > string show( X* );
@@ -135,7 +145,7 @@ string show( const char* str ) {
 }
 
 template< class S > 
-auto show( const S& s ) -> decltype( begin(s), string() )
+auto show( const S& s ) -> decltype( std::begin(s), string() )
 {
     string str = "[";
     for( const auto& x : s ) {
@@ -233,7 +243,7 @@ int main()
     printf( "\tdelete 4 es = %s\n", show( erase( 4,evens) ).c_str() );
     printf( "\tinsert 5 es = %s\n", show( insert(5,evens) ).c_str() );
     printf( "\tdeleteFirstBy (==) es [2,6] = %s\n", 
-            show( eraseFirst( equal_to<int>(),evens,vector<int>{1,2,6} ) ).c_str() );
+            show( eraseFirst( std::equal_to<int>(),evens,vector<int>{1,2,6} ) ).c_str() );
     printf( "\tpermutations (take 3 es) = %s\n", 
             show ( 
                 ( permutations ^ DupTo<std::vector>() ^ take(3) )( evens ) 
@@ -315,9 +325,9 @@ int main()
 
     auto accumF = []( int x, int y ) { return std::make_pair(x+y,x*y); };
     printf( "mapAccumL (\\x y -> (x+y,x*y)) 0 [2,8,10] = %s\n",
-            show( mapAccumL(accumF,0,std::vector<int>{2,8,10}) ).c_str() );
+            show( mapAccumL(accumF,0,vector<int>{2,8,10}) ).c_str() );
     printf( "mapAccumR (\\x y -> (x+y,x*y)) 0 [2,8,10] = %s\n",
-            show( mapAccumR(accumF,0,std::vector<int>{2,8,10}) ).c_str() );
+            show( mapAccumR(accumF,0,vector<int>{2,8,10}) ).c_str() );
 
     Vec fiveTwo = {{5,2}}, twoFive = {{2,5}};
 
@@ -363,7 +373,7 @@ int main()
     puts("p2M = fmap (+2)");
     auto plus_twoM = fmap( add(2) );
     printf( "\tp2M (1,2) = %s\n\tp2M [1,2] = %s\n",
-            show( plus_twoM(make_pair(1,2)) ).c_str(),
+            show( plus_twoM(std::make_pair(1,2)) ).c_str(),
             show( plus_twoM(std::list<int>{1,2}) ).c_str() );
     puts("");
 
@@ -399,7 +409,7 @@ int main()
             show( add3M( Just(1), Just(2), Just(3) ) ).c_str() );
     printf( "\tadd3M [1,2] [3,4] [5,6] = %s\n",
             show( add3M(vector<int>{1,2}, vector<int>{3,4}, 
-                       vector<int>{5,6}) ).c_str() );
+                        vector<int>{5,6}) ).c_str() );
     using V = vector<int>;
     printf( "\tzip_with add3 [1,2] [3,4] [5,6] = %s\n",
             show( zipWith(add3,V{1,2},V{3,4},V{5,6}) ).c_str() );
@@ -409,7 +419,7 @@ int main()
 
     vector<int> N = {1,2,3,4,5,6,7,8};
     int n = 5;
-    auto equalsN = closure( equal_to<int>(), n );
+    auto equalsN = closure( std::equal_to<int>(), n );
     printf( "find (==5) [1,2,3,4,5,6,7,8] = %s\n", 
             showMaybe( pure::list::find(equalsN, N) ).c_str() );
     n = 9;
