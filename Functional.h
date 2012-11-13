@@ -128,6 +128,7 @@ template< class D > struct Binary {
     }
 };
 
+/* ConstructBinary<T>(x,y) = T<X,Y>(x,y) */
 template< template<class...> class T >
 struct ConstructBinary : Binary<ConstructBinary<T>> {
     using Binary<ConstructBinary<T>>::operator();
@@ -138,6 +139,7 @@ struct ConstructBinary : Binary<ConstructBinary<T>> {
     }
 };
 
+/* ForwardBinary<T>(x,y) = T<X&&,Y&&>(x,y) */
 template< template<class...> class T >
 struct ForwardBinary : Binary<ForwardBinary<T>> {
     using Binary<ForwardBinary<T>>::operator();
@@ -171,9 +173,9 @@ template< class F > struct Chainable : Binary<F> {
     }
 
     template< class X, class Y, class ...Z >
-    using Unroll = typename std::result_of <
-        Chainable<F>( Result<X,Y>, Z... )
-    >::type;
+    using Unroll = Result <
+        Chainable<F>,  R<X,Y>, Z...
+    >;
 
     // Any more? recurse.
     template< class X, class Y, class Z, class H, class ...J >
@@ -240,6 +242,7 @@ template< class F, class Fold > struct Transitive : Binary<F> {
 };
 
 /*
+ * PARTIAL APPLICATION
  * Some languages implement partial application through closures, which hold
  * references to the function's arguments. But they also often use reference
  * counting. We must consider the scope of the variables we want to apply. If
@@ -247,7 +250,7 @@ template< class F, class Fold > struct Transitive : Binary<F> {
  * will dangle.
  *
  * See:
- * upward funarg problem http://en.wikipedia.org/wiki/Upward_funarg_problem
+ * upward funarg problem: http://en.wikipedia.org/wiki/Upward_funarg_problem
  */
 
 /*
@@ -407,8 +410,7 @@ template< class F, class G > struct PairComposition {
     }
 };
 
-// TODO: Chainable?
-constexpr auto pairCompose = ConstructBinary<PairComposition>();
+constexpr auto pairCompose = ConstructChainable<PairComposition>();
 
 template< class F, class G > struct FanComposition {
     F f = F();
@@ -434,7 +436,7 @@ template< class F, class G > struct FanComposition {
     }
 };
 
-constexpr auto fanCompose = ConstructBinary<FanComposition>();
+constexpr auto fanCompose = ConstructChainable<FanComposition>();
 
 template< class X > constexpr X inc( X x ) { return ++x; }
 template< class X > constexpr X dec( X x ) { return --x; }
