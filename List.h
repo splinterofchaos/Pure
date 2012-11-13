@@ -1870,7 +1870,7 @@ S zipWith( F&& f, const S& a, S b ) {
 
 template< class S >
 std::vector<Decay<S>> lines( S&& s ) {
-    return splitBy( equalTo('\n'), forward<S>(s) );
+    return splitBy( eq('\n'), forward<S>(s) );
 }
 
 template< class SS, class S = SeqVal<SS> >

@@ -785,7 +785,7 @@ void problem22() {
     auto ss = sort (
         map (
             cutEnds,
-            splitBy( equalTo(','), s )
+            splitBy( eq(','), s )
         )
     );
 

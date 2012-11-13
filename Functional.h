@@ -474,6 +474,73 @@ constexpr struct Mult : Chainable<Mult> {
     }
 } mult{};
 
+constexpr struct Div : Chainable<Div> {
+    using Chainable<Div>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator() ( X&& x, Y&& y )
+        -> decltype( declval<X>() / declval<Y>() )
+    {
+        return forward<X>(x) / forward<Y>(y);
+    }
+} div{};
+
+constexpr struct Mod : Chainable<Mod> {
+    using Chainable<Mod>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator() ( X&& x, Y&& y )
+        -> decltype( declval<X>() % declval<Y>() )
+    {
+        return forward<X>(x) % forward<Y>(y);
+    }
+} mod{};
+
+constexpr struct LShift : Chainable<LShift> {
+    using Chainable<LShift>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator() ( X&& x, Y&& y )
+        -> decltype( declval<X>() << declval<Y>() )
+    {
+        return forward<X>(x) << forward<Y>(y);
+    }
+} lshift{};
+
+constexpr struct LShiftEq : Chainable<LShiftEq> {
+    using Chainable<LShiftEq>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator() ( X&& x, Y&& y )
+        -> decltype( declval<X>() <<= declval<Y>() )
+    {
+        return forward<X>(x) <<= forward<Y>(y);
+    }
+} lshiftEq{};
+
+constexpr struct RShift : Chainable<RShift> {
+    using Chainable<RShift>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator() ( X&& x, Y&& y )
+        -> decltype( declval<X>() >> declval<Y>() )
+    {
+        return forward<X>(x) >> forward<Y>(y);
+    }
+} rshift{};
+
+constexpr struct RShiftEq : Chainable<RShiftEq> {
+    using Chainable<RShiftEq>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator() ( X&& x, Y&& y )
+        -> decltype( declval<X>() >>= declval<Y>() )
+    {
+        return forward<X>(x) >>= forward<Y>(y);
+    }
+} rshiftEq{};
+
+// TODO: notEq(x,y,z) should be equivalent to x!=y and y!=z and x!=z.
 constexpr struct NotEq : Binary<NotEq> {
     using Binary<NotEq>::operator();
 
@@ -481,7 +548,7 @@ constexpr struct NotEq : Binary<NotEq> {
     constexpr bool operator() ( X&& x, Y&& y ) {
         return forward<X>(x) != forward<Y>(y);
     }
-} notExqualTo{};
+} notEq{};
 
 struct And : Chainable<And> {
     using Chainable<And>::operator();
@@ -501,7 +568,7 @@ constexpr struct Eq : Transitive<Eq,And> {
     constexpr bool operator() ( X&& x, Y&& y ) {
         return forward<X>(x) == forward<Y>(y);
     }
-} equalTo{};
+} eq{};
 
 constexpr struct Less : Transitive<Less,And> {
     using Transitive<Less,And>::operator();
@@ -547,15 +614,6 @@ constexpr struct BinaryNot {
 } binaryNot{};
 
 constexpr auto fnot = ncompose( binaryNot );
-
-constexpr struct Mod : Chainable<Mod> {
-    using Chainable<Mod>::operator();
-
-    template< class X, class Y >
-    constexpr CommonType<X,Y> operator() ( X&& x, Y&& y ) {
-        return forward<X>(x) % forward<Y>(y);
-    }
-} mod{};
 
 constexpr auto divisorOf = compose( fnot, mod );
 constexpr auto divisibleBy = compose( fnot, rcloset(mod) );
