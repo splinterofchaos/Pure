@@ -212,13 +212,24 @@ struct ForwardChainable : Chainable<ForwardT<T>> {
     }
 };
 
+// Define And early as a helper for Transitive.
+struct And : Chainable<And> {
+    using Chainable<And>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator () ( X&& x, Y&& y )
+        -> decltype( declval<X>() && declval<Y>() )
+    {
+        return forward<X>(x) && forward<Y>(y);
+    }
+};
 
 /*
  * Transitivity:
  * Given a transitive function, f(x,y,z), f(x,y) and f(y,z) implies f(x,z).
  * Let "and" be some function that folds the return of f.
  */
-template< class F, class Fold > struct Transitive : Binary<F> {
+template< class F, class Fold=And > struct Transitive : Binary<F> {
     using Binary<F>::operator();
 
     template< class X, class Y, class Z >
@@ -550,18 +561,7 @@ constexpr struct NotEq : Binary<NotEq> {
     }
 } notEq{};
 
-struct And : Chainable<And> {
-    using Chainable<And>::operator();
-
-    template< class X, class Y >
-    constexpr auto operator () ( X&& x, Y&& y )
-        -> decltype( declval<X>() && declval<Y>() )
-    {
-        return forward<X>(x) && forward<Y>(y);
-    }
-};
-
-constexpr struct Eq : Transitive<Eq,And> {
+constexpr struct Eq : Transitive<Eq> {
     using Transitive<Eq,And>::operator();
 
     template< class X, class Y >
@@ -570,7 +570,7 @@ constexpr struct Eq : Transitive<Eq,And> {
     }
 } eq{};
 
-constexpr struct Less : Transitive<Less,And> {
+constexpr struct Less : Transitive<Less> {
     using Transitive<Less,And>::operator();
 
     template< class X, class Y >
@@ -579,7 +579,7 @@ constexpr struct Less : Transitive<Less,And> {
     }
 } less{};
 
-constexpr struct LessEq : Transitive<LessEq,And> {
+constexpr struct LessEq : Transitive<LessEq> {
     using Transitive<LessEq,And>::operator();
 
     template< class X, class Y >
@@ -588,7 +588,7 @@ constexpr struct LessEq : Transitive<LessEq,And> {
     }
 } lessEq{};
 
-constexpr struct Greater : Transitive<Greater,And> {
+constexpr struct Greater : Transitive<Greater> {
     using Transitive<Greater,And>::operator();
 
     template< class X, class Y >
@@ -597,7 +597,7 @@ constexpr struct Greater : Transitive<Greater,And> {
     }
 } greater{};
 
-constexpr struct GreaterEq : Transitive<GreaterEq,And> {
+constexpr struct GreaterEq : Transitive<GreaterEq> {
     using Transitive<GreaterEq,And>::operator();
 
     template< class X, class Y >
