@@ -463,6 +463,17 @@ constexpr struct Add : Chainable<Add> {
     }
 } add{};
 
+constexpr struct AddEq : Chainable<AddEq> {
+    using Chainable<AddEq>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator() ( X&& x, Y&& y )
+        -> decltype( declval<X>() += declval<Y>() )
+    {
+        return forward<X>(x) += forward<Y>(y);
+    }
+} addEq{};
+
 constexpr struct Sub : Chainable<Sub> {
     using Chainable<Sub>::operator();
 
@@ -471,6 +482,17 @@ constexpr struct Sub : Chainable<Sub> {
         -> decltype( declval<X>() - declval<Y>() )
     {
         return forward<X>(x) - forward<Y>(y);
+    }
+} sub{};
+
+constexpr struct SubEq : Chainable<SubEq> {
+    using Chainable<SubEq>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator() ( X&& x, Y&& y )
+        -> decltype( declval<X>() -= declval<Y>() )
+    {
+        return forward<X>(x) -= forward<Y>(y);
     }
 } sub{};
 
@@ -485,6 +507,17 @@ constexpr struct Mult : Chainable<Mult> {
     }
 } mult{};
 
+constexpr struct MultEq : Chainable<MultEq> {
+    using Chainable<MultEq>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator() ( X&& x, Y&& y )
+        -> decltype( declval<X>() *= declval<Y>() )
+    {
+        return forward<X>(x) *= forward<Y>(y);
+    }
+} multEq{};
+
 constexpr struct Div : Chainable<Div> {
     using Chainable<Div>::operator();
 
@@ -493,6 +526,17 @@ constexpr struct Div : Chainable<Div> {
         -> decltype( declval<X>() / declval<Y>() )
     {
         return forward<X>(x) / forward<Y>(y);
+    }
+} div{};
+
+constexpr struct DivEq : Chainable<DivEq> {
+    using Chainable<DivEq>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator() ( X&& x, Y&& y )
+        -> decltype( declval<X>() /= declval<Y>() )
+    {
+        return forward<X>(x) /= forward<Y>(y);
     }
 } div{};
 
@@ -506,6 +550,17 @@ constexpr struct Mod : Chainable<Mod> {
         return forward<X>(x) % forward<Y>(y);
     }
 } mod{};
+
+constexpr struct ModEq : Chainable<ModEq> {
+    using Chainable<ModEq>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator() ( X&& x, Y&& y )
+        -> decltype( declval<X>() %= declval<Y>() )
+    {
+        return forward<X>(x) %= forward<Y>(y);
+    }
+} modEq{};
 
 constexpr struct LShift : Chainable<LShift> {
     using Chainable<LShift>::operator();
@@ -569,6 +624,83 @@ constexpr struct Eq : Transitive<Eq> {
         return forward<X>(x) == forward<Y>(y);
     }
 } eq{};
+
+struct Or : Chainable<Or> {
+    using Chainable<Or>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator () ( X&& x, Y&& y )
+        -> decltype( declval<X>() || declval<Y>() )
+    {
+        return forward<X>(x) || forward<Y>(y);
+    }
+};
+
+constexpr struct BitOr : Chainable<BitOr> {
+    using Chainable<BitOr>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator () ( X&& x, Y&& y )
+        -> decltype( declval<X>() | declval<Y>() )
+    {
+        return forward<X>(x) | forward<Y>(y);
+    }
+} bitOr{};
+
+constexpr struct BitOrEq : Chainable<BitOrEq> {
+    using Chainable<BitOrEq>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator () ( X&& x, Y&& y )
+        -> decltype( declval<X>() |= declval<Y>() )
+    {
+        return forward<X>(x) |= forward<Y>(y);
+    }
+} bitOrEq{};
+
+constexpr struct XOr : Chainable<XOr> {
+    using Chainable<XOr>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator () ( X&& x, Y&& y )
+        -> decltype( declval<X>() ^ declval<Y>() )
+    {
+        return forward<X>(x) ^ forward<Y>(y);
+    }
+} xOr{};
+
+constexpr struct XOrEq : Chainable<XOrEq> {
+    using Chainable<XOrEq>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator () ( X&& x, Y&& y )
+        -> decltype( declval<X>() ^= declval<Y>() )
+    {
+        return forward<X>(x) ^= forward<Y>(y);
+    }
+} xOrEq{};
+
+constexpr struct BitAnd : Chainable<BitAnd> {
+    using Chainable<BitAnd>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator () ( X&& x, Y&& y )
+        -> decltype( declval<X>() & declval<Y>() )
+    {
+        return forward<X>(x) & forward<Y>(y);
+    }
+} bitAnd{};
+
+constexpr struct BitAndEq : Chainable<BitAndEq> {
+    using Chainable<BitAndEq>::operator();
+
+    template< class X, class Y >
+    constexpr auto operator () ( X&& x, Y&& y )
+        -> decltype( declval<X>() &= declval<Y>() )
+    {
+        return forward<X>(x) &= forward<Y>(y);
+    }
+} bitAndEq{};
 
 constexpr struct Less : Transitive<Less> {
     using Transitive<Less,And>::operator();
