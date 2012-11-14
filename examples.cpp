@@ -341,8 +341,8 @@ int main()
     printf( "<7,7> * 2 = <%f,%f>\n", fourteens[0], fourteens[1] );
 
     // Transitivity test.
-    printf( "equalTo(5,5,5,5) = %s\n", show(equalTo(5,5,5,5)).c_str() );
-    printf( "equalTo(5,5,0,5) = %s\n", show(equalTo(5,5,0,5)).c_str() );
+    printf( "eq(5,5,5,5) = %s\n", show(eq(5,5,5,5)).c_str() );
+    printf( "eq(5,5,0,5) = %s\n", show(eq(5,5,0,5)).c_str() );
     printf( "less(5,4,3,2) = %s\n", show( pure::less(5,4,3,2) ).c_str() );
     printf( "less(2,3,4,5) = %s\n", show( pure::less(2,3,4,5) ).c_str() );
 
@@ -356,10 +356,6 @@ int main()
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", sqrDoublePlus2(3) );
     printf( "3^2 * 2 + 2 = 9 * 2 + 2 = %d\n", rsqrDoublePlus2(3) );
 
-    puts("");
-    auto ccc = ncompose(closet,ncompose);
-    printf( "ccc $ square add $ 1 2 = %s\n",
-            show( ccc(square,add)(1,2)() ).c_str() );
     puts("");
 
     puts( "\naddM a b = do\n\tx <- a\n\ty <- b\n\tx + y" );

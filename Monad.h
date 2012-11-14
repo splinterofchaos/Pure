@@ -50,7 +50,7 @@ constexpr struct FMap : Binary<FMap> {
 template< class Function >
 struct Functor<Function> {
     template< class F, class G >
-    static auto fmap( F&& f, G&& g ) 
+    static constexpr auto fmap( F&& f, G&& g )
         -> decltype( compose(declval<F>(),declval<G>()) )
     {
         return compose( forward<F>(f), forward<G>(g) );

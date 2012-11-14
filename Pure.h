@@ -588,25 +588,18 @@ template< class F, class G > struct  MComposition {
 };
 
 // TODO: Chainable?
-constexpr struct MCompose : Binary<MCompose> {
-    using Binary<MCompose>::operator();
-
-    template< class G, class F >
-    constexpr MComposition<G,F> operator () ( G g, F f ) {
-        return { move(g), move(f) };
-    }
-} mcompose{};
-
+constexpr auto mcompose = ConstructBinary< MComposition >();
+constexpr auto fcompose = ncompose ^ fmap ;
 
 constexpr struct FCompose : Binary<FCompose> {
     using Binary<FCompose>::operator();
 
     template< class F, class G,
               class FM = decltype( fmap(declval<F>()) ) >
-    constexpr auto operator () ( F f, G g ) -> NCompoposition<FM,G> {
+    constexpr auto operator () ( F f, G g ) -> NComposition<FM,G> {
         return { fmap( move(f) ), move(g) };
     }
-} fcompose{};
+} fcompose_{};
 
 
 } // namespace pure
