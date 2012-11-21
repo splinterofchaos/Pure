@@ -10,13 +10,15 @@ namespace pure {
 
 namespace ap {
 
-template< class X, class ...Y, class A = std::array<Decay<X>,1+sizeof...(Y)> >
-constexpr A spure( X&& x, Y&& ...y ) {
-    return {{
-        std::forward<X>(x),
-        std::forward<Y>(y)... 
-    }}; 
-}
+constexpr struct SPure {
+    template< class X, class ...Y, class A = std::array<Decay<X>,1+sizeof...(Y)> >
+    constexpr A operator () ( X&& x, Y&& ...y ) {
+        return {{
+            std::forward<X>(x),
+            std::forward<Y>(y)...
+        }};
+    }
+} spure{};
 
 template< class ... > struct Applicative;
 template< class ... > struct Alternative;
@@ -36,24 +38,46 @@ constexpr auto apure( X&& x )
     return A::template pure<M>( std::forward<X>(x) );
 }
 
-template< class X, class ...Y, class A = Applicative<Cat<X>> >
-constexpr auto ap( X&& x, Y&& ...y ) 
-    -> decltype( A::ap(std::declval<X>(),std::declval<Y>()...) )
-{
-    return A::ap( std::forward<X>(x), std::forward<Y>(y)... );
-}
+template< template<class...> class M > struct Pure {
+    template< class X >
+    auto operator () ( X&& x ) const -> decltype(apure<M>(declval<X>()))
+    {
+        return apure<M>( forward<X>(x) );
+    }
+};
+
+constexpr struct Ap : Binary<Ap> {
+    using Binary<Ap>::operator();
+
+    template< class X, class ...Y, class A = Applicative<Cat<X>> >
+    constexpr auto operator () ( X&& x, Y&& ...y )
+        -> decltype( A::ap(std::declval<X>(),std::declval<Y>()...) )
+    {
+        return A::ap( std::forward<X>(x), std::forward<Y>(y)... );
+    }
+} ap{};
 
 template< class X, class A = Alternative< Cat<X> > >
 constexpr auto empty() -> decltype( A::template empty<X>() ) {
     return A::template empty<X>();
 }
 
-template< class X, class Y, class A = Alternative< Cat<X> > >
-constexpr auto alt( X&& x, Y&& y ) 
-    -> decltype( A::alt(std::declval<X>(),std::declval<Y>()) ) 
-{
-    return A::alt( std::forward<X>(x), std::forward<Y>(y) );
-}
+template< class X > struct Empty {
+    constexpr auto operator () () -> decltype( empty<X>() ) {
+        return empty<X>();
+    }
+};
+
+constexpr struct Alt : Chainable<Alt> {
+    using Chainable<Alt>::operator();
+
+    template< class X, class Y, class A = Alternative< Cat<X> > >
+    constexpr auto operator () ( X&& x, Y&& y )
+        -> decltype( A::alt(std::declval<X>(),std::declval<Y>()) )
+    {
+        return A::alt( std::forward<X>(x), std::forward<Y>(y) );
+    }
+} alt{};
 
 template< class X, class Y >
 constexpr auto operator * ( X&& x, Y&& y ) 
@@ -92,10 +116,12 @@ template<> struct Applicative< category::maybe_type > {
     }
 };
 
-constexpr struct Call {
-    template< class F, class X >
-    constexpr auto operator () ( F&& f, X&& x ) -> Result<F,X> {
-        return std::forward<F>(f)( std::forward<X>(x) );
+constexpr struct Call : Binary<Call> {
+    using Binary<Call>::operator();
+
+    template< class F, class ...X >
+    constexpr auto operator () ( F&& f, X&& ...x ) -> Result<F,X...> {
+        return std::forward<F>(f)( std::forward<X>(x)... );
     }
 } call{};
     
@@ -106,14 +132,7 @@ template<> struct Applicative< category::sequence_type > {
         return S<Decay<X>>{ std::forward<X>(x) };
     }
 
-//    static constexpr auto ap = fmap(call);
-
-    template< class XS, class YS >
-    static constexpr auto ap( XS&& xs, YS&& ys )
-        -> decltype( fmap( call, std::declval<XS>(), std::declval<YS>() ) )
-    {
-        return fmap( call, std::forward<XS>(xs), std::forward<YS>(ys) );
-    }
+    static constexpr auto ap = fmap(call);
 };
 
 template< class _X, class _Y > struct Applicative< std::pair<_X,_Y> > {
@@ -151,12 +170,7 @@ template<> struct Alternative< category::sequence_type > {
     template< class S >
     static constexpr S empty() { return {}; }
 
-    template< class X, class Y >
-    static auto alt( X&& x, Y&& y )
-        -> decltype( list::append(std::declval<X>(),std::declval<Y>()) )
-    {
-        return list::append( std::forward<X>(x), std::forward<Y>(y) );
-    }
+    static constexpr auto alt = list::append;
 };
 
 }

@@ -26,41 +26,31 @@ using namespace pure::category;
  */
 template< class ...F > struct Functor;
 
-template< class F, class G, class ...H,
-          class Fn = Functor< Cat<G> > >
-constexpr auto fmap( F&& f, G&& g, H&& ...h )
-    -> decltype( Fn::fmap(declval<F>(),declval<G>(),declval<H>()...) ) 
-{
-    return Fn::fmap( forward<F>(f), forward<G>(g), forward<H>(h)... );
-}
+constexpr struct FMap : Binary<FMap> {
+    using Binary<FMap>::operator();
 
-template< class F, class X,
-          class Fn = Functor< category::sequence_type > >
-constexpr auto fmap( F&& f, const std::initializer_list<X>& l )
-    -> decltype( Fn::fmap(declval<F>(),l) ) 
-{
-    return Fn::fmap( forward<F>(f), l );
-}
-
-struct FMap {
-    template< class F, class ...X >
-    constexpr auto operator() ( F&& f, X&& ...x ) 
-        -> decltype( fmap(declval<F>(),declval<X>()...) )
+    template< class F, class G, class ...H,
+              class Fn = Functor< Cat<G> > >
+    constexpr auto operator () ( F&& f, G&& g, H&& ...h )
+        -> decltype( Fn::fmap(declval<F>(),declval<G>(),declval<H>()...) )
     {
-        return fmap( forward<F>(f), forward<X>(x)... );
+        return Fn::fmap( forward<F>(f), forward<G>(g), forward<H>(h)... );
     }
-};
 
-template< class F > 
-constexpr Closure<FMap,F> fmap( F&& f ) {
-    return closure( FMap(), forward<F>(f) );
-}
+    template< class F, class X,
+              class Fn = Functor< category::sequence_type > >
+    constexpr auto operator () ( F&& f, const std::initializer_list<X>& l )
+        -> decltype( Fn::fmap(declval<F>(),l) )
+    {
+        return Fn::fmap( forward<F>(f), l );
+    }
+} fmap{};
 
 /* fmap f g = compose( f, g ) */
 template< class Function >
 struct Functor<Function> {
     template< class F, class G >
-    static auto fmap( F&& f, G&& g ) 
+    static constexpr auto fmap( F&& f, G&& g )
         -> decltype( compose(declval<F>(),declval<G>()) )
     {
         return compose( forward<F>(f), forward<G>(g) );
@@ -146,21 +136,30 @@ struct Functor< data::Either<L,R> > {
 template< class ...M > struct Monad;
 
 /* m >> k */
-template< class A, class B,
-          class Mo = Monad<Cat<A>> >
-decltype( Mo::mdo(declval<A>(),declval<B>()) ) 
-mdo( A&& a, B&& b ) {
-    return Mo::mdo( forward<A>(a), forward<B>(b) ); 
-}
+constexpr struct Mdo : Chainable<Mdo> {
+    using Chainable<Mdo>::operator();
 
-/* m >>= k */
-template< class M, class F,
-          class Mo = Monad<Cat<M>> >
-auto mbind( M&& m, F&& f ) 
-    -> decltype( Mo::mbind(declval<M>(),declval<F>()) ) 
-{
-    return Mo::mbind( forward<M>(m), forward<F>(f) ); 
-}
+    template< class A, class B,
+              class Mo = Monad<Cat<A>> >
+    constexpr auto operator () ( A&& a, B&& b )
+        -> decltype( Mo::mdo(declval<A>(),declval<B>()) )
+    {
+        return Mo::mdo( forward<A>(a), forward<B>(b) );
+    }
+} mdo{};
+
+constexpr struct Mbind : Chainable<Mbind> {
+    using Chainable<Mbind>::operator();
+
+    /* m >>= k */
+    template< class M, class F,
+              class Mo = Monad<Cat<M>> >
+    constexpr auto operator () ( F&& f, M&& m )
+        -> decltype( Mo::mbind(declval<F>(),declval<M>()) )
+    {
+        return Mo::mbind( forward<F>(f), forward<M>(m) );
+    }
+} mbind{};
 
 /* return<M> x = M x */
 template< class M, class X > 
@@ -204,9 +203,10 @@ M mfail( const char* const why ) {
 }
 
 template< class X, class Y >
-decltype( mbind(declval<X>(),declval<Y>()) ) 
-operator >>= ( X&& x, Y&& y ) {
-    return mbind( forward<X>(x), forward<Y>(y) );
+auto operator >>= ( X&& x, Y&& y )
+    -> decltype( mbind(declval<Y>(),declval<X>()) )
+{
+    return mbind( forward<Y>(y), forward<X>(x) );
 }
 
 template< class X, class Y >
@@ -238,15 +238,7 @@ template<> struct Monad< category::sequence_type > {
         return c;
     }
 
-    /* m >>= k -- where m is a sequence. */
-    template< class S, class F >
-    static decltype( list::concatMap(declval<F>(),declval<S>()) )
-    mbind( S&& xs, F&& f ) { 
-        // xs >>= f = foldr g [] xs 
-        //     where g acc x = acc ++ f(x)
-        //           ++ = append
-        return list::concatMap( f, xs );
-    }
+    static constexpr auto mbind = list::concatMap;
 };
 
 template< class P > struct IsPointerImpl { 
@@ -267,7 +259,9 @@ template<> struct Monad< maybe_type > {
     template< class M >
     using Return = smart_ptr<M> (*) ( value_type<M> );
 
-    static constexpr data::ReturnJust mreturn() { return data::ReturnJust(); }
+    static constexpr auto _ret = data::Just;
+
+    static constexpr decltype(_ret) mreturn() { return _ret; }
 
     template< class M >
     static constexpr smart_ptr<M> mfail(const char*) { return nullptr; }
@@ -281,8 +275,8 @@ template<> struct Monad< maybe_type > {
     using Result = Result< F, value_type<M> >;
 
     template< class M, class F >
-    static constexpr Result<M,F> mbind( M&& x, F&& f ) {
-        return x ? forward<F>(f)( *forward<M>(x) ) : nullptr;
+    static constexpr Result<M,F> mbind( F&& f, M&& m ) {
+        return m ? forward<F>(f)( *forward<M>(m) ) : nullptr;
     }
 };
 
@@ -290,7 +284,9 @@ template<> struct Monad< maybe_type > {
  * liftM f m = m >>= return . f
  * Similar to fmap, but not all Monads are Functors.
  */
-constexpr struct LiftM {
+constexpr struct LiftM : Binary<LiftM> {
+    using Binary<LiftM>::operator();
+
     template< class F, class M, class D = Decay<M> >
     constexpr auto operator () ( F&& f, M&& m )
         -> decltype( declval<M>() >>= Return<D>()^declval<F>() )
@@ -304,10 +300,10 @@ constexpr struct LiftCons {
     struct Close {
         template< class M, class X >
         constexpr auto operator () ( M&& m, X&& x )
-            -> decltype( liftM( rclosure(list::cons,declval<X>()),
+            -> decltype( liftM( list::cons.with(declval<X>()),
                          declval<M>() ) )
         {
-            return liftM( rclosure(list::cons,forward<X>(x)), forward<M>(m) );
+            return liftM( list::cons.with(forward<X>(x)), forward<M>(m) );
         }
     };
 

@@ -72,19 +72,19 @@ struct ToInt {
 vector<int> multiples_less_than_1000( int x ) {
     return take (
         999 / x, // x goes into 1000 (999/x) times.
-        iterate( pure::plus(x), x )
+        iterate( add(x), x )
     );
 }
 
 void problem1() {
     cout << "The sum of every multiple of 3 or 5 between 1 and 1000: "
          << flush <<
-         sum( sunion( multiples_less_than_1000(3), 
+         sum( sunion( multiples_less_than_1000(3),
                       multiples_less_than_1000(5) ) )
          << endl;
 }
 
-constexpr auto even = fnot( rcloset( Mod(), 2 ) );
+constexpr auto even = divisibleBy(2);
 
 constexpr unsigned long long operator "" _K ( unsigned long long x ) {
     return x * 1000;
@@ -100,7 +100,7 @@ void problem2() {
     using namespace pure::list::taking;
     cout << "The sum of every even Fibonacci number below 4-million: "
          << flush << sum (
-             (biIterate( Add(), 1u, 2u ) < 4_M) / even 
+             (fibs < 4_M) / even
          ) << endl;
 }
 
@@ -244,12 +244,12 @@ void problem4() {
     using namespace pure::list::misc;
     cout << "The largest palindrome product of three digit numbers :"
          << flush;
-    cout << foldMap (
+    cout << pure::fold::foldMap (
             []( const IRange& r ) -> Largest<int> {
                 return maximum (
                     // Multiply the init of r by its last; filter for
                     // palindromes.
-                    times(-r) * (++r) / palindrome | A(0) // And append zero.
+                    pure::mult(-r) * (++r) / palindrome | A(0) // And append zero.
                 );
             },
             // We remove the first three values: {} {100}, and {100,101}.
@@ -300,10 +300,10 @@ void problem8() {
 
     const std::string nsStr = "7316717653133062491922511967442657474235534919493496983520312774506326239578318016984801869478851843858615607891129494954595017379583319528532088055111254069874715852386305071569329096329522744304355766896648950445244523161731856403098711121722383113622298934233803081353362766142828064444866452387493035890729629049156044077239071381051585930796086670172427121883998797908792274921901699720888093776657273330010533678812202354218097512545405947522435258490771167055601360483958644670632441572215539753697817977846174064955149290862569321978468622482839722413756570560574902614079729686524145351004748216637048440319989000889524345065854122758866688116427171479924442928230863465674813919123162824586178664583591245665294765456828489128831426076900422421902267105562632111110937054421750694165896040807198403850962455444362981230987879927244284909188845801561660979191338754992005240636899125607176060588611646710940507754100225698315520005593572972571636269561882670428252483600823257530420752963450";
 
-    cout << foldMap ( 
-        []( const vector<int>& v ) -> Largest<int> {
+    cout << pure::list::foldMap ( 
+        []( const vector<int>& v ) {
             return product( take(5,v) ); 
-        },
+        }, pure::max, 0,
         tails( mapTo<vector>(from_sym,nsStr) )
     ) << endl;
 }
@@ -361,27 +361,26 @@ int& get_x( Vec& v ) { return get<0>(v); }
 int& get_y( Vec& v ) { return get<1>(v); }
 
 Vec operator+ ( const Vec& a, const Vec& b ) {
-    return zipWith( Add(), a, b );
+    return zipWith( add, a, b );
 }
 
 Vec operator- ( const Vec& a, const Vec& b ) {
-    return zipWith( Subtract(), a, b );
+    return zipWith( sub, a, b );
 }
 
 Vec operator* ( Vec a, int x ) {
-    return map( pure::plus(x), move(a) );
+    return map( add(x), move(a) );
 }
 
 #include <cstdio>
-Vec operator "" _v ( const char* const str, 
-                                              size_t ) 
+Vec operator "" _v ( const char* const str, size_t )
 {
     Vec v;
     sscanf( str, "%dx%d", &get_x(v), &get_y(v) );
     return v;
 }
 
-unsigned int take_dir_prod( Vec dir, Vec pos, size_t n, const Mat& m ) {
+unsigned long long take_dir_prod( Vec dir, Vec pos, size_t n, const Mat& m ) {
     unsigned int prod = 1;
 
     Vec end = pos + dir * n;
@@ -414,14 +413,15 @@ void problem11() {
         io::fileContents<Line>( fin ) 
     );
 
+    using pure::ap::spure;
 
-    cout << foldMap ( 
-        [&](int i, int j, const Vec& dir) -> Largest<unsigned int> { 
+    cout << pure::list::foldMap ( 
+        [&](int i, int j, const Vec& dir) { 
             return take_dir_prod( dir, {{i,j}}, 4, mat ); 
-        }, 
+        }, pure::max, 0ull,
         enumerate(mat), enumerate(mat[0]),  
-        pure::ap::spure<Vec>( "-1x0"_v, " 1x1"_v,
-                              " 0x1"_v, "-1x1"_v )
+        spure( "-1x0"_v, " 1x1"_v,
+               " 0x1"_v, "-1x1"_v )
     ) << endl;
 }
 
@@ -444,7 +444,7 @@ Factors _lowFactors( Factors lfs, Factor x ) {
 
     auto next = filter (
         [&]( Factor y ) { return y <= std::sqrt(x) and x % y == 0; },
-        nub(map(Mult(), lfs, lfs))
+        nub( mapSquared(Mult(),lfs) )
     );
 
     return lfs == next ? lfs : _lowFactors( move(next), x );
@@ -453,7 +453,7 @@ Factors _lowFactors( Factors lfs, Factor x ) {
 Factors primeFactors( Factor x ) {
     using namespace pure::list::taking;
     using namespace pure::list::misc;
-    return (primes < std::sqrt(x)) / divisorOf(x);
+    return (primes <= std::sqrt(x)) / divisorOf(x);
 }
 
 Factors lowFactors( Factor x ) {
@@ -785,7 +785,7 @@ void problem22() {
     auto ss = sort (
         map (
             cutEnds,
-            splitBy( equalTo(','), s )
+            splitBy( eq(','), s )
         )
     );
 
@@ -821,7 +821,7 @@ void problem23() {
     for( auto i : enumerate(as) )
         for( auto j : enumerate(i,length(as)-1) ) 
             aSums.push_back( as[i] + as[j] );
-    aSums = filter( lessEqualTo(LARGEST), nub(move(aSums)) );
+    aSums = filter( lessEq(LARGEST), nub(move(aSums)) );
 
     cout << "not the sum of two abundants : " << flush;
 
@@ -898,6 +898,7 @@ Digits repeatingDigits( double x ) {
         //}
         ds.push_back( d );
     }
+    return ds;
 }
 
 

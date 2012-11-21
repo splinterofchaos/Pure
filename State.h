@@ -51,7 +51,9 @@ constexpr auto stateT( F f )
     return { compose( R(), move(f) ) };
 }
 
-constexpr struct Run {
+constexpr struct Run : Binary<Run> {
+    using Binary<Run>::operator();
+
     template< class ST, class X > 
     constexpr auto operator () ( ST&& s, X&& x ) 
         -> decltype( declval<ST>().runState(declval<X>()) )
@@ -109,17 +111,15 @@ struct Monad< state::StateT<S,A,M,F> > {
     template< class Pair >
     using Mon = typename State::template monad_type<Pair>;
 
-    static constexpr P _return( A a, S s ) {
-        return { move(a), move(s) }; 
-    }
+    static constexpr auto _return = ConstructBinary<std::pair>();
 
     template< class ST, class X >
     static constexpr Closet<decltype(_return),X> mreturn( X x ) {
-        return closet( _return, move(x) );
+        return _return( move(x) );
     }
 
     template< class K >
-    static constexpr auto mbind( State m, K k ) 
+    static constexpr auto mbind( K k, State m )
         -> state::StateT< S, A, M, decltype (
             mcompose( compose(arrow::uncurry(state::run),arrow::first(move(k))),
                       closet(state::run,move(m)) )
@@ -133,22 +133,15 @@ struct Monad< state::StateT<S,A,M,F> > {
 
     template< class SA, class SB >
     static constexpr auto mdo( SA&& sa, SB&& sb ) 
-        -> decltype( mbind( forward<SA>(sa), pure(forward<SB>(sb)) ) )
+        -> decltype( forward<SA>(sa) >>= pure(forward<SB>(sb)) )
     {
-        return mbind( forward<SA>(sa), pure(forward<SB>(sb)) );
+        return forward<SA>(sa) >>= pure(forward<SB>(sb));
     }
 };
 
 } // namespace monad
 
 namespace state {
-
-constexpr struct ReturnPair {
-    template< class X, class Y >
-    constexpr std::pair<X,Y> operator () ( X x, Y y ) {
-        return { move(x), move(y) };
-    }
-} returnPair{};
 
 /* returnState a = State (\s -> itentity . (\s'->(a,s)) ) */
 template< class S, template<class...>class M=Identity, class A = S >
@@ -159,15 +152,11 @@ struct ReturnT {
     using state_type = StateT < 
             S, A, M,
             Composition< pure::Return<monad_type>, 
-                         Closet<ReturnPair,A> >
+                         Result<decltype(returnPair),A> >
     >;
 
-    static constexpr Closet<ReturnPair,A> ret( A a ) {
-        return { returnPair, move(a) };
-    }
-
     constexpr state_type operator () ( A a ) {
-        return stateT<S,M,A>( ret(move(a)) );
+        return stateT<S,M,A>( returnPair(move(a)) );
     }
 };
 
@@ -198,6 +187,13 @@ constexpr auto get() -> decltype( MS::get() ) {
     return MS::get();
 }
 
+template< class S, template<class...>class M = Identity >
+struct Get {
+    constexpr auto operator () () -> decltype( get<S,M>() ) {
+        return get<S,M>();
+    }
+};
+
 template< template<class...>class M = Identity, class S, 
           class MS = MonadState< StateT<S,S,M,Id> > >
 constexpr auto put( S s ) -> decltype( MS::put(move(s)) ) {
@@ -205,18 +201,30 @@ constexpr auto put( S s ) -> decltype( MS::put(move(s)) ) {
 }
 
 template< class S, template<class...>class M = Identity >
-struct SPut {
+struct Put {
     using MS = MonadState< StateT<S,S,M,Id> >;
     using type = decltype( put( declval<S>() ) );
-    constexpr type operator () ( S s ) { return put( move(s) ); }
+    constexpr type operator () ( S s ) {
+        return put( move(s) );
+    }
 };
 
 template< class S, template<class...>class M = Identity, class F >
 constexpr auto modify( F f ) 
-    -> decltype( get<S,M>()>>=compose(SPut<S,M>(),f) )
+    -> decltype( get<S,M>()>>=compose(Put<S,M>(),f) )
 {
-    return get<S,M>() >>= compose( SPut<S,M>(), f );
+    return get<S,M>() >>= compose( Put<S,M>(), f );
 }
+
+template< class S, template<class...>class M = Identity >
+struct Modify {
+    template< class F >
+    constexpr auto operator () ( F&& f )
+        -> decltype( modify<S,M>(declval<F>()) )
+    {
+        return modify<S,M>( forward<F>(f) );
+    }
+};
 
 template< class S, template<class...>class M = Identity, class F,
           class Fst = decltype( arrow::first(std::declval<F>()) ),
@@ -226,6 +234,16 @@ constexpr auto gets( F f )
 {
     return stateT<S,M>( compose( arrow::first(move(f)), duplicate ) );
 }
+
+template< class S, template<class...>class M = Identity >
+struct Gets {
+    template< class F >
+    constexpr auto operator () ( F&& f )
+        -> decltype( gets<S,M>(declval<F>()) )
+    {
+        return gets<S,M>( forward<F>(f) );
+    }
+};
 
 template< class S, template<class...>class M, class _F >
 struct MonadState< StateT<S,S,M,_F> > {
@@ -239,15 +257,17 @@ struct MonadState< StateT<S,S,M,_F> > {
     using RetM  = pure::Return< Monad >;
 
     using GetF = Composition< RetM, Duplicate >;
-    using SetF = Composition< RetM, RCloset<ReturnPair,S> >;
-
-
-    //static constexpr State<GetF> getter = state<S,S>( duplicate );
 
     static constexpr State<GetF> get() { return stateT<S,M>( duplicate ); }
 
-    static constexpr State<SetF> put( S s ) {
-        return stateT<S,M>( rcloset(returnPair,move(s)) );
+    template< class X >
+    using Set = decltype( returnPair.with(declval<X>()) );
+
+    template< class X >
+    using SetF = Composition< RetM, Set<X> >;
+
+    static constexpr State<SetF<S> > put( S s ) {
+        return stateT<S,M>( returnPair.with(move(s)) );
     }
 
 };
