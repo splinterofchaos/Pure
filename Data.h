@@ -7,12 +7,16 @@ namespace pure {
 
 namespace data {
 
-constexpr struct ReturnJust {
-    template< class T, class D = Decay<T>, class M = std::unique_ptr<D> >
-    constexpr M operator () ( T&& t ) {
-        return M( new D(forward<T>(t)) );
+template< template<class...> class Ptr >
+struct ConstructPtr {
+    template< class X, class _X = Decay<X> >
+    Ptr<_X> operator () ( X&& x ) const {
+        return Ptr<_X>( new _X(std::forward<X>(x)) );
     }
-} Just{};
+};
+
+constexpr auto Just  = ConstructPtr<std::unique_ptr>();
+constexpr auto Share = ConstructPtr<std::shared_ptr>();
 
 template< class T, class M = std::unique_ptr<T> > 
 constexpr M Nothing() {

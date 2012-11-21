@@ -468,7 +468,7 @@ int main()
 
         typedef unique_ptr<int>(*mret)(int&&);
         printf( "Just 1 >> Nothing >>= return = %s\n",
-                show( Just(1) >> Nothing<int>() >>= mreturn<unique_ptr<int>>() ).c_str() );
+                show( Just(1) >> Nothing<int>() >>= MReturn<unique_ptr>() ).c_str() );
 
         auto qr = closet( quadratic_root, 1, 3 );
         typedef pair<float,float> QR;

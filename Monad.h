@@ -259,7 +259,9 @@ template<> struct Monad< maybe_type > {
     template< class M >
     using Return = smart_ptr<M> (*) ( value_type<M> );
 
-    static constexpr data::ReturnJust mreturn() { return data::ReturnJust(); }
+    static constexpr auto _ret = data::Just;
+
+    static constexpr decltype(_ret) mreturn() { return _ret; }
 
     template< class M >
     static constexpr smart_ptr<M> mfail(const char*) { return nullptr; }

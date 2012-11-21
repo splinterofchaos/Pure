@@ -494,7 +494,7 @@ constexpr struct SubEq : Chainable<SubEq> {
     {
         return forward<X>(x) -= forward<Y>(y);
     }
-} sub{};
+} subEq{};
 
 constexpr struct Mult : Chainable<Mult> {
     using Chainable<Mult>::operator();
@@ -538,7 +538,7 @@ constexpr struct DivEq : Chainable<DivEq> {
     {
         return forward<X>(x) /= forward<Y>(y);
     }
-} div{};
+} divEq{};
 
 constexpr struct Mod : Chainable<Mod> {
     using Chainable<Mod>::operator();
