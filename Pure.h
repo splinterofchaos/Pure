@@ -219,49 +219,7 @@ template< class X, class Y > struct Monoid< std::pair<X,Y> > {
     }
 };
 
-/*
- * MonadPlus M :
- *      mzero -> M
- *      mplus M M -> M
- *
- *      mzero >>= f = mzero
- */
-template< class ...F > struct MonadPlus;
 
-template< class M, class Mo = MonadPlus<Cat<M>> >
-decltype( Mo::mzero() ) mzero() { return Mo::mzero(); }
-
-constexpr struct MPlus : Chainable<MPlus> {
-    using Chainable<MPlus>::operator();
-
-    template< class M1, class M2,
-              class Mo = MonadPlus<Cat<M1>> >
-    constexpr auto operator () ( M1&& a, M2&& b )
-        -> decltype( Mo::mplus(declval<M1>(),declval<M2>()) )
-    {
-        return Mo::mplus( forward<M1>(a), forward<M2>(b) );
-    }
-} mplus{};
-
-template<> struct MonadPlus< category::sequence_type > {
-    template< class S >
-    static S mzero() { return S(); }
-
-    static constexpr auto mplus = list::append;
-};
-
-template<> struct MonadPlus< category::maybe_type > {
-    template< class M >
-    static M mzero() { return nullptr; }
-
-    template< class A, class B >
-    using Result = decltype( declval<A>() || declval<B>() );
-
-    template< class A, class B >
-    static constexpr Result<A,B> mplus( A&& a, B&& b ) {
-        return forward<A>(a) || forward<B>(b);
-    }
-};
 
 /*
 * Rotation.

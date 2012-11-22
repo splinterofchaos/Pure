@@ -518,10 +518,13 @@ int main()
             show( vmv ).c_str(), 
             show( mconcat(vmv) ).c_str() );
 
-    printf( "Just 1 `mplus` Just 2 = %s\n",
-            show( mplus(Just(1),Just(2)) ).c_str() );
-    printf( "[1] `mplus` [2] = %s\n",
-            show( mplus(vector<int>{1},vector<int>{2}) ).c_str() );
+    {
+        using namespace monad;
+        printf( "Just 1 `mplus` Just 2 = %s\n",
+                show( Just(1) + Just(2) ).c_str() );
+        printf( "[1] `mplus` [2] = %s\n",
+                show( vector<int>{1} + vector<int>{2} ).c_str() );
+    }
 
     {
         using namespace pure::arrow;
