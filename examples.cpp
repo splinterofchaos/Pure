@@ -18,7 +18,6 @@
 #include <fstream>
 
 using namespace pure;
-using namespace pure::list;
 
 using std::cout;
 using std::endl;
@@ -45,7 +44,7 @@ constexpr int get_y( const Vec& v ) { return v[1]; }
 
 Vec operator + ( const Vec& a, const Vec& b )
 { 
-    return zipWith( Add(), a, b ); 
+    return list::zipWith( Add(), a, b );
 }
 
 
@@ -151,7 +150,7 @@ auto show( const S& s ) -> decltype( std::begin(s), string() )
     for( const auto& x : s ) {
         str += show( x ) + ",";
     }
-    if( length(str) > 1 )
+    if( str.size() > 1 )
         str.back() = ']';
     else 
         str.push_back( ']' );
@@ -229,105 +228,111 @@ int main()
 {
     rcloset( print_xyz, 2, 3 )( 1 );
 
-    auto evens = ( DupTo<std::set>() ^ filter(even) )( enumerate(1,12) );
-    printf( "es = filter even [1..12] = %s\n", show(evens).c_str() );
-    printf( "\tnull es = %s\n", show( null(evens) ).c_str() );
-    printf( "\tlength es = %lu\n", length(evens) );
-    printf( "\thead es = %d\n\tlast es = %d\n", head(evens), last(evens) );
-    printf( "\ttail es = %s\n\tinit es = %s\n",
-            show( tail(evens) ).c_str(), show( init(evens) ).c_str() );
-    printf( "\tinits es = %s\n", show( inits(evens) ).c_str() );
-    printf( "\treverse es = %s\n", show( pure::list::reverse(evens) ).c_str() );
-    printf( "\tisPrefixOf [2,4] es = %s\n", show( prefix({2,4},evens) ).c_str() );
-    printf( "\telem 2 es = %s\n",   show( elem(  2,evens) ).c_str() );
-    printf( "\tdelete 4 es = %s\n", show( erase( 4,evens) ).c_str() );
-    printf( "\tinsert 5 es = %s\n", show( insert(5,evens) ).c_str() );
-    printf( "\tdeleteFirstBy (==) es [2,6] = %s\n", 
-            show( eraseFirst( std::equal_to<int>(),evens,vector<int>{1,2,6} ) ).c_str() );
-    printf( "\tpermutations (take 3 es) = %s\n", 
-            show ( 
-                ( permutations ^ DupTo<std::vector>() ^ take(3) )( evens ) 
-            ).c_str() );
-    printf( "\tscanl (+) %s = %s\n", 
-            show( evens ).c_str(), show( scanl( Add(), evens ) ).c_str() );
-    printf( "\tscanr (+) %s = %s\n", 
-            show( evens ).c_str(), show( scanr( Add(), evens ) ).c_str() );
     {
-        using namespace pure::set::ordered;
-        printf( "\npure::set :\n"
-                "es contains 2 = %s\n", show(2<evens).c_str() );
-        printf( "The length of es = %s\n", show(+evens).c_str() );
-        printf( "[6,2] is a subset of es: %s\n", 
-                show( S(6,2) <= evens ).c_str() );
-        printf( "union of es and [3,7,10] = %s\n",
-                show( S(3,7,10) | evens ).c_str() );
-        printf( "intersection of es and [4,7,10] = %s\n",
-                show( S(4,7,10) % evens ).c_str() );
-        printf( "es without [2,8,10] = %s\n",
-                show( evens / S(2,8,10) ).c_str() );
+        using namespace list;
+        auto evens = ( DupTo<std::set>() ^ filter(even) )( enumerate(1,12) );
+        printf( "es = filter even [1..12] = %s\n", show(evens).c_str() );
+        printf( "\tnull es = %s\n", show( null(evens) ).c_str() );
+        printf( "\tlength es = %lu\n", length(evens) );
+        printf( "\thead es = %d\n\tlast es = %d\n", head(evens), last(evens) );
+        printf( "\ttail es = %s\n\tinit es = %s\n",
+                show( tail(evens) ).c_str(), show( init(evens) ).c_str() );
+        printf( "\tinits es = %s\n", show( inits(evens) ).c_str() );
+        printf( "\treverse es = %s\n", show( pure::list::reverse(evens) ).c_str() );
+        printf( "\tisPrefixOf [2,4] es = %s\n", show( prefix({2,4},evens) ).c_str() );
+        printf( "\telem 2 es = %s\n",   show( elem(  2,evens) ).c_str() );
+        printf( "\tdelete 4 es = %s\n", show( erase( 4,evens) ).c_str() );
+        printf( "\tinsert 5 es = %s\n", show( insert(5,evens) ).c_str() );
+        printf( "\tdeleteFirstBy (==) es [2,6] = %s\n",
+                show( eraseFirst( std::equal_to<int>(),evens,vector<int>{1,2,6} ) ).c_str() );
+        printf( "\tpermutations (take 3 es) = %s\n",
+                show (
+                    ( permutations ^ DupTo<std::vector>() ^ take(3) )( evens )
+                ).c_str() );
+        printf( "\tscanl (+) %s = %s\n",
+                show( evens ).c_str(), show( scanl( Add(), evens ) ).c_str() );
+        printf( "\tscanr (+) %s = %s\n",
+                show( evens ).c_str(), show( scanr( Add(), evens ) ).c_str() );
 
-        printf( "['a','b'] * evens = %s\n",
-                show( S('a','b') * S(1,2) ).c_str() );
-    }
-    puts("");
+        {
+            using namespace pure::set::ordered;
+            printf( "\npure::set :\n"
+                    "es contains 2 = %s\n", show(2<evens).c_str() );
+            printf( "The length of es = %s\n", show(+evens).c_str() );
+            printf( "[6,2] is a subset of es: %s\n",
+                    show( S(6,2) <= evens ).c_str() );
+            printf( "union of es and [3,7,10] = %s\n",
+                    show( S(3,7,10) | evens ).c_str() );
+            printf( "intersection of es and [4,7,10] = %s\n",
+                    show( S(4,7,10) % evens ).c_str() );
+            printf( "es without [2,8,10] = %s\n",
+                    show( evens / S(2,8,10) ).c_str() );
 
-    printf( "intersparse ',' \"abcd\" = %s\n",
-            intersparse( ',', string("abcd") ).c_str() );
-    printf( "intercalcate \"--\" {\"ab\",\"cd\",\"ef\"} = %s\n",
-             intercalcate ( 
-                 string("--"),
-                 vector<string>{"ab","cd","ef"}
-             ).c_str() );
+            printf( "['a','b'] * evens = %s\n",
+                    show( S('a','b') * S(1,2) ).c_str() );
+        }
 
-    puts("");
-    printf( "take 10 $ iterate (+2) 1 = %s\n",
-            show( take( 10, iterate(add(2),1) ) ).c_str() );
-    printf( "replicate 10 1 = %s\n",
-            show( replicate(10, 1) ).c_str() );
-    puts("");
+        puts("");
 
-    printf( "break even [1..8] = %s\n",
-            show( sbreak(even,vector<int>{1,2,3,4,5,6,7,8}) ).c_str() );
-    printf( "goup \"footoonopor\" = %s\n",
-            show( group(string("footoonopor")) ).c_str() );
-    printf( "elemIndecies 'o' \"footoonopor\" = %s\n",
-            show( elemIndecies('o',string("footoonopor")) ).c_str() );
-    printf( "nub \"footoonopor\" = %s\n",
-            show( nub(string("footoonopor")) ).c_str() );
-    printf( "\"footo\" `union` \"onopor\" = %s\n",
-            show( sunion(string("footo"),string("onopor")) ).c_str() );
-    printf( "\"footo\" // \"onopor\" = %s\n",
-            show( difference(string("footo"),string("onopor")) ).c_str() );
-    printf( "\"footo\" `intersect` \"onopor\" = %s\n",
-            show( intersect(string("footo"),string("onopor")) ).c_str() );
-    printf( "intersectBy (<) \"footo\" \"onopor\" = %s\n",
-            show( intersectIf(pure::greater,string("footo"),string("onopor")) ).c_str() );
+        printf( "intersparse ',' \"abcd\" = %s\n",
+                intersparse( ',', string("abcd") ).c_str() );
+        printf( "intercalcate \"--\" {\"ab\",\"cd\",\"ef\"} = %s\n",
+                 intercalcate (
+                     string("--"),
+                     vector<string>{"ab","cd","ef"}
+                 ).c_str() );
 
-    // isspace is a macro, so we need to wrap it to pass it.
-    auto is_space = [](char c){ return isspace(c); };
-    printf( "dropWhile isspace \" \\tfoo\" = \"%s\"\n",
-            dropWhile( is_space, string(" \tfoo") ).c_str() );
-    printf( "dropWhileEnd isspace \"foo\\n\" = %s\n",
-            show( dropWhileEnd(is_space, string("foo\n")) ).c_str() );
+        puts("");
+        printf( "take 10 $ iterate (+2) 1 = %s\n",
+                show( take( 10, iterate(add(2),1) ) ).c_str() );
+        printf( "replicate 10 1 = %s\n",
+                show( replicate(10, 1) ).c_str() );
+        puts("");
 
-    puts("");
+        printf( "break even [1..8] = %s\n",
+                show( sbreak(even,vector<int>{1,2,3,4,5,6,7,8}) ).c_str() );
+        printf( "goup \"footoonopor\" = %s\n",
+                show( group(string("footoonopor")) ).c_str() );
+        printf( "elemIndecies 'o' \"footoonopor\" = %s\n",
+                show( elemIndecies('o',string("footoonopor")) ).c_str() );
+        printf( "nub \"footoonopor\" = %s\n",
+                show( nub(string("footoonopor")) ).c_str() );
+        printf( "\"footo\" `union` \"onopor\" = %s\n",
+                show( sunion(string("footo"),string("onopor")) ).c_str() );
+        printf( "\"footo\" // \"onopor\" = %s\n",
+                show( difference(string("footo"),string("onopor")) ).c_str() );
+        printf( "\"footo\" `intersect` \"onopor\" = %s\n",
+                show( intersect(string("footo"),string("onopor")) ).c_str() );
+        printf( "intersectBy (<) \"footo\" \"onopor\" = %s\n",
+                show( intersectIf(pure::greater,string("footo"),string("onopor")) ).c_str() );
 
-    printf( "3^2 = %d\n", square(3) );
+        // isspace is a macro, so we need to wrap it to pass it.
+        auto is_space = [](char c){ return isspace(c); };
+        printf( "dropWhile isspace \" \\tfoo\" = \"%s\"\n",
+                dropWhile( is_space, string(" \tfoo") ).c_str() );
+        printf( "dropWhileEnd isspace \"foo\\n\" = %s\n",
+                show( dropWhileEnd(is_space, string("foo\n")) ).c_str() );
 
-    printf (
-        "sum of (1,2,3,4) = %d\n", // = 10
-        foldl( Add(), {1,2,3,4} )
-    );
-    printf(
-        "sum of (4,3,2,1) = %d\n", // = 10
-        foldr( Add(), {1,2,3,4} )
-    );
+        puts("");
 
-    auto accumF = []( int x, int y ) { return std::make_pair(x+y,x*y); };
-    printf( "mapAccumL (\\x y -> (x+y,x*y)) 0 [2,8,10] = %s\n",
-            show( mapAccumL(accumF,0,vector<int>{2,8,10}) ).c_str() );
-    printf( "mapAccumR (\\x y -> (x+y,x*y)) 0 [2,8,10] = %s\n",
-            show( mapAccumR(accumF,0,vector<int>{2,8,10}) ).c_str() );
+        printf( "3^2 = %d\n", square(3) );
+
+        printf (
+            "sum of (1,2,3,4) = %d\n", // = 10
+            foldl( Add(), {1,2,3,4} )
+        );
+        printf(
+            "sum of (4,3,2,1) = %d\n", // = 10
+            foldr( Add(), {1,2,3,4} )
+        );
+
+        auto accumF = []( int x, int y ) { return std::make_pair(x+y,x*y); };
+        printf( "mapAccumL (\\x y -> (x+y,x*y)) 0 [2,8,10] = %s\n",
+                show( mapAccumL(accumF,0,vector<int>{2,8,10}) ).c_str() );
+        printf( "mapAccumR (\\x y -> (x+y,x*y)) 0 [2,8,10] = %s\n",
+                show( mapAccumR(accumF,0,vector<int>{2,8,10}) ).c_str() );
+
+    } // using namespace list
 
     Vec fiveTwo = {{5,2}}, twoFive = {{2,5}};
 
@@ -408,9 +413,9 @@ int main()
                         vector<int>{5,6}) ).c_str() );
     using V = vector<int>;
     printf( "\tzip_with add3 [1,2] [3,4] [5,6] = %s\n",
-            show( zipWith(add3,V{1,2},V{3,4},V{5,6}) ).c_str() );
+            show( list::zipWith(add3,V{1,2},V{3,4},V{5,6}) ).c_str() );
     printf( "\tfold add3 10 [1,2] [3,4] = %s\n",
-            show( foldl(add3,10,V{1,2},V{3,4}) ).c_str() );
+            show( list::foldl(add3,10,V{1,2},V{3,4}) ).c_str() );
     puts("");
 
     vector<int> N = {1,2,3,4,5,6,7,8};
@@ -531,6 +536,14 @@ int main()
         constexpr auto dec = endo( sub.with(1) );
         constexpr auto same = inc + dec + eid;
         printf( "Endo (+1) <> Endo (-1) <> Endo Id$ 10 = %s\n", show(same(10)).c_str() );
+
+        std::vector< All > vall = { true, false, true };
+        printf( "mconcat [All true, All false, All true] = %s\n",
+                show( mconcat(vall) ).c_str() );
+
+        std::vector< Any > vany = { true, false, true };
+        printf( "mconcat [Any true, Any false, Any true] = %s\n",
+                show( mconcat(vany) ).c_str() );
 
     }
 

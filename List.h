@@ -1697,20 +1697,32 @@ constexpr struct Maximum {
     }
 } maximum{};
 
-template< class F, class S >
-bool all( F&& f, const S& s ) {
-    return std::all_of( begin(s), end(s), forward<F>(f) );
-}
+constexpr struct All : Binary<All> {
+    using Binary<All>::operator();
 
-template< class F, class S >
-bool any( F&& f, const S& s ) {
-    return any_of( begin(s), end(s), forward<F>(f) );
-}
+    template< class F, class S >
+    bool operator () ( F&& f, const S& s ) const {
+        return std::all_of( begin(s), end(s), forward<F>(f) );
+    }
+} all{};
 
-template< class F, class S >
-bool none( F&& f, const S& s ) {
-    return std::none_of( begin(s), end(s), forward<F>(f) );
-}
+constexpr struct Any : Binary<Any> {
+    using Binary<Any>::operator();
+
+    template< class F, class S >
+    bool operator () ( F&& f, const S& s ) const {
+        return any_of( begin(s), end(s), forward<F>(f) );
+    }
+} any{};
+
+constexpr struct None : Binary<None> {
+    using Binary<None>::operator();
+
+    template< class F, class S >
+    bool operator () ( F&& f, const S& s ) const {
+        return std::none_of( begin(s), end(s), forward<F>(f) );
+    }
+} none{};
 
 template< class F, class XS, class YS >
 XS intersectIf( F&& f, const XS& xs, const YS& ys ) {
