@@ -504,22 +504,28 @@ int main()
         puts("");
     }
 
-    printf( "Just [1,2] <> Just [3,4] = %s\n",
-            show( mappend(Just(vector<int>{1,2}),Just(vector<int>{3,4})) ).c_str() );
-    const auto PSX = make_pair( vector<int>{1}, vector<int>{2} );
-    const auto PSY = make_pair( vector<int>{3}, vector<int>{4} );
-    printf( "Pair [1] [2] <> Pair [3] [4] = %s\n",
-            show( mappend(PSX,PSY) ).c_str() );
+    {
+        using namespace pure::monoid;
 
-    vector<unique_ptr<vector<int>>> vmv;
-    vmv.emplace_back( Just(vector<int>{1,2}) ); // Don't use an initializer list
-    vmv.emplace_back( Just(vector<int>{3,4}) ); // since Maybe is non-copyable.
-    printf( "mconcat %s = %s\n",
-            show( vmv ).c_str(), 
-            show( mconcat(vmv) ).c_str() );
+        printf( "Just [1,2] <> Just [3,4] = %s\n",
+                show( Just(vector<int>{1,2}) + Just(vector<int>{3,4}) ).c_str() );
+        const auto PSX = make_pair( vector<int>{1}, vector<int>{2} );
+        const auto PSY = make_pair( vector<int>{3}, vector<int>{4} );
+        printf( "Pair [1] [2] <> Pair [3] [4] = %s\n",
+                show( PSX + PSY ).c_str() );
+
+        vector<unique_ptr<vector<int>>> vmv;
+        vmv.emplace_back( Just(vector<int>{1,2}) ); // Don't use an initializer list
+        vmv.emplace_back( Just(vector<int>{3,4}) ); // since Maybe is non-copyable.
+        printf( "mconcat %s = %s\n",
+                show( vmv ).c_str(),
+                show( mconcat(vmv) ).c_str() );
+
+    }
 
     {
         using namespace monad;
+
         printf( "Just 1 `mplus` Just 2 = %s\n",
                 show( Just(1) + Just(2) ).c_str() );
         printf( "[1] `mplus` [2] = %s\n",

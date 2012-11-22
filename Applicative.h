@@ -1,8 +1,8 @@
 
 #pragma once
 
-#include "Pure.h"
 #include "Arrow.h"
+#include "Monoid.h"
 
 #include <array>
 
@@ -145,7 +145,8 @@ template< class _X, class _Y > struct Applicative< std::pair<_X,_Y> > {
     static constexpr auto ap( std::pair<U,F> a, const std::pair<V,X>& b )
         -> std::pair<U,Result<F,X>>
     {
-        return { mappend( move(std::get<0>(a)), std::get<0>(b) ), 
+        using monoid::operator+;
+        return { move(std::get<0>(a)) + std::get<0>(b),
                  std::get<1>(a)( std::get<1>(b) ) };
     }
 };
