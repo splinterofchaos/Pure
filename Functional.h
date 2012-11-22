@@ -7,7 +7,7 @@ namespace pure {
 
 /* Forwarder<F>(x...) = f(x...) */
 template< class F > struct Forwarder {
-    using function = F;
+    using function = Decay<F>;
     function f = F();
 
     template< class ...G >

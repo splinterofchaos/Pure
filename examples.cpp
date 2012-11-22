@@ -521,6 +521,17 @@ int main()
                 show( vmv ).c_str(),
                 show( mconcat(vmv) ).c_str() );
 
+        using D = Dual< std::vector<int> >;
+        D sx( {4,5,6} ), sy( {1,2,3} );
+        printf( "Dual [4,5,6] <> Dual [1,2,3] = %s\n",
+                show((sx+sy)()).c_str() );
+
+        constexpr auto eid = mempty<Endo<Id>>();
+        constexpr auto inc = endo( add(1) );
+        constexpr auto dec = endo( sub.with(1) );
+        constexpr auto same = inc + dec + eid;
+        printf( "Endo (+1) <> Endo (-1) <> Endo Id$ 10 = %s\n", show(same(10)).c_str() );
+
     }
 
     {
