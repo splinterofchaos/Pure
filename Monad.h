@@ -335,6 +335,8 @@ constexpr struct Sequence {
 
 constexpr auto mapM = ncompose( sequence, list::map );
 
+
+
 /*
  * MonadPlus M :
  *      mzero -> M
@@ -345,7 +347,9 @@ constexpr auto mapM = ncompose( sequence, list::map );
 template< class ...F > struct MonadPlus;
 
 template< class M, class Mo = MonadPlus<Cat<M>> >
-decltype( Mo::mzero() ) mzero() { return Mo::mzero(); }
+constexpr auto mzero() -> decltype( Mo::template mzero<M>() ) {
+    return Mo::template mzero<M>();
+}
 
 constexpr struct MPlus : Chainable<MPlus> {
     using Chainable<MPlus>::operator();
@@ -385,6 +389,16 @@ template<> struct MonadPlus< category::maybe_type > {
         return forward<A>(a) || forward<B>(b);
     }
 };
+
+/*
+ * gaurd(b) >> m = m, if b.
+ * In Haskell, this would return an M (),
+ * but I don't see how to translate that.
+ */
+template< template<class...> class M >
+M<bool> guard( bool b ) {
+    return b ? mreturn<M>(true) : mzero<M<bool>>();
+}
 
 } // namespace monad
 

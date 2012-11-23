@@ -493,8 +493,12 @@ int main()
         printf( "[] >> [3,4] = %s\n",
                 show( vector<int>{} >> vector<int>{3,4} ).c_str() );
 
-        printf( "toFour >>= (\\x->[x,-x]) = %s\n",
-                show( toFour >>= pos_neg ).c_str() );
+        printf( "toFour >>= (\\x-> guard (rem x 2==0) >> [x,-x]) = %s\n",
+                show (
+                    toFour >>= [](int x) {
+                        return guard<std::vector>(x%2==0) >> pos_neg(x);
+                    }
+                ).c_str() );
 
 
         std::vector< std::unique_ptr<int> > v;
