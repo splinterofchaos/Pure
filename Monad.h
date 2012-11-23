@@ -381,12 +381,14 @@ template<> struct MonadPlus< category::maybe_type > {
     template< class M >
     static M mzero() { return nullptr; }
 
-    template< class A, class B >
-    using Result = decltype( declval<A>() || declval<B>() );
+    template< class P >
+    static constexpr P mplus( const P& a, const P& b ) {
+        return a ? data::Just(*a) : data::Just(*b);;
+    }
 
-    template< class A, class B >
-    static constexpr Result<A,B> mplus( A&& a, B&& b ) {
-        return forward<A>(a) || forward<B>(b);
+    template< class P >
+    static constexpr ERVal<P,P> mplus( P&& a, P&& b ) {
+        return a ? a : b;
     }
 };
 
@@ -396,9 +398,16 @@ template<> struct MonadPlus< category::maybe_type > {
  * but I don't see how to translate that.
  */
 template< template<class...> class M >
-M<bool> guard( bool b ) {
+constexpr M<bool> guard( bool b ) {
     return b ? mreturn<M>(true) : mzero<M<bool>>();
 }
+
+constexpr struct MSum {
+    template< template<class...> class S, class MX >
+    MX operator () ( const S<MX>& ms ) const {
+        return list::foldr( mplus, mzero<MX>(), ms );
+    }
+} msum{};
 
 } // namespace monad
 
