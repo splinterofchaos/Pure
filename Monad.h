@@ -326,10 +326,14 @@ constexpr struct LiftCons {
  * sequence [Just 1, Just 2] = Just [1,2]
  * sequence [[1,2],[3,4]] = [[1,3],[2,4]]
  */
-template< template<class...> class S, template<class...> class M, class X >
-constexpr M<S<X>> sequence( const S<M<X>>& smx ) {
-    return list::foldl( liftCons, mreturn<M>(S<X>{}), smx );
-}
+constexpr struct Sequence {
+    template< template<class...> class S, template<class...> class M, class X >
+    constexpr M<S<X>> operator () ( const S<M<X>>& smx ) {
+        return list::foldl( liftCons, mreturn<M>(S<X>{}), smx );
+    }
+} sequence{};
+
+constexpr auto mapM = ncompose( sequence, list::map );
 
 /*
  * MonadPlus M :

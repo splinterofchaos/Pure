@@ -486,13 +486,15 @@ int main()
         printf( "Just 1 >> fail 'oops' = %s\n",
                 show( Just(1) >> mfail<unique_ptr<int>>("oops") ).c_str() );
 
-        printf( "[1,2,3] >> [4,5] = %s\n",
-                show( vector<int>{1,2,3} >> vector<int>{4,5} ).c_str() );
+        vector<int> toFour = { 1, 2, 3, 4 };
+        printf( "toFour = %s\n", show(toFour).c_str() );
+        printf( "toFour >> [4,5] = %s\n",
+                show( toFour >> vector<int>{4,5} ).c_str() );
         printf( "[] >> [3,4] = %s\n",
                 show( vector<int>{} >> vector<int>{3,4} ).c_str() );
 
-        printf( "[1,2,3] >>= (\\x->[x,-x]) = %s\n",
-                show( vector<int>{1,2,3} >>= pos_neg ).c_str() );
+        printf( "toFour >>= (\\x->[x,-x]) = %s\n",
+                show( toFour >>= pos_neg ).c_str() );
 
 
         std::vector< std::unique_ptr<int> > v;
@@ -505,6 +507,8 @@ int main()
         std::vector<std::vector<int>> vv = { {1}, {2,3}, {4} };
         printf( "sequence [[1],[2,3],[4]] = %s\n",
                         show( sequence(vv) ).c_str() );
+
+        printf( "mapM Just toFour = %s\n", show(mapM(Just,toFour)).c_str() );
 
         puts("");
     }
