@@ -500,6 +500,9 @@ int main()
                     }
                 ).c_str() );
 
+        auto double_half = [](int x){ return std::vector<int>{x*2,x/2}; };
+        printf( "pos_neg >=> double_half $ 10 = %s\n",
+                show( kcompose(pos_neg,double_half)(10) ).c_str() );
 
         std::vector< std::unique_ptr<int> > v;
         v.emplace_back(Just(1));

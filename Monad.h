@@ -409,6 +409,27 @@ constexpr struct MSum {
     }
 } msum{};
 
+template< class F, class G >
+struct KComposition {
+    F f;
+    G g;
+
+    template< class _F, class _G >
+    constexpr KComposition( _F&& f, _G&& g )
+        : f(forward<_F>(f)), g(forward<_G>(g))
+    {
+    }
+
+    template< class X >
+    constexpr auto operator () ( X&& x )
+        -> decltype( f(declval<X>()) >>= g )
+    {
+        return f( forward<X>(x) ) >>= g;
+    }
+};
+
+constexpr auto kcompose = ConstructT<KComposition>();
+
 } // namespace monad
 
 } // namespace pure
