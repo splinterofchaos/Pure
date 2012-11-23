@@ -537,19 +537,23 @@ int main()
         constexpr auto same = inc + dec + eid;
         printf( "Endo (+1) <> Endo (-1) <> Endo Id$ 10 = %s\n", show(same(10)).c_str() );
 
-        std::vector< All > vall = { true, false, true };
-        printf( "mconcat [All true, All false, All true] = %s\n",
-                show( mconcat(vall) ).c_str() );
-
-        std::vector< Any > vany = { true, false, true };
-        printf( "mconcat [Any true, Any false, Any true] = %s\n",
-                show( mconcat(vany) ).c_str() );
+        std::vector< int > stuff = { 5, 0, 2 };
+        printf( "let v = %s\n", show(stuff).c_str() );
+        printf( "mconcat (map All v)     = %s\n",
+                show( mconcat(Construct<All>() ^ stuff) ).c_str() );
+        printf( "mconcat (map Any v)     = %s\n",
+                show( mconcat(Construct<Any>() ^ stuff) ).c_str() );
+        printf( "mconcat (map Sum v)     = %s\n",
+                show( mconcat(Construct<Sum>() ^ stuff) ).c_str() );
+        printf( "mconcat (map Product v) = %s\n",
+                show( mconcat(Construct<Product>() ^ stuff) ).c_str() );
 
     }
 
     {
         using namespace monad;
 
+        puts("");
         printf( "Just 1 `mplus` Just 2 = %s\n",
                 show( Just(1) + Just(2) ).c_str() );
         printf( "[1] `mplus` [2] = %s\n",
@@ -559,6 +563,7 @@ int main()
     {
         using namespace pure::arrow;
 
+        puts("");
         pair<int,int> p( 1, 2 );
         using Show = string(int);
         auto showInt = [](int x){ return show(x); };

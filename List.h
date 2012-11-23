@@ -1685,10 +1685,12 @@ constexpr struct Sum {
     }
 } sum{};
 
-template< class S >
-constexpr SeqVal<S> product( const S& s ) {
-    return list::foldl( Mult(), SeqVal<S>(1), s );
-}
+constexpr struct Product {
+    template< class S >
+    constexpr SeqVal<S> operator () ( const S& s ) {
+        return list::foldl( Mult(), SeqVal<S>(1), s );
+    }
+} product{};
 
 constexpr struct Maximum {
     template< class S >
