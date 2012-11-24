@@ -238,7 +238,12 @@ template<> struct Monad< category::sequence_type > {
         return c;
     }
 
-    static constexpr auto mbind = list::concatMap;
+    template< class F, class S >
+    static auto mbind( F&& f, S&& s )
+        -> decltype( list::concatMap(declval<F>(),declval<S>()) )
+    {
+        return list::concatMap( forward<F>(f), forward<S>(s) );
+    }
 };
 
 template< class P > struct IsPointerImpl { 
@@ -401,6 +406,39 @@ template< template<class...> class M >
 constexpr M<bool> guard( bool b ) {
     return b ? mreturn<M>(true) : mzero<M<bool>>();
 }
+
+/* gaurd(b,m) = gaurd(b) >> m */
+template< class M >
+constexpr M guard( bool b, M m )
+{
+    return b ? m : mzero<M>();
+}
+
+template< template<class...> class M >
+struct Guard {
+    constexpr M<bool> operator () ( bool b ) {
+        return guard<M>(b);
+    }
+
+    template< class ...X >
+    constexpr M<X...> operator () ( bool b, M<X...> m ) {
+        return guard( b, move(m) );
+    }
+};
+
+constexpr struct GuardIf {
+    template< class P, class F, class X, class R = Result<F,X> >
+    constexpr R operator () ( P&& p, F&& f, X&& x )
+    {
+        return forward<P>(p)(x) ? forward<F>(f)(forward<X>(x)) : mzero<R>();
+    }
+
+    template< class P, class F >
+    constexpr Closet<GuardIf,P,F> operator () ( P&& p, F&& f )
+    {
+        return closet( GuardIf(), forward<P>(p), forward<F>(f) );
+    }
+} guardIf{};
 
 /* msum( {x,y} ) = mplus(x,y) */
 constexpr struct MSum {

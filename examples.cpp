@@ -496,8 +496,13 @@ int main()
         printf( "toFour >>= (\\x-> guard (rem x 2==0) >> [x,-x]) = %s\n",
                 show (
                     toFour >>= [](int x) {
-                        return guard<std::vector>(x%2==0) >> pos_neg(x);
+                        return guard( x%2==0, pos_neg(x) );
                     }
+                ).c_str() );
+
+        printf( "toFour >>= (\\x-> guard (rem x 2==0) >> [x,-x]) = %s\n",
+                show (
+                    toFour >>= guardIf(eq(0) ^ mod.with(2), pos_neg)
                 ).c_str() );
 
         auto double_half = [](int x){ return std::vector<int>{x*2,x/2}; };
