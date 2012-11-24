@@ -298,6 +298,19 @@ constexpr struct LiftM : Binary<LiftM> {
     {
         return forward<M>(m) >>= Return<D>() ^ forward<F>(f);
     }
+
+    template< class F, class A, class B, class ...C >
+    constexpr auto operator () ( F&& f, A&& a, B&& b, C&& ...c )
+        -> decltype( declval<A>() >>= compose (
+                rcloset( LiftM(), declval<B>(), declval<C>()... ),
+                closet(declval<F>())
+            ) )
+    {
+        return forward<A>(a) >>= compose (
+            rcloset( LiftM(), forward<B>(b), forward<C>(c)... ),
+            closet(forward<F>(f))
+        );
+    }
 } liftM{};
 
 /* liftCons my mx = mx >>= (\x -> liftM( cons x, my )) */
@@ -339,8 +352,6 @@ constexpr struct Sequence {
 } sequence{};
 
 constexpr auto mapM = ncompose( sequence, list::map );
-
-
 
 /*
  * MonadPlus M :
@@ -503,7 +514,7 @@ constexpr struct FoldM {
               class R = Result< Binary, Init, Result<list::Head,S> > >
     R operator () ( Binary&& b, Init&& i, const S& s ) const
     {
-        return do_fold (
+        return DoFold() (
             forward<Binary>(b), list::range(s), forward<Init>(i)
         );
     }

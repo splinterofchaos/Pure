@@ -534,6 +534,18 @@ int main()
         printf( "replicateM 5 [5] = %s\n",
                 show( replicateM(5,std::vector<int>{5}) ).c_str() );
 
+        std::vector<int> toTwo = {1,2};
+        puts( "toTwo = [1,2]");
+        printf( "liftM (*2) toTwo = %s\n",
+                show( liftM(mult(2),toTwo) ).c_str() );
+        printf( "liftM2 (*) toTwo toTwo = %s\n",
+                show( liftM(mult,toTwo,toTwo) ).c_str() );
+        printf( "liftM3 (\\x y z->x*y*z) toTwo toTwo toTwo = %s\n",
+                show( liftM(mult,toTwo,toTwo,toTwo) ).c_str() );
+        // Won't work due to a failure of rclosure to work as expected.
+//        printf( "liftM4 (\\x y z h->x*y*z*h) toTwo toTwo toTwo toTwo = %s\n",
+//                show( liftM(mult,toTwo,toTwo,toTwo,toTwo) ).c_str() );
+
         puts("");
     }
 
