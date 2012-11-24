@@ -1368,10 +1368,12 @@ constexpr struct Take : Binary<Take> {
     }
 } take{};
 
-template< class X >
-std::vector<Decay<X>> replicate( size_t n, X&& x ) {
-    return take( n, repeat(forward<X>(x)) );
-}
+constexpr struct Replicate {
+    template< class X >
+    std::vector<Decay<X>> operator () ( size_t n, X&& x ) const {
+        return take( n, repeat(forward<X>(x)) );
+    }
+} replicate{};
 
 constexpr struct TakeWhile : Binary<TakeWhile> {
     using Binary<TakeWhile>::operator();

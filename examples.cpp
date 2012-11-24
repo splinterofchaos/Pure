@@ -531,6 +531,9 @@ int main()
         printf( "foldM (\\x y -> Just $ x+y) 0 toFour = %s\n",
                 show( foldM(ncompose(Just,add),0,toFour) ).c_str() );
 
+        printf( "replicateM 5 [5] = %s\n",
+                show( replicateM(5,std::vector<int>{5}) ).c_str() );
+
         puts("");
     }
 

@@ -509,6 +509,8 @@ constexpr struct FoldM {
     }
 } foldM{};
 
+constexpr auto replicateM = ncompose( sequence, list::replicate );
+
 } // namespace monad
 
 } // namespace pure
