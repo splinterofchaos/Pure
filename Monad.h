@@ -239,10 +239,10 @@ template<> struct Monad< category::sequence_type > {
     }
 
     template< class F, class S >
-    static auto mbind( F&& f, S&& s )
-        -> decltype( list::concatMap(declval<F>(),declval<S>()) )
+    static auto mbind( F&& f, const S& s )
+        -> decltype( list::concatMap(declval<F>(),s) )
     {
-        return list::concatMap( forward<F>(f), forward<S>(s) );
+        return list::concatMap( forward<F>(f), s );
     }
 };
 

@@ -542,7 +542,8 @@ int main()
                 show( liftM(mult,toTwo,toTwo) ).c_str() );
         printf( "liftM3 (\\x y z->x*y*z) toTwo toTwo toTwo = %s\n",
                 show( liftM(mult,toTwo,toTwo,toTwo) ).c_str() );
-        // Won't work due to a failure of rclosure to work as expected.
+
+        // TODO: Why exactly does this not work?
 //        printf( "liftM4 (\\x y z h->x*y*z*h) toTwo toTwo toTwo toTwo = %s\n",
 //                show( liftM(mult,toTwo,toTwo,toTwo,toTwo) ).c_str() );
 

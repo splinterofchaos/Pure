@@ -191,6 +191,8 @@ template< class F > struct Chainable : Binary<F> {
 };
 
 template< class F > struct ReverseChainable : Binary<F> {
+    using Self = ReverseChainable<F>;
+
     using Binary<F>::operator();
 
     template< class X, class Y >
@@ -207,20 +209,21 @@ template< class F > struct ReverseChainable : Binary<F> {
         );
     }
 
-    template< class X, class Y, class ...Z >
-    using Unroll = Result <
-        Chainable<F>,  R<X,Y>, Z...
-    >;
-
     // Any more? recurse.
     template< class X, class Y, class Z, class H, class ...J >
     constexpr auto operator () ( X&& x, Y&& y, Z&& z, H&& h, J&& ...j )
-        -> Unroll<X,Y,Z,H,J...>
+        -> decltype(
+            F() (
+                (*this)( forward<X>(x), forward<Z>(z),
+                         forward<H>(h), forward<J>(j)... ),
+                forward<Y>(y)
+            )
+        )
     {
         // Notice how (*this) always gets applied at LEAST three arguments.
         return F() (
             (*this)( forward<X>(x), forward<Z>(z),
-                    forward<H>(h), forward<J>(j)... ),
+                     forward<H>(h), forward<J>(j)... ),
             forward<Y>(y)
         );
     }
