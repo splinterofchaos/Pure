@@ -238,7 +238,12 @@ template<> struct Monad< category::sequence_type > {
         return c;
     }
 
-    static constexpr auto mbind = list::concatMap;
+    template< class F, class S >
+    static auto mbind( F&& f, const S& s )
+        -> decltype( list::concatMap(declval<F>(),s) )
+    {
+        return list::concatMap( forward<F>(f), s );
+    }
 };
 
 template< class P > struct IsPointerImpl { 
@@ -293,6 +298,19 @@ constexpr struct LiftM : Binary<LiftM> {
     {
         return forward<M>(m) >>= Return<D>() ^ forward<F>(f);
     }
+
+    template< class F, class A, class B, class ...C >
+    constexpr auto operator () ( F&& f, A&& a, B&& b, C&& ...c )
+        -> decltype( declval<A>() >>= compose (
+                rcloset( LiftM(), declval<B>(), declval<C>()... ),
+                closet(declval<F>())
+            ) )
+    {
+        return forward<A>(a) >>= compose (
+            rcloset( LiftM(), forward<B>(b), forward<C>(c)... ),
+            closet(forward<F>(f))
+        );
+    }
 } liftM{};
 
 /* liftCons my mx = mx >>= (\x -> liftM( cons x, my )) */
@@ -326,10 +344,199 @@ constexpr struct LiftCons {
  * sequence [Just 1, Just 2] = Just [1,2]
  * sequence [[1,2],[3,4]] = [[1,3],[2,4]]
  */
-template< template<class...> class S, template<class...> class M, class X >
-constexpr M<S<X>> sequence( const S<M<X>>& smx ) {
-    return list::foldl( liftCons, mreturn<M>(S<X>{}), smx );
+constexpr struct Sequence {
+    template< template<class...> class S, template<class...> class M, class X >
+    constexpr M<S<X>> operator () ( const S<M<X>>& smx ) {
+        return list::foldl( liftCons, mreturn<M>(S<X>{}), smx );
+    }
+} sequence{};
+
+constexpr auto mapM = ncompose( sequence, list::map );
+
+/*
+ * MonadPlus M :
+ *      mzero -> M
+ *      mplus M M -> M
+ *
+ *      mzero >>= f = mzero
+ */
+template< class ...F > struct MonadPlus;
+
+template< class M, class Mo = MonadPlus<Cat<M>> >
+constexpr auto mzero() -> decltype( Mo::template mzero<M>() ) {
+    return Mo::template mzero<M>();
 }
+
+constexpr struct MPlus : Chainable<MPlus> {
+    using Chainable<MPlus>::operator();
+
+    template< class M1, class M2,
+              class Mo = MonadPlus<Cat<M1>> >
+    constexpr auto operator () ( M1&& a, M2&& b )
+        -> decltype( Mo::mplus(declval<M1>(),declval<M2>()) )
+    {
+        return Mo::mplus( forward<M1>(a), forward<M2>(b) );
+    }
+} mplus{};
+
+template< class X, class Y >
+auto operator + ( X&& x, Y&& y )
+    -> decltype( mplus(declval<X>(),declval<Y>()) )
+{
+    return mplus( std::forward<X>(x), std::forward<Y>(y) );
+}
+
+template<> struct MonadPlus< category::sequence_type > {
+    template< class S >
+    static S mzero() { return S(); }
+
+    static constexpr auto mplus = list::append;
+};
+
+template<> struct MonadPlus< category::maybe_type > {
+    template< class M >
+    static M mzero() { return nullptr; }
+
+    template< class P >
+    static constexpr P mplus( const P& a, const P& b ) {
+        return a ? data::Just(*a) : data::Just(*b);;
+    }
+
+    template< class P >
+    static constexpr ERVal<P,P> mplus( P&& a, P&& b ) {
+        return a ? a : b;
+    }
+};
+
+/*
+ * gaurd(b) >> m = m, if b.
+ * In Haskell, this would return an M (),
+ * but I don't see how to translate that.
+ */
+template< template<class...> class M >
+constexpr M<bool> guard( bool b ) {
+    return b ? mreturn<M>(true) : mzero<M<bool>>();
+}
+
+/* gaurd(b,m) = gaurd(b) >> m */
+template< class M >
+constexpr M guard( bool b, M m )
+{
+    return b ? m : mzero<M>();
+}
+
+template< template<class...> class M >
+struct Guard {
+    constexpr M<bool> operator () ( bool b ) {
+        return guard<M>(b);
+    }
+
+    template< class ...X >
+    constexpr M<X...> operator () ( bool b, M<X...> m ) {
+        return guard( b, move(m) );
+    }
+};
+
+constexpr struct GuardIf {
+    template< class P, class F, class X, class R = Result<F,X> >
+    constexpr R operator () ( P&& p, F&& f, X&& x )
+    {
+        return forward<P>(p)(x) ? forward<F>(f)(forward<X>(x)) : mzero<R>();
+    }
+
+    template< class P, class F >
+    constexpr Closet<GuardIf,P,F> operator () ( P&& p, F&& f )
+    {
+        return closet( GuardIf(), forward<P>(p), forward<F>(f) );
+    }
+} guardIf{};
+
+/* msum( {x,y} ) = mplus(x,y) */
+constexpr struct MSum {
+    template< template<class...> class S, class MX >
+    MX operator () ( const S<MX>& ms ) const {
+        return list::foldr( mplus, mzero<MX>(), ms );
+    }
+} msum{};
+
+/* kcompose(f,g)(x) = f(x) >>= g */
+template< class F, class G >
+struct KComposition {
+    F f;
+    G g;
+
+    template< class _F, class _G >
+    constexpr KComposition( _F&& f, _G&& g )
+        : f(forward<_F>(f)), g(forward<_G>(g))
+    {
+    }
+
+    template< class X >
+    constexpr auto operator () ( X&& x )
+        -> decltype( f(declval<X>()) >>= g )
+    {
+        return f( forward<X>(x) ) >>= g;
+    }
+};
+
+constexpr auto kcompose = ConstructBinary<KComposition>();
+
+/*
+ * join( {{1},{2,3}} ) = {1,2,3}
+ * join( Just(Just(2)) ) = Just(2)
+ */
+constexpr auto join = mbind( id );
+
+constexpr auto zipWithM = ncompose( sequence, list::zipWith );
+
+/*
+ * foldM(b,x,xs) = b(x,head(xs)) >>= foldM(b,_,tail(xs)
+ *      where b is a function from (a,b) to some monad.
+ *
+ * foldM(f,0,{1,2,3}) = f(0,1) >>= f(_,2) >>= f(_,3)
+ */
+constexpr struct FoldM {
+    static constexpr struct DoFold {
+        template< class B, class S, class I,
+                  class R = Result< B, I, list::SeqVal<S> > >
+        R operator () ( B&& b, const S& s, I&& i ) const {
+            if( list::null(s) )
+                return mreturn<R>( forward<I>(i) );
+
+            auto acc = forward<B>(b)( forward<I>(i), list::head(s) );
+            return acc >>= closure (
+                DoFold(), forward<B>(b), list::tail_wrap( s )
+            );
+        }
+    } do_fold{};
+
+    template< class Binary, class Init, class S,
+              class R = Result< Binary, Init, Result<list::Head,S> > >
+    R operator () ( Binary&& b, Init&& i, const S& s ) const
+    {
+        return DoFold() (
+            forward<Binary>(b), list::range(s), forward<Init>(i)
+        );
+    }
+} foldM{};
+
+constexpr auto replicateM = ncompose( sequence, list::replicate );
+
+constexpr auto ap = closure( liftM, id );
+
+constexpr struct MFilter {
+    template< class R > struct DoFilter{
+        template< class P, class X >
+        constexpr R operator () ( P&& p, X&& x ) {
+            return forward<P>(p)(x) ? mreturn<R>(forward<X>(x)) : mzero<R>();
+        }
+    };
+
+    template< class P, class M, class R = Decay<M> >
+    constexpr R operator () ( P&& p, M&& m ) {
+        return forward<M>(m) >>= closet( DoFilter<R>(), forward<P>(p) );
+    }
+} mfilter{};
 
 } // namespace monad
 

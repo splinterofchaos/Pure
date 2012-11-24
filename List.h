@@ -1368,10 +1368,12 @@ constexpr struct Take : Binary<Take> {
     }
 } take{};
 
-template< class X >
-std::vector<Decay<X>> replicate( size_t n, X&& x ) {
-    return take( n, repeat(forward<X>(x)) );
-}
+constexpr struct Replicate {
+    template< class X >
+    std::vector<Decay<X>> operator () ( size_t n, X&& x ) const {
+        return take( n, repeat(forward<X>(x)) );
+    }
+} replicate{};
 
 constexpr struct TakeWhile : Binary<TakeWhile> {
     using Binary<TakeWhile>::operator();
@@ -1685,10 +1687,12 @@ constexpr struct Sum {
     }
 } sum{};
 
-template< class S >
-constexpr SeqVal<S> product( const S& s ) {
-    return list::foldl( Mult(), SeqVal<S>(1), s );
-}
+constexpr struct Product {
+    template< class S >
+    constexpr SeqVal<S> operator () ( const S& s ) {
+        return list::foldl( Mult(), SeqVal<S>(1), s );
+    }
+} product{};
 
 constexpr struct Maximum {
     template< class S >
@@ -1697,20 +1701,32 @@ constexpr struct Maximum {
     }
 } maximum{};
 
-template< class F, class S >
-bool all( F&& f, const S& s ) {
-    return std::all_of( begin(s), end(s), forward<F>(f) );
-}
+constexpr struct All : Binary<All> {
+    using Binary<All>::operator();
 
-template< class F, class S >
-bool any( F&& f, const S& s ) {
-    return any_of( begin(s), end(s), forward<F>(f) );
-}
+    template< class F, class S >
+    bool operator () ( F&& f, const S& s ) const {
+        return std::all_of( begin(s), end(s), forward<F>(f) );
+    }
+} all{};
 
-template< class F, class S >
-bool none( F&& f, const S& s ) {
-    return std::none_of( begin(s), end(s), forward<F>(f) );
-}
+constexpr struct Any : Binary<Any> {
+    using Binary<Any>::operator();
+
+    template< class F, class S >
+    bool operator () ( F&& f, const S& s ) const {
+        return any_of( begin(s), end(s), forward<F>(f) );
+    }
+} any{};
+
+constexpr struct None : Binary<None> {
+    using Binary<None>::operator();
+
+    template< class F, class S >
+    bool operator () ( F&& f, const S& s ) const {
+        return std::none_of( begin(s), end(s), forward<F>(f) );
+    }
+} none{};
 
 template< class F, class XS, class YS >
 XS intersectIf( F&& f, const XS& xs, const YS& ys ) {
@@ -1896,18 +1912,20 @@ R _zipWith( F&& f, R r, const S& ...s ) {
         : r;
 }
 
-template< class F, class XS, class ...YS, class R = Dup<XS> >
-R zipWith( F&& f, const XS& xs, const YS& ...ys ) {
-    return _zipWith( forward<F>(f), R(), xs, ys... );
-}
+constexpr struct ZipWith {
+    template< class F, class XS, class ...YS, class R = Dup<XS> >
+    R operator () ( F&& f, const XS& xs, const YS& ...ys ) const {
+        return _zipWith( forward<F>(f), R(), xs, ys... );
+    }
 
 
-template< typename S, typename F >
-S zipWith( F&& f, const S& a, S b ) {
-    std::transform( begin(a), end(a), begin(b), 
-                    begin(b), forward<F>(f) );
-    return b;
-}
+    template< typename S, typename F >
+    S operator () ( F&& f, const S& a, S b ) const {
+        std::transform( begin(a), end(a), begin(b),
+                        begin(b), forward<F>(f) );
+        return b;
+    }
+} zipWith{};
 
 template< class S >
 std::vector<Decay<S>> lines( S&& s ) {

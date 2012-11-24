@@ -1,4 +1,5 @@
 
+#include "Monoid.h"
 #include "Pure.h"
 
 namespace pure {
@@ -60,12 +61,14 @@ template<> struct Foldable< category::sequence_type > {
 
     template< class S, class X = Val<S> > static
     X fold( const S& s ) {
+        using namespace monoid;
         return list::foldr( mappend, mempty<X>(), s );
     }
 
     template< class F, class S, class X = Val<S>,
               class R = Result<F,X> > 
     static R foldMap( F&& f, const S& s ) {
+        using namespace monoid;
         return list::foldr( compose( mappend, forward<F>(f) ),
                             mempty<R>(), s );
     }
@@ -76,6 +79,7 @@ template<> struct Foldable< category::sequence_type > {
                                 declval<Ref<ZS>>()... )
               ) >
     static R foldMap( F&& f, const XS& xs, const YS& ys, const ZS& ...zs ) {
+        using namespace monoid;
         R r = mempty<R>();
         for( const auto& x : xs )
             r = mappend( move(r),

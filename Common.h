@@ -38,7 +38,12 @@ using DResult = Decay<decltype( declval<F>()( declval<Decay<X>>()... ) )>;
 
 constexpr struct Id {
     template< class X >
-    constexpr X operator() ( X&& x ) { return forward<X>(x); }
+    constexpr X operator () ( X&& x ) { return forward<X>(x); }
+
+    template< class F, class ...X >
+    constexpr Result<F,X...> operator () ( F&& f, X&& ...x ) {
+        return forward<F>(f)( forward<X>(x)... );
+    }
 } id{};
 
 }
