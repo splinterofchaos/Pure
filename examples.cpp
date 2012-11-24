@@ -519,6 +519,10 @@ int main()
 
         printf( "mapM Just toFour = %s\n", show(mapM(Just,toFour)).c_str() );
 
+        printf( "join [[1],[2,3]] = %s\n",
+//                show( vector<vector<int>>{{1},{2,3}} >>= id ).c_str() );
+                show( monad::join(vector<vector<int>>{{1},{2,3}}) ).c_str() );
+
         puts("");
     }
 

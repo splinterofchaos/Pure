@@ -1910,18 +1910,20 @@ R _zipWith( F&& f, R r, const S& ...s ) {
         : r;
 }
 
-template< class F, class XS, class ...YS, class R = Dup<XS> >
-R zipWith( F&& f, const XS& xs, const YS& ...ys ) {
-    return _zipWith( forward<F>(f), R(), xs, ys... );
-}
+constexpr struct ZipWith {
+    template< class F, class XS, class ...YS, class R = Dup<XS> >
+    R operator () ( F&& f, const XS& xs, const YS& ...ys ) const {
+        return _zipWith( forward<F>(f), R(), xs, ys... );
+    }
 
 
-template< typename S, typename F >
-S zipWith( F&& f, const S& a, S b ) {
-    std::transform( begin(a), end(a), begin(b), 
-                    begin(b), forward<F>(f) );
-    return b;
-}
+    template< typename S, typename F >
+    S operator () ( F&& f, const S& a, S b ) const {
+        std::transform( begin(a), end(a), begin(b),
+                        begin(b), forward<F>(f) );
+        return b;
+    }
+} zipWith{};
 
 template< class S >
 std::vector<Decay<S>> lines( S&& s ) {

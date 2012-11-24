@@ -402,6 +402,7 @@ constexpr M<bool> guard( bool b ) {
     return b ? mreturn<M>(true) : mzero<M<bool>>();
 }
 
+/* msum( {x,y} ) = mplus(x,y) */
 constexpr struct MSum {
     template< template<class...> class S, class MX >
     MX operator () ( const S<MX>& ms ) const {
@@ -409,6 +410,7 @@ constexpr struct MSum {
     }
 } msum{};
 
+/* kcompose(f,g)(x) = f(x) >>= g */
 template< class F, class G >
 struct KComposition {
     F f;
@@ -428,7 +430,15 @@ struct KComposition {
     }
 };
 
-constexpr auto kcompose = ConstructT<KComposition>();
+constexpr auto kcompose = ConstructBinary<KComposition>();
+
+/*
+ * join( {{1},{2,3}} ) = {1,2,3}
+ * join( Just(Just(2)) ) = Just(2)
+ */
+constexpr auto join = mbind( id );
+
+constexpr auto zipWithM = ncompose( sequence, list::zipWith );
 
 } // namespace monad
 
