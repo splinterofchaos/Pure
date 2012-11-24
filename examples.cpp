@@ -547,6 +547,12 @@ int main()
 //        printf( "liftM4 (\\x y z h->x*y*z*h) toTwo toTwo toTwo toTwo = %s\n",
 //                show( liftM(mult,toTwo,toTwo,toTwo,toTwo) ).c_str() );
 
+        printf( "Just(+2) `ap` Just 5 = %s\n",
+                show( monad::ap(Just(add(2)),Just(5)) ).c_str() );
+
+        printf( "mfilter even toFour = %s",
+                show( mfilter(even,toFour) ).c_str() );
+
         puts("");
     }
 

@@ -522,6 +522,22 @@ constexpr struct FoldM {
 
 constexpr auto replicateM = ncompose( sequence, list::replicate );
 
+constexpr auto ap = closure( liftM, id );
+
+constexpr struct MFilter {
+    template< class R > struct DoFilter{
+        template< class P, class X >
+        constexpr R operator () ( P&& p, X&& x ) {
+            return forward<P>(p)(x) ? mreturn<R>(forward<X>(x)) : mzero<R>();
+        }
+    };
+
+    template< class P, class M, class R = Decay<M> >
+    constexpr R operator () ( P&& p, M&& m ) {
+        return forward<M>(m) >>= closet( DoFilter<R>(), forward<P>(p) );
+    }
+} mfilter{};
+
 } // namespace monad
 
 } // namespace pure
