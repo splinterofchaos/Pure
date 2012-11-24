@@ -146,7 +146,7 @@ constexpr struct Uncurry {
     }
 } _uncurry{};
 
-constexpr auto uncurry = rcloset( bcompose, Nth<1>(), Nth<0>() );
+constexpr auto uncurry = rcloset( bcompose, Nth<0>(), Nth<1>() );
 
 //template< template<class...>class, class ... > struct Kleisli;
 

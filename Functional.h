@@ -190,9 +190,44 @@ template< class F > struct Chainable : Binary<F> {
     }
 };
 
+template< class F > struct ReverseChainable : Binary<F> {
+    using Binary<F>::operator();
+
+    template< class X, class Y >
+    using R = typename std::result_of< F(X,Y) >::type;
+
+    // Three arguments: unroll.
+    template< class X, class Y, class Z >
+    constexpr auto operator () ( X&& x, Y&& y, Z&& z )
+        -> R< R<X,Z>, Y >
+    {
+        return F()(
+            F()( std::forward<X>(x), std::forward<Z>(z) ),
+            std::forward<Y>(y)
+        );
+    }
+
+    template< class X, class Y, class ...Z >
+    using Unroll = Result <
+        Chainable<F>,  R<X,Y>, Z...
+    >;
+
+    // Any more? recurse.
+    template< class X, class Y, class Z, class H, class ...J >
+    constexpr auto operator () ( X&& x, Y&& y, Z&& z, H&& h, J&& ...j )
+        -> Unroll<X,Y,Z,H,J...>
+    {
+        // Notice how (*this) always gets applied at LEAST three arguments.
+        return F() (
+            (*this)( forward<X>(x), forward<Z>(z),
+                    forward<H>(h), forward<J>(j)... ),
+            forward<Y>(y)
+        );
+    }
+};
+
 template< template<class...> class T >
 struct ConstructChainable : Chainable<ConstructT<T>> {
-    using Self = ConstructChainable<T>;
     using Chainable<ConstructT<T>>::operator();
 
     template< class X, class Y, class R = T< Decay<X>, Decay<Y> > >
@@ -202,9 +237,28 @@ struct ConstructChainable : Chainable<ConstructT<T>> {
 };
 
 template< template<class...> class T >
+struct ConstructReverseChainable : ReverseChainable<ConstructT<T>> {
+    using ReverseChainable<ConstructT<T>>::operator();
+
+    template< class X, class Y, class R = T< Decay<X>, Decay<Y> > >
+    constexpr R operator () ( X&& x, Y&& y ) {
+        return R( forward<X>(x), forward<Y>(y) );
+    }
+};
+
+template< template<class...> class T >
 struct ForwardChainable : Chainable<ForwardT<T>> {
-    using Self = ForwardChainable<T>;
     using Chainable<ForwardT<T>>::operator();
+
+    template< class X, class Y, class R = T<X,Y> >
+    constexpr R operator () ( X&& x, Y&& y ) {
+        return R( forward<X>(x), forward<Y>(y) );
+    }
+};
+
+template< template<class...> class T >
+struct ForwardReverseChainable : ReverseChainable<ForwardT<T>> {
+    using ReverseChainable<ForwardT<T>>::operator();
 
     template< class X, class Y, class R = T<X,Y> >
     constexpr R operator () ( X&& x, Y&& y ) {
@@ -275,9 +329,9 @@ template< class F, class Fold=And > struct Transitive : Binary<F> {
  */
 
 constexpr auto closure  = ForwardChainable<Part>();
-constexpr auto rclosure = ForwardChainable<RPart>();
 constexpr auto closet   = ConstructChainable<Part>();
-constexpr auto rcloset  = ConstructChainable<RPart>();
+constexpr auto rclosure = ForwardReverseChainable<RPart>();
+constexpr auto rcloset  = ConstructReverseChainable<RPart>();
 
 template< class F, class ...X >
 using Closure = decltype( closure(declval<F>(), declval<X>()...) );
