@@ -528,6 +528,9 @@ int main()
 //                show( vector<vector<int>>{{1},{2,3}} >>= id ).c_str() );
                 show( monad::join(vector<vector<int>>{{1},{2,3}}) ).c_str() );
 
+        printf( "foldM (\\x y -> Just $ x+y) 0 toFour = %s\n",
+                show( foldM(ncompose(Just,add),0,toFour) ).c_str() );
+
         puts("");
     }
 

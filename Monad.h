@@ -478,6 +478,37 @@ constexpr auto join = mbind( id );
 
 constexpr auto zipWithM = ncompose( sequence, list::zipWith );
 
+/*
+ * foldM(b,x,xs) = b(x,head(xs)) >>= foldM(b,_,tail(xs)
+ *      where b is a function from (a,b) to some monad.
+ *
+ * foldM(f,0,{1,2,3}) = f(0,1) >>= f(_,2) >>= f(_,3)
+ */
+constexpr struct FoldM {
+    static constexpr struct DoFold {
+        template< class B, class S, class I,
+                  class R = Result< B, I, list::SeqVal<S> > >
+        R operator () ( B&& b, const S& s, I&& i ) const {
+            if( list::null(s) )
+                return mreturn<R>( forward<I>(i) );
+
+            auto acc = forward<B>(b)( forward<I>(i), list::head(s) );
+            return acc >>= closure (
+                DoFold(), forward<B>(b), list::tail_wrap( s )
+            );
+        }
+    } do_fold{};
+
+    template< class Binary, class Init, class S,
+              class R = Result< Binary, Init, Result<list::Head,S> > >
+    R operator () ( Binary&& b, Init&& i, const S& s ) const
+    {
+        return do_fold (
+            forward<Binary>(b), list::range(s), forward<Init>(i)
+        );
+    }
+} foldM{};
+
 } // namespace monad
 
 } // namespace pure
