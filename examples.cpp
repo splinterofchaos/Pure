@@ -587,13 +587,13 @@ int main()
         std::vector< int > stuff = { 5, 0, 2 };
         printf( "let v = %s\n", show(stuff).c_str() );
         printf( "mconcat (map All v)     = %s\n",
-                show( mconcat(Construct<All>() ^ stuff) ).c_str() );
+                show( mconcat(Make<All>() ^ stuff) ).c_str() );
         printf( "mconcat (map Any v)     = %s\n",
-                show( mconcat(Construct<Any>() ^ stuff) ).c_str() );
+                show( mconcat(Make<Any>() ^ stuff) ).c_str() );
         printf( "mconcat (map Sum v)     = %s\n",
-                show( mconcat(Construct<Sum>() ^ stuff) ).c_str() );
+                show( mconcat(Make<Sum>() ^ stuff) ).c_str() );
         printf( "mconcat (map Product v) = %s\n",
-                show( mconcat(Construct<Product>() ^ stuff) ).c_str() );
+                show( mconcat(Make<Product>() ^ stuff) ).c_str() );
 
     }
 

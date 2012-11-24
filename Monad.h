@@ -479,7 +479,7 @@ struct KComposition {
     }
 };
 
-constexpr auto kcompose = ConstructBinary<KComposition>();
+constexpr auto kcompose = MakeBinaryT<KComposition>();
 
 /*
  * join( {{1},{2,3}} ) = {1,2,3}

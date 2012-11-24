@@ -21,16 +21,16 @@ template< class F > struct Forwarder {
     }
 };
 
-/* Construct<T>(x...) = T(x...) */
-template< class T > struct Construct {
+/* Make<T>(x...) = T(x...) */
+template< class T > struct Make {
     template< class ...X >
-    constexpr T operator() ( X&& ...x ) {
+    constexpr T operator () ( X&& ...x ) {
         return T( forward<X>(x)... );
     }
 };
 
-/* ConstructT<T>(x) = T<X>(x) */
-template< template<class...> class T > struct ConstructT {
+/* MakeT<T>(x) = T<X>(x) */
+template< template<class...> class T > struct MakeT {
     template< class ...X, class R = T< Decay<X>... > >
     constexpr R operator () ( X&& ...x ) {
         return R( forward<X>(x)... );
@@ -59,7 +59,7 @@ template< class F > struct Flip {
     }
 };
 
-constexpr auto flip = ConstructT<Flip>();
+constexpr auto flip = MakeT<Flip>();
 
 /* 
  * Partial application.
@@ -130,8 +130,8 @@ template< class D > struct Binary {
 
 /* ConstructBinary<T>(x,y) = T<X,Y>(x,y) */
 template< template<class...> class T >
-struct ConstructBinary : Binary<ConstructBinary<T>> {
-    using Binary<ConstructBinary<T>>::operator();
+struct MakeBinaryT : Binary<MakeBinaryT<T>> {
+    using Binary<MakeBinaryT<T>>::operator();
 
     template< class X, class Y, class R = T< Decay<X>, Decay<Y> > >
     constexpr R operator () ( X&& x, Y&& y ) {
@@ -141,8 +141,8 @@ struct ConstructBinary : Binary<ConstructBinary<T>> {
 
 /* ForwardBinary<T>(x,y) = T<X&&,Y&&>(x,y) */
 template< template<class...> class T >
-struct ForwardBinary : Binary<ForwardBinary<T>> {
-    using Binary<ForwardBinary<T>>::operator();
+struct ForwardBinaryT : Binary<ForwardBinaryT<T>> {
+    using Binary<ForwardBinaryT<T>>::operator();
 
     template< class X, class Y, class R = T<X,Y> >
     constexpr R operator () ( X&& x, Y&& y ) {
@@ -230,8 +230,8 @@ template< class F > struct ReverseChainable : Binary<F> {
 };
 
 template< template<class...> class T >
-struct ConstructChainable : Chainable<ConstructT<T>> {
-    using Chainable<ConstructT<T>>::operator();
+struct MakeChainableT : Chainable<MakeT<T>> {
+    using Chainable<MakeT<T>>::operator();
 
     template< class X, class Y, class R = T< Decay<X>, Decay<Y> > >
     constexpr R operator () ( X&& x, Y&& y ) {
@@ -240,8 +240,8 @@ struct ConstructChainable : Chainable<ConstructT<T>> {
 };
 
 template< template<class...> class T >
-struct ConstructReverseChainable : ReverseChainable<ConstructT<T>> {
-    using ReverseChainable<ConstructT<T>>::operator();
+struct MakeReverseChainableT : ReverseChainable<MakeT<T>> {
+    using ReverseChainable<MakeT<T>>::operator();
 
     template< class X, class Y, class R = T< Decay<X>, Decay<Y> > >
     constexpr R operator () ( X&& x, Y&& y ) {
@@ -250,7 +250,7 @@ struct ConstructReverseChainable : ReverseChainable<ConstructT<T>> {
 };
 
 template< template<class...> class T >
-struct ForwardChainable : Chainable<ForwardT<T>> {
+struct ForwardChainableT : Chainable<ForwardT<T>> {
     using Chainable<ForwardT<T>>::operator();
 
     template< class X, class Y, class R = T<X,Y> >
@@ -260,7 +260,7 @@ struct ForwardChainable : Chainable<ForwardT<T>> {
 };
 
 template< template<class...> class T >
-struct ForwardReverseChainable : ReverseChainable<ForwardT<T>> {
+struct ForwardReverseChainableT : ReverseChainable<ForwardT<T>> {
     using ReverseChainable<ForwardT<T>>::operator();
 
     template< class X, class Y, class R = T<X,Y> >
@@ -331,10 +331,10 @@ template< class F, class Fold=And > struct Transitive : Binary<F> {
  * arguments (or environment).
  */
 
-constexpr auto closure  = ForwardChainable<Part>();
-constexpr auto closet   = ConstructChainable<Part>();
-constexpr auto rclosure = ForwardReverseChainable<RPart>();
-constexpr auto rcloset  = ConstructReverseChainable<RPart>();
+constexpr auto closure  = ForwardChainableT<Part>();
+constexpr auto closet   = MakeChainableT<Part>();
+constexpr auto rclosure = ForwardReverseChainableT<RPart>();
+constexpr auto rcloset  = MakeReverseChainableT<RPart>();
 
 template< class F, class ...X >
 using Closure = decltype( closure(declval<F>(), declval<X>()...) );
@@ -364,7 +364,7 @@ template< class F > struct Enclosure {
     }
 };
 
-constexpr auto enclosure = ConstructT<Enclosure>();
+constexpr auto enclosure = MakeT<Enclosure>();
 
 /* 
  * Composition. 
@@ -386,7 +386,7 @@ template< class F, class G > struct Composition {
     }
 };
 
-constexpr auto compose = ConstructChainable<Composition>();
+constexpr auto compose = MakeChainableT<Composition>();
 
 /* A const composition for when g is a constant function. */
 template< class F, class G > struct CComposition {
@@ -403,7 +403,7 @@ template< class F, class G > struct CComposition {
     }
 };
 
-constexpr auto ccompose = ConstructChainable<CComposition>();
+constexpr auto ccompose = MakeChainableT<CComposition>();
 
 /* N-ary composition assumes a unary f and N-ary g. */
 template< class F, class G > struct NComposition {
@@ -420,7 +420,7 @@ template< class F, class G > struct NComposition {
     }
 };
 
-constexpr auto ncompose = ConstructChainable<NComposition>();
+constexpr auto ncompose = MakeChainableT<NComposition>();
 
 /*
  * Binary composition 
@@ -445,9 +445,9 @@ struct BComposition
     }
 };
 
-constexpr auto bcompose = ConstructT<BComposition>();
+constexpr auto bcompose = MakeT<BComposition>();
 
-constexpr auto returnPair = ConstructChainable<std::pair>();
+constexpr auto returnPair = MakeChainableT<std::pair>();
 
 template< size_t N, class P >
 using Nth = decltype( std::get<N>(declval<P>()) );
@@ -478,7 +478,7 @@ template< class F, class G > struct PairComposition {
     }
 };
 
-constexpr auto pairCompose = ConstructChainable<PairComposition>();
+constexpr auto pairCompose = MakeChainableT<PairComposition>();
 
 template< class F, class G > struct FanComposition {
     F f = F();
@@ -504,7 +504,7 @@ template< class F, class G > struct FanComposition {
     }
 };
 
-constexpr auto fanCompose = ConstructChainable<FanComposition>();
+constexpr auto fanCompose = MakeChainableT<FanComposition>();
 
 template< class X > constexpr X inc( X x ) { return ++x; }
 template< class X > constexpr X dec( X x ) { return --x; }

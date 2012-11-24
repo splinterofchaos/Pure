@@ -453,7 +453,7 @@ template< class F, class G > struct  MComposition {
 };
 
 // TODO: Chainable?
-constexpr auto mcompose = ConstructBinary< MComposition >();
+constexpr auto mcompose = MakeBinaryT< MComposition >();
 constexpr auto fcompose = ncompose ^ fmap ;
 
 constexpr struct FCompose : Binary<FCompose> {

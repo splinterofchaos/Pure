@@ -111,7 +111,7 @@ struct Monad< state::StateT<S,A,M,F> > {
     template< class Pair >
     using Mon = typename State::template monad_type<Pair>;
 
-    static constexpr auto _return = ConstructBinary<std::pair>();
+    static constexpr auto _return = MakeBinaryT<std::pair>();
 
     template< class ST, class X >
     static constexpr Closet<decltype(_return),X> mreturn( X x ) {
