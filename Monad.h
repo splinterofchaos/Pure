@@ -46,6 +46,14 @@ constexpr struct FMap : Binary<FMap> {
     }
 } fmap{};
 
+/* f <$> m */
+template< class F, class M >
+constexpr auto operator^ ( F&& f, M&& m )
+    -> decltype( fmap(declval<F>(), declval<M>()) )
+{
+    return fmap( forward<F>(f), forward<M>(m) );
+}
+
 /* fmap f g = compose( f, g ) */
 template< class Function >
 struct Functor<Function> {

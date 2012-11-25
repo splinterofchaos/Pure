@@ -35,6 +35,7 @@ using data::either;
 
 using monad::Functor;
 using monad::fmap;
+using monad::operator ^;
 using monad::FMap;
 using monad::Monad;
 using monad::mdo;
@@ -116,17 +117,6 @@ template< class C, class R > struct ESeq : std::enable_if<IsSeq<C>::value,R> { }
 
 /* Disable if is sequence. */
 template< class C, class R > struct XSeq : std::enable_if<not IsSeq<C>::value,R> { };
-
-/* f <$> m */
-template< class F, class M >
-constexpr auto operator^ ( F&& f, M&& m ) 
-    -> decltype( fmap(declval<F>(), declval<M>()) )
-{
-    return fmap( forward<F>(f), forward<M>(m) );
-}
-
-
-
 
 /*
 * Rotation.

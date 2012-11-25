@@ -224,8 +224,14 @@ void print_xyz( int x, int y, int z ) {
     printf( "%d %d %d\n", x, y, z );
 }
 
+struct Obj {
+    int x, y;
+};
+constexpr auto obj = Initialize<Obj>();
+
 int main()
 {
+    auto o = obj(1,2);
     rcloset( print_xyz, 2, 3 )( 1 );
 
     {
@@ -325,7 +331,10 @@ int main()
             "sum of (4,3,2,1) = %d\n", // = 10
             foldr( Add(), {1,2,3,4} )
         );
-
+        printf(
+            "map (+1) [1,2,3,4] = %s\n", // = 10
+            show( fmap( add(1), {1,2,3,4} ) ).c_str()
+        );
         auto accumF = []( int x, int y ) { return std::make_pair(x+y,x*y); };
         printf( "mapAccumL (\\x y -> (x+y,x*y)) 0 [2,8,10] = %s\n",
                 show( mapAccumL(accumF,0,vector<int>{2,8,10}) ).c_str() );
@@ -552,6 +561,7 @@ int main()
 
         printf( "mfilter even toFour = %s",
                 show( mfilter(even,toFour) ).c_str() );
+        auto evens = std::vector<int>{1} >>= []( int x ) -> std::vector<int> { return x%2==0? std::vector<int>{x} : std::vector<int>{}; };
 
         puts("");
     }
