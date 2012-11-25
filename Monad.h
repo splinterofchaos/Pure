@@ -46,6 +46,14 @@ constexpr struct FMap : Binary<FMap> {
     }
 } fmap{};
 
+/* f <$> m */
+template< class F, class M >
+constexpr auto operator^ ( F&& f, M&& m )
+    -> decltype( fmap(declval<F>(), declval<M>()) )
+{
+    return fmap( forward<F>(f), forward<M>(m) );
+}
+
 /* fmap f g = compose( f, g ) */
 template< class Function >
 struct Functor<Function> {
@@ -457,6 +465,11 @@ constexpr struct MSum {
     MX operator () ( const S<MX>& ms ) const {
         return list::foldr( mplus, mzero<MX>(), ms );
     }
+
+    template< class M >
+    M operator () ( std::initializer_list<M> l ) const {
+        return list::foldr( mplus, mzero<M>(), l );
+    }
 } msum{};
 
 /* kcompose(f,g)(x) = f(x) >>= g */
@@ -479,7 +492,7 @@ struct KComposition {
     }
 };
 
-constexpr auto kcompose = ConstructBinary<KComposition>();
+constexpr auto kcompose = MakeBinaryT<KComposition>();
 
 /*
  * join( {{1},{2,3}} ) = {1,2,3}

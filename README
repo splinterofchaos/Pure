@@ -7,6 +7,8 @@ write in many ways. Explaining what the library does would be equivalent to
 explaining Haskell, so use and development of it requires a working knowledge
 of Haskell.
 
+See the wiki for documentation.
+
 Some of the techniques used to do this, however, are generally useful and I
 have been maintaining a blog about it:
 

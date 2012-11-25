@@ -224,8 +224,14 @@ void print_xyz( int x, int y, int z ) {
     printf( "%d %d %d\n", x, y, z );
 }
 
+struct Obj {
+    int x, y;
+};
+constexpr auto obj = Initialize<Obj>();
+
 int main()
 {
+    auto o = obj(1,2);
     rcloset( print_xyz, 2, 3 )( 1 );
 
     {
@@ -325,7 +331,10 @@ int main()
             "sum of (4,3,2,1) = %d\n", // = 10
             foldr( Add(), {1,2,3,4} )
         );
-
+        printf(
+            "map (+1) [1,2,3,4] = %s\n", // = 10
+            show( fmap( add(1), {1,2,3,4} ) ).c_str()
+        );
         auto accumF = []( int x, int y ) { return std::make_pair(x+y,x*y); };
         printf( "mapAccumL (\\x y -> (x+y,x*y)) 0 [2,8,10] = %s\n",
                 show( mapAccumL(accumF,0,vector<int>{2,8,10}) ).c_str() );
@@ -513,11 +522,13 @@ int main()
         v.emplace_back(Just(1));
         v.emplace_back(Just(2));
         v.emplace_back(Just(3));
-        printf( "sequence [Just 1, Just 2, Just 3] = %s\n",
-                show( sequence(v) ).c_str() );
         printf( "msum [Just 1, Just 2, Just 3] = %s\n",
                 show( msum(v) ).c_str() );
+        printf( "msum [Just 1, Just 2, Just 3] = %s\n",
+                show( msum({Just(1),Just(2),Just(3)}) ).c_str() );
 
+        printf( "sequence [Just 1, Just 2, Just 3] = %s\n",
+                show( sequence(v) ).c_str() );
         std::vector<std::vector<int>> vv = { {1}, {2,3}, {4} };
         printf( "sequence [[1],[2,3],[4]] = %s\n",
                         show( sequence(vv) ).c_str() );
@@ -552,6 +563,7 @@ int main()
 
         printf( "mfilter even toFour = %s",
                 show( mfilter(even,toFour) ).c_str() );
+        auto evens = std::vector<int>{1} >>= []( int x ) -> std::vector<int> { return x%2==0? std::vector<int>{x} : std::vector<int>{}; };
 
         puts("");
     }
@@ -587,13 +599,13 @@ int main()
         std::vector< int > stuff = { 5, 0, 2 };
         printf( "let v = %s\n", show(stuff).c_str() );
         printf( "mconcat (map All v)     = %s\n",
-                show( mconcat(Construct<All>() ^ stuff) ).c_str() );
+                show( mconcat(Make<All>() ^ stuff) ).c_str() );
         printf( "mconcat (map Any v)     = %s\n",
-                show( mconcat(Construct<Any>() ^ stuff) ).c_str() );
+                show( mconcat(Make<Any>() ^ stuff) ).c_str() );
         printf( "mconcat (map Sum v)     = %s\n",
-                show( mconcat(Construct<Sum>() ^ stuff) ).c_str() );
+                show( mconcat(Make<Sum>() ^ stuff) ).c_str() );
         printf( "mconcat (map Product v) = %s\n",
-                show( mconcat(Construct<Product>() ^ stuff) ).c_str() );
+                show( mconcat(Make<Product>() ^ stuff) ).c_str() );
 
     }
 
