@@ -465,6 +465,11 @@ constexpr struct MSum {
     MX operator () ( const S<MX>& ms ) const {
         return list::foldr( mplus, mzero<MX>(), ms );
     }
+
+    template< class M >
+    M operator () ( std::initializer_list<M> l ) const {
+        return list::foldr( mplus, mzero<M>(), l );
+    }
 } msum{};
 
 /* kcompose(f,g)(x) = f(x) >>= g */
