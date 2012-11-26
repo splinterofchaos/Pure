@@ -459,7 +459,9 @@ int main()
         printf( "Nothing <|> Nothing  = %s\n",
                 show( Nothing<int>() || Nothing<int>() ).c_str() );
 
-        std::vector<Part<Add,int>> fs = { add(1), add(5), add(3) };
+        // Take advantage of Part<F,X>::Part<F,X>(X).
+        std::vector<Part<Add,int>> fs = { 1, 5, 3 };
+
         puts( "fs = [(+1),(+5),(+3)]" );
         printf( "\tfs <*> pure 1 = %s\n",
                 show( fs*apure<std::vector>(1) ).c_str() );

@@ -77,7 +77,7 @@ constexpr auto flip = MakeT<Flip>();
  */
 template< class F, class X >
 struct Part {
-    F f;
+    F f = F();
     X x;
 
     template< class _F, class _X >
@@ -86,8 +86,13 @@ struct Part {
     {
     }
 
+    constexpr Part( X x )
+        : x(move(x))
+    {
+    }
+
     /* 
-     * The return type of F only gets deduced based on the number of xuments
+     * The return type of F only gets deduced based on the number of arguments
      * supplied. Part otherwise has no idea whether f takes 1 or 10 xs.
      */
     template< class ... Xs >
@@ -104,12 +109,17 @@ struct Part {
  * rpartial( f, y, z ) -> g(x)
  */
 template< class F, class X > struct RPart {
-    F f;
+    F f = F();
     X x;
 
     template< class _F, class _X >
     constexpr RPart( _F&& f, _X&& x ) 
         : f( forward<_F>(f) ), x( forward<_X>(x) ) { }
+
+    constexpr RPart( X x )
+        : x(move(x))
+    {
+    }
 
     template< class ...Y >
     constexpr decltype( f(declval<Y>()..., x) )
@@ -381,8 +391,10 @@ constexpr auto enclosure = MakeT<Enclosure>();
  *
  */
 template< class F, class G > struct Composition {
-    F f; G g;
+    F f = F();
+    G g = G();
 
+    constexpr Composition() { }
     constexpr Composition( F f, G g) 
         : f(move(f)), g(move(g)) { }
 
@@ -397,7 +409,10 @@ constexpr auto compose = MakeChainableT<Composition>();
 
 /* A const composition for when g is a constant function. */
 template< class F, class G > struct CComposition {
-    F f; G g;
+    F f = F();
+    G g = G();
+
+    constexpr CComposition() { }
 
     template< class _F, class _G >
     constexpr CComposition( _F&& f, _G&& g ) 
@@ -414,7 +429,10 @@ constexpr auto ccompose = MakeChainableT<CComposition>();
 
 /* N-ary composition assumes a unary f and N-ary g. */
 template< class F, class G > struct NComposition {
-    F f; G g;
+    F f = F();
+    G g = G();
+
+    constexpr NComposition() { }
 
     template< class _F, class _G >
     constexpr NComposition( _F&& f, _G&& g )
@@ -439,7 +457,11 @@ constexpr auto ncompose = MakeChainableT<NComposition>();
 template< class F, class G, class H >
 struct BComposition
 {
-    F f; G g; H h;
+    F f = F();
+    G g = G();
+    H h = H();
+
+    constexpr BComposition() {}
 
     template< class _F, class _G, class _H >
     constexpr BComposition( _F&& f, _G&& g, _H&& h ) 
@@ -464,7 +486,10 @@ using Nth = decltype( std::get<N>(declval<P>()) );
  * pair_compose( f, g ) = \(x,y) -> (f x, g y) 
  */
 template< class F, class G > struct PairComposition {
-    F f; G g;
+    F f = F();
+    G g = G();
+
+    constexpr PairComposition() {}
 
     template< class _F, class _G >
     constexpr PairComposition( _F&& f, _G&& g )
@@ -490,6 +515,8 @@ constexpr auto pairCompose = MakeChainableT<PairComposition>();
 template< class F, class G > struct FanComposition {
     F f = F();
     G g = G();
+
+    constexpr FanComposition() {}
 
     constexpr FanComposition( F f, G g )
         : f( std::move(f) ), g( std::move(g) )
