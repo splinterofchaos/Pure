@@ -170,14 +170,19 @@ constexpr struct Mbind : Chainable<Mbind> {
 } mbind{};
 
 /* return<M> x = M x */
-template< class M, class X > 
-M mreturn( X&& x ) {
-    return Monad< Cat<M> >::template mreturn<M>( forward<X>(x) );
+template< class M, class X, class Mo = Monad< Cat<M> > >
+constexpr auto mreturn( X&& x )
+    -> decltype( Mo::template mreturn<M>( declval<X>() ) )
+{
+    return Mo::template mreturn<M>( forward<X>(x) );
 }
 
-template< template<class...>class M, class X, class _X = Decay<X> >
-M<_X> mreturn( X&& x ) {
-    return Monad< Cat<M<_X>> >::template mreturn<M<_X>>( forward<X>(x) );
+template< template<class...>class M, class X, class _X = Decay<X>,
+          class Mo = Monad< Cat<M<_X>> > >
+constexpr auto mreturn( X&& x )
+    -> decltype( Mo::template mreturn<M<_X>>( forward<X>(x) ) )
+{
+    return Mo::template mreturn<M<_X>>( forward<X>(x) );
 }
 
 /* mreturn () = (\x -> return x) */
@@ -264,9 +269,11 @@ template<> struct Monad< maybe_type > {
     template< class M > using value_type = typename traits<M>::value_type;
     template< class M > using smart_ptr  = typename traits<M>::smart_ptr;
 
-    template< class M, class X, class P = smart_ptr<M> >
-    static P mreturn( X&& x ) {
-        return P( new Decay<X>(forward<X>(x)) );
+    template< class M, class X >
+    static auto mreturn( X&& x )
+        -> decltype( data::Just(declval<X>()) )
+    {
+        return data::Just( forward<X>(x) );
     }
 
     template< class M >
@@ -288,7 +295,9 @@ template<> struct Monad< maybe_type > {
     using Result = Result< F, value_type<M> >;
 
     template< class M, class F >
-    static constexpr Result<M,F> mbind( F&& f, M&& m ) {
+    static constexpr auto mbind( F&& f, M&& m )
+        -> decltype( declval<F>()( *declval<M>() ) )
+    {
         return m ? forward<F>(f)( *forward<M>(m) ) : nullptr;
     }
 };

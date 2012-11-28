@@ -3,6 +3,8 @@
 
 #include "Pure.h"
 
+#include <functional>
+
 namespace pure {
 
 namespace arrow {
@@ -150,19 +152,22 @@ constexpr auto uncurry = rcloset( bcompose, Nth<0>(), Nth<1>() );
 
 //template< template<class...>class, class ... > struct Kleisli;
 
-template< template<class...> class M, class F = Id >
-struct Kleisli : Forwarder<F> {
-    template< class ...G >
-    constexpr Kleisli( G&& ...g ) : Forwarder<F>(std::forward<G>(g)...) { }
+template< template<class...> class M, class S, class T = S, class F = Id >
+struct KleisliF : Forwarder<F> {
+    template< class G >
+    constexpr KleisliF( G g ) : Forwarder<F>(move(g)) { }
 };
 
-template< template<class...> class M, class F,
-          class K = Kleisli<M,F> >
+template< template<class...> class M, class S, class T = S >
+using Kleisli = KleisliF< M, S, T, std::function<M<T>(S)> >;
+
+template< template<class...> class M, class S, class T=S, class F,
+          class K = KleisliF<M,S,T,F> >
 constexpr K kleisli( F f ) {
     return K( std::move(f) );
 }
 
-template< template<class...> class M, class F, class G >
+template< class F, class G >
 struct KleisliComposition {
     F f;
     G g;
@@ -184,23 +189,24 @@ struct KleisliComposition {
     }
 };
 
-template< template<class...> class M >
-struct KleisliCompose : Chainable<KleisliCompose<M>> {
-    using Chainable<KleisliCompose<M>>::operator();
+template< template<class...> class M, class S, class T=S >
+struct KleisliCompose : Chainable<KleisliCompose<M,S,T>> {
+    using Chainable<KleisliCompose<M,S,T>>::operator();
 
     template< class F, class G,
-              class Komp = KleisliComposition<M,F,G>,
-              class K = Kleisli<M,Komp> >
+              class Komp = KleisliComposition<F,G>,
+              class K = KleisliF<M,S,T,Komp> >
     constexpr K operator () ( F f, G g ) {
         return K( Komp(std::move(f), std::move(g)) );
     }
 };
 
-template< template<class...> class M, class ...F >
+template< template<class...> class M, class S, class T=S, class ...F,
+          class Make = KleisliCompose<M,S,T> >
 constexpr auto kleisliCompose( F&& ...f )
-    -> decltype( KleisliCompose<M>()(std::declval<F>()...) )
+    -> decltype( Make()(std::declval<F>()...) )
 {
-    return KleisliCompose<M>()( std::forward<F>(f)... );
+    return Make()( std::forward<F>(f)... );
 }
 
 template< template<class...> class M, class X, class Y >
@@ -274,10 +280,10 @@ constexpr auto kleisliSecond( F f ) -> KleisliSecond<M,F> {
 
 namespace category {
 
-template< template<class...> class M, class F >
-struct Category< arrow::Kleisli<M,F> > {
+template< template<class...> class M, class S, class T, class F >
+struct Category< arrow::KleisliF<M,S,T,F> > {
     template< class G >
-    using K = arrow::Kleisli<M,G>;
+    using K = arrow::KleisliF<M,S,T,G>;
 
     template< class G >
     using Ret = decltype( comp(monad::MReturn<M>(),std::declval<G>()) );
@@ -290,60 +296,137 @@ struct Category< arrow::Kleisli<M,F> > {
         return KRet<F>( comp(monad::MReturn<M>(), std::forward<G>(g)) );
     }
 
-    template< template<class...> class _M, class _F, class _G >
-    using Komp = arrow::KleisliComposition<_M,_F,_G>;
+    template< class _F, class _G >
+    using Komp = arrow::KleisliComposition<_F,_G>;
 
-    template< template<class...> class _M, class _F, class _G,
-              class Kl = K< Komp<_M,_F,_G> > >
-    static constexpr auto comp( arrow::Kleisli<_M,_F> f,
-                                arrow::Kleisli<_M,_G> g )
-        -> K< Komp<_M,_F,_G> >
+    using A = decltype( std::placeholders::_1 );
+
+    template< class X >
+    using First = std::pair< X, A >;
+    template< class X >
+    using Second = std::pair< A, X >;
+
+    template< class X, class Y >
+    struct Inform {
+        using Source = X;
+    };
+
+    template< class X >
+    struct Inform< A, X > {
+        using Source = X;
+    };
+
+    template< class X >
+    struct Inform< X, A > {
+        using Source = X;
+    };
+
+    template< class T2, class G >
+    static constexpr auto comp( arrow::KleisliF<M,S,T,F> f,
+                              arrow::KleisliF<M,T,T2,G> g )
+        -> decltype( arrow::kleisliCompose<M,S,T2>( std::move(f.f), std::move(g.f) ) )
     {
-        return arrow::kleisliCompose<M>( std::move(f.f), std::move(g.f) );
+        return arrow::kleisliCompose<M,S,T2>( std::move(f.f), std::move(g.f) );
     }
+
+//    template< class TX, class TY, class T2, class G,
+//              class Kl = arrow::Kleisli<M, S, T2, Komp<F,G> > >
+//    static constexpr Kl comp( arrow::Kleisli<M,S,T,F> f,
+//                              arrow::Kleisli<M,T,T2,G> g )
+//    {
+//        return arrow::kleisliCompose<M,S,T2>( std::move(f.f), std::move(g.f) );
+//    }
+//
+//    template< class SX1, class TX1, class SY1, class TY1,
+//              class SX2, class TX2, class SY2, class TY2,
+//              class G,
+//              class _SX = typename Inform<SX1,SX2>::Source,
+//              class _SY = typename Inform<SY1,SY2>::Source,
+//              class _TX = typename Inform<TX2,TX1>::Source,
+//              class _TY = typename Inform<TY2,TY1>::Source >
+//    static constexpr auto comp( arrow::Kleisli<M,std::pair<SX1,SY1>,std::pair<TX1,TY1>,F> f,
+//                              arrow::Kleisli<M,std::pair<SX2,SY2>,std::pair<TX2,TY2>,G> g )
+//        -> decltype( arrow::kleisliCompose<M,std::pair<_SX,_SY>,std::pair<_TX,_TY>>( std::move(f.f), std::move(g.f) ) )
+//    {
+//        return arrow::kleisliCompose<M,std::pair<_SX,_SY>,std::pair<_TX,_TY>>( std::move(f.f), std::move(g.f) );
+//    }
+//
+//    template< class TX1, class TY1,
+//              class SX2, class TX2, class SY2, class TY2,
+//              class G,
+//              class _TX = typename Inform<TX2,TX1>::Source,
+//              class _TY = typename Inform<TY2,TY1>::Source >
+//    static constexpr auto comp( arrow::Kleisli<M,S,std::pair<TX1,TY1>,F> f,
+//                              arrow::Kleisli<M,std::pair<SX2,SY2>,std::pair<TX2,TY2>,G> g )
+//        -> decltype( arrow::kleisliCompose<M,S,std::pair<_TX,_TY>>( std::move(f.f), std::move(g.f) ) )
+//    {
+//        return arrow::kleisliCompose<M,S,std::pair<_TX,_TY>>( std::move(f.f), std::move(g.f) );
+//    }
 };
 
 } // namespace category
 
 namespace arrow {
 
-template< template<class...> class M, class F >
-struct Arrow< Kleisli<M,F> > {
+template< template<class...> class M, class S, class T, class F >
+struct Arrow< KleisliF<M,S,T,F> > {
     template< class G >
-    using Comp = decltype (
+    using Ret = decltype (
             comp( monad::MReturn<M>(), std::declval<G>() )
     );
 
-    template< class G >
-    using K = Kleisli<M,G>;
+    template< class S2, class T2, class G >
+    using K = KleisliF<M,S2,T2,G>;
 
     template< class G >
-    static constexpr auto arr( G g ) -> Kleisli< M, Comp<G> > {
-        return kleisli<M>( comp(monad::MReturn<M>(), std::move(g)) );
+    static constexpr auto arr( G g ) -> KleisliF< M, S, T, Ret<G> > {
+        return comp(monad::MReturn<M>(), std::move(g));
     }
 
+    using A = decltype(std::placeholders::_1);
+
     template< class G >
-    static constexpr auto first( G g ) -> K< KleisliFirst<M,G> > {
+    static auto first( G g )
+        -> K< std::pair<S,A>, std::pair<T,A>, KleisliFirst<M,G> >
+    {
         return kleisliFirst<M>( move(g) );
     }
 
     template< class G >
-    static constexpr auto second( G g) -> K< KleisliSecond<M,G> > {
+    static constexpr auto second( G g)
+        -> K< std::pair<A,S>, std::pair<A,T>, KleisliSecond<M,G> >
+    {
         return kleisliSecond<M>( move(g) );
     }
 
-    template< class _F, class _G >
-    static constexpr auto split( _F&& f, _G&& g )
-        -> decltype( first(declval<_F>()) > second(declval<_G>()) )
+    static constexpr auto makeP = MakeT<std::pair>();
+
+//    template< class S2, class T2, class G >
+//    static constexpr auto split( KleisliF<M,S,T,F> f, KleisliF<M,S2,T2,G> g )
+//        -> Kleisli<M,std::pair<S,S2>,std::pair<T,T2>>
+//    {
+//        return kleisli<M,std::pair<S,S2>,std::pair<T,T2>> (
+//            bcompose (
+//                closet(monad::liftM,makeP),
+//                Get<0>() > f.f,
+//                Get<1>() > g.f
+//            )
+//        );
+//    }
+
+    template< class S2, class T2, class G >
+    static constexpr auto split( KleisliF<M,S,T,F> f, KleisliF<M,S2,T2,G> g )
+        -> decltype( arrow::first(move(f)) > arrow::second(move(g)) )
     {
-        return first(forward<_F>(f)) > second(forward<_G>(g));
+        return arrow::first(move(f)) > arrow::second(move(g));
     }
 
-    template< class _F, class _G >
-    static constexpr auto fan( _F&& f, _G&& g )
-        -> decltype( arr(duplicate) > declval<_F>() * declval<_G>() )
+    template< class T2, class G,
+              class R = K< S, std::pair<T,T2>,
+              decltype( compose(declval<K<S,T,F>>() * declval<K<S,T2,G>>(),duplicate) ) >>
+    static constexpr R fan( KleisliF<M,S,T,F> f, KleisliF<M,S,T2,G> g )
     {
-        return arr(duplicate) > forward<_F>(f) * forward<_G>(g);
+        return kleisli<M,S,std::pair<T,T2>>( compose( move(f) * move(g), duplicate ) );
     }
 };
 

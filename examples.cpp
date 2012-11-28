@@ -634,21 +634,23 @@ int main()
         printf( "show &&& (+2) $ 5 = %s\n",
                 show( (showInt && add(2))( 5 ) ).c_str() );
 
-        constexpr auto plusTwoK = arr<Kleisli<std::unique_ptr>>(
+        Kleisli<std::unique_ptr,int,int> plusTwoK = arr<Kleisli<std::unique_ptr,int,int>>(
             add(2)
         );
 
-        constexpr auto subTwoK = arr<Kleisli<std::unique_ptr>>(
+        Kleisli<std::unique_ptr,int,int> subTwoK = arr<Kleisli<std::unique_ptr,int,int>>(
             sub.with(2) // (-2)
         );
 
         using namespace category;
-        constexpr auto plusFourK = plusTwoK > plusTwoK;
+        Kleisli<std::unique_ptr,int,int> plusFourK = plusTwoK > plusTwoK;
+
+        Kleisli<std::unique_ptr,int,std::pair<int,int>> KKK = plusTwoK && subTwoK;
 
         printf( "plusFourK 10 = %s\n",
                 show( plusFourK(10) ).c_str() );
         printf( "(plusTwoK &&& subTwoK) 0 = %s\n",
-                show( (plusTwoK && subTwoK)(0) ).c_str() );
+                show( (KKK)(0) ).c_str() );
 
     }
 

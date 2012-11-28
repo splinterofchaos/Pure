@@ -445,10 +445,11 @@ struct BComposition
     constexpr BComposition( _F&& f, _G&& g, _H&& h ) 
         : f(forward<_F>(f)), g(forward<_G>(g)), h(forward<_H>(h)) { }
 
-    template< class ...X >
-    constexpr decltype( f(g(declval<X>()...), h(declval<X>()...)) )
-    operator() ( X&& ...x ) {
-        return f( g( forward<X>(x)... ), h( forward<X>(x)... ) );
+    template< class X >
+    constexpr auto operator() ( const X& x )
+        -> decltype( f(g(x), h(x)) )
+    {
+        return f( g(x), h(x) );
     }
 };
 
