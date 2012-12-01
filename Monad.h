@@ -537,7 +537,9 @@ constexpr auto replicateM = ncompose( sequence, list::replicate );
 
 constexpr auto ap = closure( liftM, id );
 
-constexpr struct MFilter {
+constexpr struct MFilter : Binary<MFilter> {
+    using Binary<MFilter>::operator();
+
     template< class R > struct DoFilter{
         template< class P, class X >
         constexpr R operator () ( P&& p, X&& x ) {

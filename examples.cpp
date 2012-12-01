@@ -44,6 +44,7 @@ constexpr int get_y( const Vec& v ) { return v[1]; }
 
 Vec operator + ( const Vec& a, const Vec& b )
 { 
+    while(true);
     return list::zipWith( Add(), a, b );
 }
 

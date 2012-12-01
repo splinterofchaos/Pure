@@ -96,6 +96,13 @@ struct Part {
      * supplied. Part otherwise has no idea whether f takes 1 or 10 xs.
      */
     template< class ... Xs >
+    auto operator () ( Xs&& ...xs )
+        -> decltype( f(x,declval<Xs>()...) )
+    {
+        return f( x, forward<Xs>(xs)... );
+    }
+
+    template< class ... Xs >
     constexpr auto operator () ( Xs&& ...xs )
         -> decltype( f(x,declval<Xs>()...) )
     {
