@@ -1,6 +1,7 @@
 
 #include "Common.h"
 #include "Functional.h"
+#include "tpl.h"
 
 #pragma once
 
@@ -438,32 +439,9 @@ auto mapExactly( F&& f, S r ) -> ESame<R,S,S> {
     return r;
 }
 
-template< size_t ... > struct LastIndex;
-
-template< size_t X > struct LastIndex<X> {
-    static constexpr size_t I = X;
-};
-
-template< size_t X, size_t ...Y > struct LastIndex<X,Y...> {
-    static constexpr size_t I = LastIndex<Y...>::I;
-};
-
-template< size_t ...i > struct IndexList {
-    static constexpr size_t I = LastIndex<i...>::I;
-    using Next = IndexList< i..., I+1 >;
-};
-
-template< size_t n > struct IListBuilder {
-    using type = typename IListBuilder< n-1 >::type::Next;
-};
-
-template<> struct IListBuilder<0> {
-    using type = IndexList<0>;
-};
-
 template< class F, class X, size_t N, size_t ...i,
           class R = Result<F,X> >
-constexpr auto mapExactlyA( F&& f, const std::array<X,N>& a, IndexList<i...> ) 
+constexpr auto mapExactlyA( F&& f, const std::array<X,N>& a, tpl::IndexList<i...> )
     -> XSame< X, R, std::array<R,N> >
 {
     return {{ forward<F>(f)( std::get<i>(a) )... }};
@@ -484,7 +462,7 @@ auto _doMapA( F&& f, std::array<X,N>& a )
 
 template< class F, class X, size_t N, size_t ...i,
           class R = Result<F,X> >
-auto mapExactlyA( F&& f, std::array<X,N> a, IndexList<i...> ) 
+auto mapExactlyA( F&& f, std::array<X,N> a, tpl::IndexList<i...> )
     -> ESame< X, R, std::array<X,N> >
 {
     // We could break down here and do an std::transform on a, but this has
@@ -497,7 +475,7 @@ template< class R, class F, class X, size_t N >
 constexpr auto mapExactly( F&& f, std::array<X,N>&& a ) 
     -> std::array< Result<F,X>, N >
 {
-    return mapExactlyA( forward<F>(f), a, typename IListBuilder<N-1>::type() );
+    return mapExactlyA( forward<F>(f), a, typename tpl::IListBuilder<N-1>::type() );
 }
 
 /* mapTo<R> v = R( map(f,v) ) */
