@@ -46,7 +46,7 @@ template< template<class...> class M > struct Pure {
     }
 };
 
-constexpr struct Ap : Binary<Ap> {
+struct Ap : Binary<Ap> {
     using Binary<Ap>::operator();
 
     template< class X, class ...Y, class A = Applicative<Cat<X>> >
@@ -132,8 +132,10 @@ template<> struct Applicative< category::sequence_type > {
         return S<Decay<X>>{ std::forward<X>(x) };
     }
 
-    static constexpr auto ap = fmap(call);
+    static Part<FMap,Call> ap;
 };
+
+Part<FMap,Call> Applicative< category::sequence_type >::ap = fmap(call);
 
 template< class _X, class _Y > struct Applicative< std::pair<_X,_Y> > {
     template< class P, class X > 

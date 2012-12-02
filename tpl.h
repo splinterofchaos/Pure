@@ -32,8 +32,29 @@ template<> struct IListBuilder<0> {
     using type = IndexList<0>;
 };
 
+template< size_t N > using BuildList = typename IListBuilder<N-1>::type;
+
 constexpr auto pair  = MakeBinaryT<std::pair>();
 constexpr auto tuple = MakeT<std::tuple>();
+
+template< size_t I, class X >
+X xOfI( const X& x ) {
+    return x;
+}
+
+template< class X, size_t ...I >
+constexpr auto _repeat( const X& x, IndexList<I...> )
+    -> decltype( tuple( xOfI<I>(x)... ) )
+{
+    return tuple( xOfI<I>(x)... );
+}
+
+template< size_t I, class X >
+constexpr auto repeat( const X& x )
+    -> decltype( _repeat(x,BuildList<I>()) )
+{
+    return _repeat( x, BuildList<I>() );
+}
 
 constexpr struct tupleZip {
     template< class F, class ...X, size_t ...I,

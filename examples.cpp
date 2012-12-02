@@ -91,6 +91,7 @@ string show( const char* );
 string show( string );
 string show( float );
 template< class X, class Y > string show( const pair<X,Y>& p );
+template< class ...X > string show( const std::tuple<X...>& t );
 template< class S > auto show( const S& s )
     -> decltype( std::begin(s), string() );
 template< class X > string showJust( const X& );
@@ -162,8 +163,29 @@ template< class X, class Y > string show( const pair<X,Y>& p ) {
     return "(" + show(p.first) + ", " + show(p.second) + ")";
 }
 
-template< class X, class Y > string show( const std::tuple<X,Y>& p ) {
-    return "{" + show(std::get<0>(p)) + ", " + show(std::get<1>(p)) + "}";
+template< size_t N, class T >
+auto showTuple( const T& p )
+    -> typename std::enable_if<(N>=std::tuple_size<T>::value), string >::type
+{
+    return "";
+}
+
+template< size_t N, class T >
+auto showTuple( const T& p )
+    -> typename std::enable_if<(N==std::tuple_size<T>::value-1), string >::type
+{
+    return show( std::get<N>(p) );
+}
+
+template< size_t N, class T >
+auto showTuple( const T& p )
+    -> typename std::enable_if<(N<std::tuple_size<T>::value-1), string >::type
+{
+    return show(std::get<N>(p)) + ", " + showTuple<N+1>(p);
+}
+
+template< class ...X > string show( const std::tuple<X...>& t ) {
+    return "{" + showTuple<0>(t) + "}";
 }
 
 
@@ -230,11 +252,15 @@ int main()
 
     {
         using namespace tpl;
-        auto strs = Make<std::tuple<std::string,std::string>>();
-        printf( "tupleZip (++) ['hello','good'] ['world','bye'] = %s\n",
+
+        printf( "tpl::repeat<3>(3) = %s\n", show(repeat<3>(3)).c_str() );
+
+        auto strs = Make<decltype(repeat<3>(std::string()))>();
+        printf( "tupleZip (++) ['hello','good','com'] "
+                              "['world','bye','puter'] = %s\n",
                 show (
-                    tupleZip( list::append, strs("hello","good"),
-                                            strs("world","bye" ) )
+                    tupleZip( list::append, strs("hello ","good","com"),
+                                            strs("world"," bye", "puter") )
                 ).c_str() );
 
         std::vector<int> xs = { 1, 2, 3, 4, 5, 6, 7 },
