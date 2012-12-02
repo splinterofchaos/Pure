@@ -254,6 +254,9 @@ int main()
 
         printf( "tpl::repeat<3>(3) = %s\n", show(repeat<3>(3)).c_str() );
 
+        printf( "tpl::foldl (+) {1,2,3} = %s\n",
+                show( foldl(add,tuple(1,2,3)) ).c_str() );
+
         auto strs = Make<decltype(repeat<3>(std::string()))>();
         printf( "tupleZip (++) ['hello','good','com'] "
                               "['world','bye','puter'] = %s\n",
