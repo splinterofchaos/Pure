@@ -160,8 +160,13 @@ auto show( const S& s ) -> decltype( std::begin(s), string() )
 }
 
 template< class X, class Y > string show( const pair<X,Y>& p ) {
-    return "(Pair: " + show(p.first) + ", " + show(p.second) + ")";
+    return "(" + show(p.first) + ", " + show(p.second) + ")";
 }
+
+template< class X, class Y > string show( const std::tuple<X,Y>& p ) {
+    return "{" + show(std::get<0>(p)) + ", " + show(std::get<1>(p)) + "}";
+}
+
 
 template< class X > string showJust( const X& x );
 template< class M > string showMaybe( const M& m ) {
@@ -221,22 +226,32 @@ unique_ptr<int> addM2( const unique_ptr<int>& a, const unique_ptr<int>& b ) {
     return fmap( add, a, b );
 };
 
-void print_xyz( int x, int y, int z ) {
-    printf( "%d %d %d\n", x, y, z );
-}
-
-struct Obj {
-    int x, y;
-};
-constexpr auto obj = Initialize<Obj>();
-
 int main()
 {
-    auto o = obj(1,2);
-    rcloset( print_xyz, 2, 3 )( 1 );
-
     {
         using namespace list;
+
+        {
+            using namespace tpl;
+            auto strs = Make<std::tuple<std::string,std::string>>();
+            printf( "tupleZip (++) ['hello','good'] ['world','bye'] = %s\n",
+                    show (
+                        tupleZip( append, strs("hello","good"),
+                                          strs("world","bye" ) )
+                    ).c_str() );
+
+            std::vector<int> xs = { 1, 2, 3, 4, 5, 6, 7 },
+                evens, thirds, odds;
+            std::tie(xs,evens,thirds,odds) =
+                fork( xs, even, eq(0)^mod.with(3), fnot(even) );
+            printf( "evens = %s\nthirds = %s\nodds = %s\nrest = %s\n" ,
+                    show(evens).c_str(), show(thirds).c_str(),
+                    show(odds).c_str(),  show(xs).c_str() );
+
+        }
+        puts( "tuple support:" );
+
+
         auto evens = ( DupTo<std::set>() ^ filter(even) )( enumerate(1,12) );
         printf( "es = filter even [1..12] = %s\n", show(evens).c_str() );
         printf( "\tnull es = %s\n", show( null(evens) ).c_str() );

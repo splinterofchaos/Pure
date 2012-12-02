@@ -1,6 +1,10 @@
 
 #pragma once
 
+#include <utility>
+
+#include "Functional.h"
+
 namespace pure {
 
 namespace tpl {
@@ -27,6 +31,74 @@ template< size_t n > struct IListBuilder {
 template<> struct IListBuilder<0> {
     using type = IndexList<0>;
 };
+
+constexpr auto pair  = MakeBinaryT<std::pair>();
+constexpr auto tuple = MakeT<std::tuple>();
+
+constexpr struct tupleZip {
+    template< class F, class ...X, size_t ...I,
+              class R = std::tuple< Result<F,X,X>... > >
+    R operator () ( F f, const std::tuple<X...>& xs,
+                         const std::tuple<X...>& ys,
+                         IndexList<I...> ) const
+    {
+        return R( f( std::get<I>(xs), std::get<I>(ys) )... );
+    }
+
+    template< class F, class ...X,
+              class R = std::tuple< decltype(declval<F>()(declval<X>(),declval<X>()))... > >
+    R operator () ( F f, const std::tuple<X...>& xs,
+                         const std::tuple<X...>& ys) const
+    {
+        const auto N = sizeof ...(X);
+        return (*this)( std::move(f), xs, ys, typename IListBuilder<N-1>::type() );
+    }
+} tupleZip{};
+
+template< size_t N, class ...P, class X, class ...XS >
+auto _doSendWhen( X&& x, std::tuple<XS...>& dsts, const std::tuple<P...>& )
+    -> typename std::enable_if<(N==sizeof...(P)), void >::type
+{
+    std::get<0>(dsts).emplace_back( forward<X>(x) );
+}
+
+template< size_t N, class ...P, class X, class ...XS >
+auto _doSendWhen( X&& x, std::tuple<XS...>& dsts,
+                  const std::tuple<P...>& preds )
+    -> typename std::enable_if<(N<sizeof...(P)), void >::type
+{
+    if( std::get<N>(preds)(x) ) {
+        std::get<N+1>(dsts).emplace_back( forward<X>(x) );
+    } else {
+        _doSendWhen<N+1>( forward<X>(x), dsts, preds );
+    }
+}
+
+template< class R, class X >
+R dontCare(X);
+
+template< class XS, class ...P,
+          class R = decltype (
+              tuple_cat( tuple(declval<XS>()),
+                         tuple(dontCare<XS>(declval<P>())...) )
+          ) >
+R _fork( const XS& xs, const std::tuple<P...>& ps ) {
+    R r;
+    for( const auto& x : xs )
+        _doSendWhen<0>( std::move(x), r, ps );
+    return r;
+}
+
+template< class XS, class ...P,
+          class R = decltype (
+              tuple_cat( tuple(declval<XS>()),
+                         tuple(dontCare<XS>(declval<P>())...) )
+          ) >
+R fork( const XS& xs, P&& ...ps ) {
+    return _fork( xs, std::forward_as_tuple(ps...) );
+}
+
+
 
 } // namespace tpl
 

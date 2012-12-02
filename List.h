@@ -453,7 +453,7 @@ void _doMapA( const F&, std::array<X,I>& ) {
 
 template< size_t I, class F, class X, size_t N >
 auto _doMapA( F&& f, std::array<X,N>& a ) 
-    -> typename std::enable_if< I < N, void >::type
+    -> typename std::enable_if<(I<N), void >::type
 {
     static_assert( I < N, "Index larger than container!" );
     std::get<I>(a) = std::forward<F>(f)( std::get<I>(a) );
