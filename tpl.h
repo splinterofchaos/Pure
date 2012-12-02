@@ -89,16 +89,36 @@ R _fork( const XS& xs, const std::tuple<P...>& ps ) {
     return r;
 }
 
-template< class XS, class ...P,
-          class R = decltype (
-              tuple_cat( tuple(declval<XS>()),
-                         tuple(dontCare<XS>(declval<P>())...) )
-          ) >
-R fork( const XS& xs, P&& ...ps ) {
-    return _fork( xs, std::forward_as_tuple(ps...) );
-}
+constexpr struct Fork : Binary<Fork> {
+    using Binary<Fork>::operator();
 
+    template< class XS, class ...P,
+              class R = decltype (
+                  tuple_cat( tuple(declval<XS>()),
+                             tuple(dontCare<XS>(declval<P>())...) )
+              ) >
+    R operator () ( const XS& xs, P&& ...ps ) const {
+        return _fork( xs, std::forward_as_tuple(ps...) );
+    }
+} fork{};
 
+constexpr struct Map {
+    template< class F, class ...X, size_t ...I >
+    constexpr auto doMap( F f, const std::tuple<X...>& ts,
+                          IndexList<I...> )
+        -> decltype( tuple( f(std::get<I>(ts))... ) )
+    {
+        return tuple( f(std::get<I>(ts))... );
+    }
+
+    template< class F, class ...X,
+              class IList = typename IListBuilder<sizeof...(X)-1>::type >
+    constexpr auto operator () ( F f, const std::tuple<X...>& ts  )
+        -> decltype( doMap(std::move(f),ts,IList()) )
+    {
+        return doMap( std::move(f), ts, IList() );
+    }
+} map{};
 
 } // namespace tpl
 

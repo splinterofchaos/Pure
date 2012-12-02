@@ -44,7 +44,6 @@ constexpr int get_y( const Vec& v ) { return v[1]; }
 
 Vec operator + ( const Vec& a, const Vec& b )
 { 
-    while(true);
     return list::zipWith( Add(), a, b );
 }
 
@@ -228,28 +227,30 @@ unique_ptr<int> addM2( const unique_ptr<int>& a, const unique_ptr<int>& b ) {
 
 int main()
 {
+
+    {
+        using namespace tpl;
+        auto strs = Make<std::tuple<std::string,std::string>>();
+        printf( "tupleZip (++) ['hello','good'] ['world','bye'] = %s\n",
+                show (
+                    tupleZip( list::append, strs("hello","good"),
+                                            strs("world","bye" ) )
+                ).c_str() );
+
+        std::vector<int> xs = { 1, 2, 3, 4, 5, 6, 7 },
+            evens, thirds, odds;
+        std::tie(xs,evens,thirds,odds) =
+            fork( xs, even, eq(0)^mod.with(3), fnot(even) );
+        printf( "evens = %s\nthirds = %s\nodds = %s\nrest = %s\n" ,
+                show(evens).c_str(), show(thirds).c_str(),
+                show(odds).c_str(),  show(xs).c_str() );
+
+        printf( "tpl.map (List.map (+1)) {evens,odds} = %s\n",
+                show( map(list::map(add(1)),tuple(evens,odds)) ).c_str() );
+    }
+
     {
         using namespace list;
-
-        {
-            using namespace tpl;
-            auto strs = Make<std::tuple<std::string,std::string>>();
-            printf( "tupleZip (++) ['hello','good'] ['world','bye'] = %s\n",
-                    show (
-                        tupleZip( append, strs("hello","good"),
-                                          strs("world","bye" ) )
-                    ).c_str() );
-
-            std::vector<int> xs = { 1, 2, 3, 4, 5, 6, 7 },
-                evens, thirds, odds;
-            std::tie(xs,evens,thirds,odds) =
-                fork( xs, even, eq(0)^mod.with(3), fnot(even) );
-            printf( "evens = %s\nthirds = %s\nodds = %s\nrest = %s\n" ,
-                    show(evens).c_str(), show(thirds).c_str(),
-                    show(odds).c_str(),  show(xs).c_str() );
-
-        }
-        puts( "tuple support:" );
 
 
         auto evens = ( DupTo<std::set>() ^ filter(even) )( enumerate(1,12) );
