@@ -249,7 +249,6 @@ unique_ptr<int> addM2( const unique_ptr<int>& a, const unique_ptr<int>& b ) {
 
 int main()
 {
-
     {
         using namespace tpl;
 
