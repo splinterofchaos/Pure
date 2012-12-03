@@ -187,7 +187,7 @@ auto showTuple( const T& p )
 template< class ...X > string show( const std::tuple<X...>& t ) {
     return "{" + showTuple<0>(t) + "}";
 }
-template<> string show( const std::tuple<>& t ) {
+template<> string show( const std::tuple<>& ) {
     return "{}";
 }
 
@@ -261,6 +261,7 @@ int main()
         auto arr = toArray( t );
         printf( "toArray t = %s\n", show(arr).c_str() );
         printf( "toTuple( toArray(t) ) = %s\n", show(toTuple(arr)).c_str() );
+        printf( "reverse t = %s\n", show(reverse(t)).c_str() );
 
         printf( "take 0 t = %s\n", show( take<0>(t) ).c_str() );
         printf( "take 5 t = %s\n", show( take<5>(t) ).c_str() );
