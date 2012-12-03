@@ -98,51 +98,71 @@ constexpr auto zip = closure( zipWith, tuple );
  * such that predN(x) is true. leftovers contains every x for which no
  * predicate is true.
  */
-constexpr struct Fork : Binary<Fork> {
-    using Binary<Fork>::operator();
+constexpr struct Fork_ : Binary<Fork_> {
+    using Binary<Fork_>::operator();
+
+//    template< class XS, class ...P >
+//    using Forked = decltype (
+//        tuple_cat( tuple(declval<XS>()), // leftovers
+//                   repeat<sizeof...(P)>(XS()) /* {xs0,xs1,...} */ )
+//    );
 
     template< class XS, class ...P >
-    using Forked = decltype (
-        tuple_cat( tuple(declval<XS>()), // leftovers
-                   repeat<sizeof...(P)>(XS()) /* {xs0,xs1,...} */ )
-    );
+    using Forked = decltype( repeat<sizeof...(P)>(XS()) );
 
     // First, convert ps... to a tuple.
     template< class XS, class ...P >
-    Forked<XS,P...> operator () ( const XS& xs, P&& ...ps ) const {
+    Forked<XS,P...> operator () ( XS& xs, P&& ...ps ) const {
         return doFork( xs, std::forward_as_tuple(ps...) );
     }
 
     // Build the results.
     template< class XS, class ...P >
-    static Forked<XS,P...> doFork( const XS& xs, const std::tuple<P...>& ps ) {
+    static Forked<XS,P...> doFork( XS& xs, const std::tuple<P...>& ps ) {
         Forked<XS,P...> r;
-        for( const auto& x : xs )
-            doSendWhen<0>( x, r, ps );
+        auto it = std::begin(xs);
+        for( ; it != std::end(xs); )
+            if( doSendWhen<0>( *it, r, ps ) )
+                it = xs.erase(it);
+            else
+                it++;
         return r;
     }
 
+    template< bool when >
+    using EnableWhen = typename std::enable_if< when, bool >::type;
+
     // Check each predicate and send it to the correct resultant.
     // If nothing matched, send x to the leftovers.
-    template< size_t N, class ...P, class X, class ...XS >
-    static auto doSendWhen( X&& x, std::tuple<XS...>& dsts,
-                            const std::tuple<P...>& )
-        -> typename std::enable_if<(N==sizeof...(P)), void >::type
+    template< size_t N, class X, class Dsts, class Preds >
+    static auto doSendWhen( const X&, Dsts&, const Preds& )
+        -> EnableWhen< N >= std::tuple_size<Dsts>::value >
     {
-        // Nothing matched.
-        std::get<0>(dsts).emplace_back( forward<X>(x) );
+        return false; // No match.
     }
 
-    template< size_t N, class ...P, class X, class ...XS >
-    static auto doSendWhen( X&& x, std::tuple<XS...>& dsts,
-                      const std::tuple<P...>& preds )
-        -> typename std::enable_if<(N<sizeof...(P)), void >::type
+    template< size_t N, class X, class Dsts, class Preds >
+    static auto doSendWhen( X& x, Dsts& dsts, const Preds& preds )
+        -> EnableWhen< (N < std::tuple_size<Dsts>::value) >
     {
         if( std::get<N>(preds)(x) ) {
-            std::get<N+1>(dsts).emplace_back( forward<X>(x) );
+            std::get<N>(dsts).push_back( std::move(x) );
+            return true;
         } else {
-            doSendWhen<N+1>( forward<X>(x), dsts, preds );
+            doSendWhen<N+1>( x, dsts, preds );
         }
+    }
+} fork_{};
+
+constexpr struct fork {
+    template< class XS, class ...P >
+    using Forked = decltype( repeat<sizeof...(P) + 1>(XS()) );
+
+    // First, convert ps... to a tuple.
+    template< class XS, class ...P >
+    Forked<XS,P...> operator () ( XS xs, P&& ...ps ) const {
+        auto forks = fork_( xs, forward<P>(ps)... );
+        return std::tuple_cat( tuple(std::move(xs)), std::move(forks) );
     }
 } fork{};
 
