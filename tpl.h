@@ -144,6 +144,15 @@ constexpr struct init {
     }
 } init{};
 
+constexpr struct append {
+    template< class ...T >
+    constexpr auto operator () ( T&& ...t )
+        -> decltype( std::tuple_cat( forward<T>(t)... ) )
+    {
+        return std::tuple_cat( forward<T>(t)... );
+    }
+} append{};
+
 template< size_t i, class TF, class ...TX >
 constexpr auto apRow( const TF& tf, TX&& ...tx )
     -> decltype( std::get<i>(tf)( get<i>(forward<TX>(tx))... ) )
@@ -276,24 +285,6 @@ constexpr struct fork {
         return std::tuple_cat( tuple(move(xs)), move(forks) );
     }
 } fork{};
-
-constexpr struct Map {
-    template< class F, class ...X, size_t ...I >
-    constexpr auto doMap( F f, const std::tuple<X...>& ts,
-                          IndexList<I...> )
-        -> decltype( tuple( f(get<I>(ts))... ) )
-    {
-        return tuple( f(get<I>(ts))... );
-    }
-
-    template< class F, class ...X,
-              class IList = BuildList<sizeof...(X)-1> >
-    constexpr auto operator () ( F f, const std::tuple<X...>& ts  )
-        -> decltype( doMap(move(f),ts,IList()) )
-    {
-        return doMap( move(f), ts, IList() );
-    }
-} map{};
 
 constexpr struct Chainl {
     template< class Binary, class X >

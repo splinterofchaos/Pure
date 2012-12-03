@@ -284,9 +284,6 @@ int main()
         printf( "evens = %s\nthirds = %s\nodds = %s\nrest = %s\n" ,
                 show(evens).c_str(), show(thirds).c_str(),
                 show(odds).c_str(),  show(xs).c_str() );
-
-        printf( "tpl.map (List.map (+1)) {evens,odds} = %s\n",
-                show( map(list::map(add(1)),tuple(evens,odds)) ).c_str() );
     }
 
     {
