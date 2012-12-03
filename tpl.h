@@ -416,55 +416,6 @@ constexpr struct call : Binary<call> {
 
 constexpr auto toTuple = closure( call, tuple );
 
-/*
- * chainl(b,x...) -- Apply b to x... from left to right.
- * chainl(+,1,2,3) = (1+2) + 3
- */
-constexpr struct Chainl {
-    template< class Binary, class X >
-    constexpr X operator () ( const Binary&, X&& x ) {
-        return forward<X>(x);
-    }
-
-    template< class Binary, class X, class Y, class ...Z >
-    constexpr auto operator () ( Binary&& b, X&& x, Y&& y, Z&& ...z)
-        -> decltype(
-            (*this)( b, b(declval<X>(),declval<Y>()), declval<Z>()... )
-        )
-    {
-        return (*this)(
-            b,
-            b( forward<X>(x), forward<Y>(y) ),
-            forward<Z>(z)...
-        );
-    }
-} chainl{};
-
-/*
- * chainr(b,x...) -- Apply b to x... from right to left.
- * chainr(+,1,2,3) = 1 + (2+3)
- */
-constexpr struct Chainr {
-    template< class Binary, class X >
-    constexpr X operator () ( const Binary&, X&& x ) {
-        return forward<X>(x);
-    }
-
-    template< class Binary, class X, class Y, class ...Z >
-    constexpr auto operator () ( const Binary& b, X&& x, Y&& y, Z&& ...z)
-        -> decltype(
-                b( (*this)(b,declval<Y>(),declval<Z>()...), declval<X>() )
-        )
-    {
-        return b (
-            // Reverse the argument order.
-            (*this)( b, forward<Y>(y), forward<Z>(z)... ),
-            // The first gets applied last.
-            forward<X>(x)
-        );
-    }
-} chainr{};
-
 /*fold(b,{x...}) = chain( b, x... ) */
 
 constexpr struct Foldl {
