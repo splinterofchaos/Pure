@@ -252,6 +252,8 @@ int main()
     {
         using namespace tpl;
 
+        printf( "tail {1,2,3,4,5} = %s\n", show(tail(tuple(1,2,3,4,5))).c_str() );
+        printf( "init {1,2,3,4,5} = %s\n", show(init(tuple(1,2,3,4,5))).c_str() );
         printf( "tpl::repeat<3>(3) = %s\n", show(repeat<3>(3)).c_str() );
 
         printf( "call (+) {1,2} = %s\n",

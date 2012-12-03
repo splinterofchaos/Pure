@@ -20,6 +20,9 @@ using std::get;
 
 namespace tpl {
 
+constexpr auto pair  = MakeBinaryT<std::pair>();
+constexpr auto tuple = MakeT<std::tuple>();
+
 template< size_t ... > struct LastIndex;
 
 template< size_t X > struct LastIndex<X> {
@@ -48,9 +51,6 @@ using BuildList = typename IListBuilder<N-1>::type;
 
 template< class T >
 using TupleIndicies = BuildList< std::tuple_size<Decay<T>>::value >;
-
-constexpr auto pair  = MakeBinaryT<std::pair>();
-constexpr auto tuple = MakeT<std::tuple>();
 
 template< size_t I, class X >
 X xOfI( const X& x ) {
@@ -88,6 +88,61 @@ constexpr struct call : Binary<call> {
         return impl( IS(), f, forward<T>(t) );
     }
 } call{};
+
+
+template< class T >
+constexpr size_t size() {
+    return std::tuple_size<T>::value();
+}
+
+template< class T >
+constexpr size_t size( const T& ) {
+    return size<T>();
+}
+
+template< size_t i, class T >
+using Elem = decltype( get<i>(declval<T>()) );
+
+constexpr auto head = Get<0>();
+
+constexpr struct last {
+    template< class T, size_t S = size<T>() >
+    constexpr Elem<S-1,T> operator () ( T&& t ) {
+        return get<S-1>( forward<T>(t) );
+    }
+} last{};
+
+constexpr struct tail {
+    template< size_t ...I, class T >
+    constexpr auto impl( IndexList<0,I...>, T&& t )
+        -> decltype( tuple( get<I>(t)... ) )
+    {
+        return tuple( get<I>(t)... );
+    }
+
+    template< class T, class I = TupleIndicies<T> >
+    constexpr auto operator () ( T&& t )
+        -> decltype( impl( I(), forward<T>(t) ) )
+    {
+        return impl( I(), forward<T>(t) );
+    }
+} tail{};
+
+constexpr struct init {
+    template< size_t ...I, class T >
+    constexpr auto impl( IndexList<0,I...>, T&& t )
+        -> decltype( tuple( get<I-1>(t)... ) )
+    {
+        return tuple( get<I-1>(t)... );
+    }
+
+    template< class T, class I = TupleIndicies<T> >
+    constexpr auto operator () ( T&& t )
+        -> decltype( impl( I(), forward<T>(t) ) )
+    {
+        return impl( I(), forward<T>(t) );
+    }
+} init{};
 
 template< size_t i, class TF, class ...TX >
 constexpr auto apRow( const TF& tf, TX&& ...tx )
