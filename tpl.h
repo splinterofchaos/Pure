@@ -42,21 +42,23 @@ template<> struct IndexList<> {
     using Next = IndexList<>;
 };
 
-
+// Build an index list of N elements, [0,N).
 template< size_t n > struct IListBuilder {
     using type = typename IListBuilder< n-1 >::type::Next;
 };
 
-template<> struct IListBuilder<-1> {
-    using type = IndexList<>;
-};
-
-template<> struct IListBuilder<0> {
+// Base case: one element.
+template<> struct IListBuilder<1> {
     using type = IndexList<0>;
 };
 
+// No elements: empty list.
+template<> struct IListBuilder<0> {
+    using type = IndexList<>;
+};
+
 template< size_t N >
-using BuildList = typename IListBuilder<N-1>::type;
+using BuildList = typename IListBuilder<N>::type;
 
 template< class T >
 using TupleIndicies = BuildList< std::tuple_size<Decay<T>>::value >;
@@ -73,11 +75,12 @@ constexpr auto _repeat( const X& x, IndexList<I...> )
     return tuple( xOfI<I>(x)... );
 }
 
-template< size_t I, class X >
+/* repeat<N>(x) = {x,x,x...} */
+template< size_t N, class X >
 constexpr auto repeat( const X& x )
-    -> decltype( _repeat(x,BuildList<I>()) )
+    -> decltype( _repeat(x,BuildList<N>()) )
 {
-    return _repeat( x, BuildList<I>() );
+    return _repeat( x, BuildList<N>() );
 }
 
 template< size_t N > struct Repeat {
@@ -111,6 +114,10 @@ constexpr struct last {
     }
 } last{};
 
+/*
+ * Take each value, with the offset, N.
+ * takeFrom<2>({1,2,3,4}) = {3,4}
+ */
 template< size_t N, size_t ...I, class T >
 constexpr auto takeFrom( IndexList<I...>, T&& t )
     -> std::tuple< Decay<Elem<I+N,T>>... >
@@ -199,6 +206,7 @@ constexpr struct rcons : Chainable<rcons> {
     }
 } rcons{};
 
+/* call( f, {x,y,z} ) = f(x,y,z) */
 constexpr struct call : Binary<call> {
     using Binary<call>::operator();
 
@@ -218,6 +226,7 @@ constexpr struct call : Binary<call> {
 } call{};
 
 
+/* nth<N>(f,{x,n,y}) = { x, f(x), y } */
 template< size_t N, class F, class T >
 constexpr auto nth( const F& f, T&& t )
     -> decltype( std::tuple_cat (
@@ -248,6 +257,7 @@ constexpr auto apRow( const TF& tf, TX&& ...tx )
     return std::get<i>(tf)( get<i>(forward<TX>(tx))... );
 }
 
+/* ap( {f,g,h}, {x,y,z}, {a,b,c} ) = { f(x,a), g(y,b), h(z,c) } */
 constexpr struct ap {
     template< size_t ...I, class TF, class ...T >
     static constexpr auto impl( IndexList<I...>, const TF& tf, T&& ...t )
@@ -271,6 +281,7 @@ constexpr auto zipRowWith( const F& f, T&& ...t )
     return f( get<i>(forward<T>(t))... );
 }
 
+/* zipWith( f, {x,y}, {a,b} ) = { f(x,a), f(y,b) } */
 constexpr struct zipWith {
     template< size_t ...I, class F, class ...T >
     static constexpr auto _zip (IndexList<I...>, const F& f, T&& ...t )
@@ -295,6 +306,7 @@ constexpr auto zipRow( T&& ...t )
     return tuple( get<i>(forward<T>(t))... );
 }
 
+/* zip( {x,y}, {a,b} ) = { (x,a), (y,b) } */
 constexpr auto zip = closure( zipWith, tuple );
 
 /*
@@ -308,12 +320,6 @@ constexpr auto zip = closure( zipWith, tuple );
  */
 constexpr struct Fork_ : Binary<Fork_> {
     using Binary<Fork_>::operator();
-
-//    template< class XS, class ...P >
-//    using Forked = decltype (
-//        tuple_cat( tuple(declval<XS>()), // leftovers
-//                   repeat<sizeof...(P)>(XS()) /* {xs0,xs1,...} */ )
-//    );
 
     template< class XS, class ...P >
     using Forked = decltype( repeat<sizeof...(P)>(XS()) );
@@ -431,8 +437,10 @@ constexpr struct Foldr {
     }
 } foldr{};
 
+/* concat( {{1,2},{3},{4,5}} ) = {1,2,3,4,5} */
 constexpr auto concat = closure( foldl, append );
 
+/* fan(x,f,g,h) = { f(x), g(x), g(x) } */
 constexpr struct fan {
     template< class X, class ...F >
     constexpr auto operator () ( const X& x, const F& ...f )
@@ -442,6 +450,7 @@ constexpr struct fan {
     }
 } fan{};
 
+/* split( {x,y,z}, f g h ) = { f(x), g(y), z(h) }; */
 constexpr struct split {
     template< class T, class ...F >
     constexpr auto operator () ( T&& t, F&& ...f )
