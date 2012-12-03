@@ -95,7 +95,7 @@ constexpr struct last {
 
 template< size_t N, size_t ...I, class T >
 constexpr auto takeFrom( IndexList<I...>, T&& t )
-    -> decltype( tuple( get<I+N>(forward<T>(t))... ) )
+    -> std::tuple< Decay<Elem<I+N,T>>... >
 {
     return tuple( get<I+N>(forward<T>(t))... );
 }
@@ -141,6 +141,28 @@ constexpr struct append {
     }
 } append{};
 
+constexpr struct cons : Chainable<cons> {
+    using Chainable<cons>::operator();
+
+    template< class T, class X >
+    constexpr auto operator () ( T t, X&& x )
+        -> decltype( append( move(t), tuple(forward<X>(x)) ) )
+    {
+        return append( move(t), tuple(forward<X>(x)) );
+    }
+} cons{};
+
+constexpr struct rcons : Chainable<rcons> {
+    using Chainable<rcons>::operator();
+
+    template< class T, class X >
+    constexpr auto operator () ( T t, X&& x )
+        -> decltype( append( tuple(forward<X>(x)), move(t) ) )
+    {
+        return append( tuple(forward<X>(x)), move(t) );
+    }
+} rcons{};
+
 constexpr struct call : Binary<call> {
     using Binary<call>::operator();
 
@@ -163,9 +185,8 @@ constexpr struct call : Binary<call> {
 template< size_t N, class F, class T >
 constexpr auto nth( const F& f, T&& t )
     -> decltype( std::tuple_cat (
-        take<N>( forward<T>(t) ),
-        tuple( f(get<N>(forward<T>(t))) ),
-        drop<N+1>(forward<T>(t))
+            take<N>( forward<T>(t) ),  tuple( f(get<N>(forward<T>(t))) ),
+            drop<N+1>(forward<T>(t))
     ) )
 {
     return std::tuple_cat (
@@ -291,7 +312,7 @@ constexpr struct Fork_ : Binary<Fork_> {
             std::get<N>(dsts).push_back( std::move(x) );
             return true;
         } else {
-            doSendWhen<N+1>( x, dsts, preds );
+            return doSendWhen<N+1>( x, dsts, preds );
         }
     }
 } fork_{};
@@ -304,7 +325,7 @@ constexpr struct fork {
     template< class XS, class ...P >
     Forked<XS,P...> operator () ( XS xs, P&& ...ps ) const {
         auto forks = fork_( xs, forward<P>(ps)... );
-        return std::tuple_cat( tuple(move(xs)), move(forks) );
+        return rcons( move(forks), move(xs) );
     }
 } fork{};
 
