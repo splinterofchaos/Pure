@@ -276,8 +276,9 @@ int main()
         printf( "tpl::foldr (-) {2,3} = %s\n",
                 show( foldr(sub,tuple(2,3)) ).c_str() );
 
-        printf( "tpl::concat {{1,2,3},{4,5}} = %s\n",
-                show( concat(tuple(tuple(1,2,3),tuple(4,5))) ).c_str() );
+        auto ttt = tuple (
+            tuple( tuple(1,2), tuple(tuple(4,5)), tuple(6) ), tuple(7,8,9)
+        );
 
         printf( "zip {1,'a','hi '} {2,'b',' '} {3,'c','there'} = %s\n",
                 show( zip( tuple(1,'a',"hi"), tuple(2,'b'," "),
@@ -287,6 +288,11 @@ int main()
                     zipWith( add, tuple(5,std::string("com"),1),
                                   tuple(5,"p",1), tuple(5,"uter",1) )
                 ).c_str() );
+
+        printf( "fan 10 (+1) (*10) = %s\n",
+                show( fan(10,add(1),mult(10)) ).c_str() );
+        printf( "split {1,-1} (-1) (+1) = %s\n",
+                show( split(tuple(1,-1),sub.with(1),add(1)) ).c_str() );
 
         std::vector<int> xs = { 1, 2, 3, 4, 5, 6, 7 },
             evens, thirds, odds;

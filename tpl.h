@@ -361,6 +361,24 @@ constexpr struct Foldr {
 
 constexpr auto concat = closure( foldl, append );
 
+constexpr struct fan {
+    template< class X, class ...F >
+    constexpr auto operator () ( const X& x, const F& ...f )
+        -> decltype( tuple( f(x)... ) )
+    {
+        return tuple( f(x)... );
+    }
+} fan{};
+
+constexpr struct split {
+    template< class T, class ...F >
+    constexpr auto operator () ( T&& t, F&& ...f )
+        -> decltype( ap( std::forward_as_tuple(forward<F>(f)...), forward<T>(t) ) )
+    {
+        return ap( std::forward_as_tuple(forward<F>(f)...), forward<T>(t) );
+    }
+} split{};
+
 } // namespace tpl
 
 } // namespace pure
