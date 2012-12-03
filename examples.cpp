@@ -261,15 +261,13 @@ int main()
         printf( "tpl::foldr (-) {2,3} = %s\n",
                 show( foldr(sub,tuple(2,3)) ).c_str() );
 
-        auto strs = Make<decltype(repeat<3>(std::string()))>();
         printf( "zip {1,'a','hi '} {2,'b',' '} {3,'c','there'} = %s\n",
                 show( zip( tuple(1,'a',"hi"), tuple(2,'b'," "),
                            tuple(3,'c',"there") ) ).c_str() );
-        printf( "zipWith (++) ['hello','good','com'] "
-                             "['world','bye','puter'] = %s\n",
+        printf( "zipWith (+) {5,'com',1} {5,'p',1} {5,'uter',1} = %s\n",
                 show (
-                    zipWith( list::append, strs("hello ","good","com"),
-                                           strs("world"," bye", "puter") )
+                    zipWith( add, tuple(5,std::string("com"),1),
+                                  tuple(5,"p",1), tuple(5,"uter",1) )
                 ).c_str() );
 
         std::vector<int> xs = { 1, 2, 3, 4, 5, 6, 7 },

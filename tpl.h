@@ -56,23 +56,27 @@ constexpr auto repeat( const X& x )
     return _repeat( x, BuildList<I>() );
 }
 
+template< size_t i, class F, class ...T >
+constexpr auto zipRowWith( const F& f, T&& ...t )
+    -> decltype( f( std::get<i>(forward<T>(t))... ) )
+{
+    return f( std::get<i>(forward<T>(t))... );
+}
+
 constexpr struct zipWith {
-    template< class F, class ...X, size_t ...I,
-              class R = std::tuple< Result<F,X,X>... > >
-    R operator () ( F f, const std::tuple<X...>& xs,
-                         const std::tuple<X...>& ys,
-                         IndexList<I...> ) const
+    template< size_t ...I, class F, class ...T >
+    static constexpr auto _zip (IndexList<I...>, const F& f, T&& ...t )
+        -> decltype( tuple(zipRowWith<I>(f,declval<T>()...)...) )
     {
-        return R( f( std::get<I>(xs), std::get<I>(ys) )... );
+        return tuple( zipRowWith<I>( f, forward<T>(t)... )... );
     }
 
-    template< class F, class ...X,
-              class R = std::tuple< decltype(declval<F>()(declval<X>(),declval<X>()))... > >
-    R operator () ( F f, const std::tuple<X...>& xs,
-                         const std::tuple<X...>& ys) const
+    template< class F, class T, class ...U,
+              class IS = BuildList<std::tuple_size<T>::value> >
+    constexpr auto operator () ( const F& f, T&& t, U&& ...u )
+        -> decltype( _zip(IS(),f,declval<T>(),declval<U>()...) )
     {
-        const auto N = sizeof ...(X);
-        return (*this)( std::move(f), xs, ys, typename IListBuilder<N-1>::type() );
+        return _zip( IS(), f, forward<T>(t), forward<U>(u)... );
     }
 } zipWith{};
 
@@ -83,22 +87,7 @@ constexpr auto zipRow( T&& ...t )
     return tuple( std::get<i>(forward<T>(t))... );
 }
 
-constexpr struct Zip {
-    template< size_t ...I, class ...T >
-    static constexpr auto _zip( IndexList<I...>, T&& ...t )
-        -> decltype( tuple( zipRow<I>(forward<T>(t)...)... ) )
-    {
-        return tuple( zipRow<I>(forward<T>(t)...)... );
-    }
-
-    template< class T, class ...U,
-              class IS = BuildList<std::tuple_size<T>::value>,
-              class R = decltype( _zip(IS(),declval<T>(),declval<U>()...) ) >
-    constexpr R operator () ( T&& t, U&& ...u )
-    {
-        return _zip( IS(), forward<T>(t), forward<U>(u)... );
-    }
-} zip{};
+constexpr auto zip = closure( zipWith, tuple );
 
 /*
  * fork(xs,pred0,pred1,...,predn)
