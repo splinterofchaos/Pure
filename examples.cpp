@@ -44,7 +44,6 @@ constexpr int get_y( const Vec& v ) { return v[1]; }
 
 Vec operator + ( const Vec& a, const Vec& b )
 { 
-    while(true);
     return list::zipWith( Add(), a, b );
 }
 
@@ -92,6 +91,7 @@ string show( const char* );
 string show( string );
 string show( float );
 template< class X, class Y > string show( const pair<X,Y>& p );
+template< class ...X > string show( const std::tuple<X...>& t );
 template< class S > auto show( const S& s )
     -> decltype( std::begin(s), string() );
 template< class X > string showJust( const X& );
@@ -160,7 +160,35 @@ auto show( const S& s ) -> decltype( std::begin(s), string() )
 }
 
 template< class X, class Y > string show( const pair<X,Y>& p ) {
-    return "(Pair: " + show(p.first) + ", " + show(p.second) + ")";
+    return "(" + show(p.first) + ", " + show(p.second) + ")";
+}
+
+template< size_t N, class T >
+auto showTuple( const T& p )
+    -> typename std::enable_if<(N>=std::tuple_size<T>::value), string >::type
+{
+    return "";
+}
+
+template< size_t N, class T >
+auto showTuple( const T& p )
+    -> typename std::enable_if<(N==std::tuple_size<T>::value-1), string >::type
+{
+    return show( std::get<N>(p) );
+}
+
+template< size_t N, class T >
+auto showTuple( const T& p )
+    -> typename std::enable_if<(N<std::tuple_size<T>::value-1), string >::type
+{
+    return show(std::get<N>(p)) + ", " + showTuple<N+1>(p);
+}
+
+template< class ...X > string show( const std::tuple<X...>& t ) {
+    return "{" + showTuple<0>(t) + "}";
+}
+template<> string show( const std::tuple<>& ) {
+    return "{}";
 }
 
 template< class X > string showJust( const X& x );
@@ -221,22 +249,75 @@ unique_ptr<int> addM2( const unique_ptr<int>& a, const unique_ptr<int>& b ) {
     return fmap( add, a, b );
 };
 
-void print_xyz( int x, int y, int z ) {
-    printf( "%d %d %d\n", x, y, z );
-}
-
-struct Obj {
-    int x, y;
-};
-constexpr auto obj = Initialize<Obj>();
-
 int main()
 {
-    auto o = obj(1,2);
-    rcloset( print_xyz, 2, 3 )( 1 );
+    {
+        using namespace tpl;
+
+        auto t = tuple(1,2,3,4,5);
+
+        printf( "t = %s\n", show(t).c_str() );
+
+        auto arr = toArray( t );
+        printf( "toArray t = %s\n", show(arr).c_str() );
+        printf( "toTuple( toArray(t) ) = %s\n", show(toTuple(arr)).c_str() );
+        printf( "reverse t = %s\n", show(reverse(t)).c_str() );
+
+        printf( "take 0 t = %s\n", show( take<0>(t) ).c_str() );
+        printf( "take 5 t = %s\n", show( take<5>(t) ).c_str() );
+        printf( "drop 0 t = %s\n", show( drop<0>(t) ).c_str() );
+        printf( "drop 5 t = %s\n", show( drop<5>(t) ).c_str() );
+        printf( "tail t = %s\n", show(tail(t)).c_str() );
+        printf( "init t = %s\n", show(init(t)).c_str() );
+        printf( "tpl::repeat<3>(3) = %s\n", show(repeat<3>(3)).c_str() );
+
+        printf( "nth<1> (+1) t = %s\n", show(nth<1>(add(1),t)).c_str() );
+        printf( "nth<2> (+1) t = %s\n", show(nth<2>(add(1),t)).c_str() );
+
+        printf( "nth<0> (+1) (1,2) = %s\n", show(nth<0>(add(1),tpl::pair(1,2))).c_str() );
+        printf( "nth<1> (+1) (1,2) = %s\n", show(nth<1>(add(1),tpl::pair(1,2))).c_str() );
+
+        printf( "call (+) {1,2} = %s\n",
+                show( call(add,tuple(1,2)) ).c_str() );
+        printf( "ap {+,*} {1,2} {3,2} = %s\n",
+                show( tpl::ap(tuple(add,mult),tuple(1,2),tuple(3,2)) ).c_str() );
+
+        printf( "tpl::foldl (-) {1,2,3} = %s\n",
+                show( foldl(sub,tuple(1,2,3)) ).c_str() );
+        printf( "tpl::foldr (-) {1,2,3} = %s\n",
+                show( foldr(sub,tuple(1,2,3)) ).c_str() );
+
+        auto ttt = tuple (
+            tuple( tuple(1,2), tuple(tuple(4,5)), tuple(6) ), tuple(7,8,9)
+        );
+
+        printf( "zip {1,'a','hi '} {2,'b',' '} {3,'c','there'} = %s\n",
+                show( zip( tuple(1,'a',"hi"), tuple(2,'b'," "),
+                           tuple(3,'c',"there") ) ).c_str() );
+        printf( "zipWith (+) {5,'com',1} {5,'p',1} {5,'uter',1} = %s\n",
+                show (
+                    zipWith( add, tuple(5,std::string("com"),1),
+                                  tuple(5,"p",1), tuple(5,"uter",1) )
+                ).c_str() );
+
+        printf( "fan 10 (+1) (*10) = %s\n",
+                show( fan(10,add(1),mult(10)) ).c_str() );
+        printf( "split {1,-1} (-1) (+1) = %s\n",
+                show( split(tuple(1,-1),sub.with(1),add(1)) ).c_str() );
+
+        std::vector<int> xs = { 1, 2, 3, 4, 5, 6, 7 },
+            evens, thirds, odds;
+        std::tie(xs,evens,thirds,odds) =
+            fork( xs, even, eq(0)^mod.with(3), fnot(even) );
+        printf( "evens = %s\nthirds = %s\nodds = %s\nrest = %s\n" ,
+                show(evens).c_str(), show(thirds).c_str(),
+                show(odds).c_str(),  show(xs).c_str() );
+    }
 
     {
         using namespace list;
+
+
         auto evens = ( DupTo<std::set>() ^ filter(even) )( enumerate(1,12) );
         printf( "es = filter even [1..12] = %s\n", show(evens).c_str() );
         printf( "\tnull es = %s\n", show( null(evens) ).c_str() );

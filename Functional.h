@@ -5,6 +5,55 @@
 
 namespace pure {
 
+/*
+ * chainl(b,x...) -- Apply b to x... from left to right.
+ * chainl(+,1,2,3) = (1+2) + 3
+ */
+constexpr struct chainl {
+    template< class Binary, class X >
+    constexpr X operator () ( const Binary&, X&& x ) {
+        return forward<X>(x);
+    }
+
+    template< class Binary, class X, class Y, class ...Z >
+    constexpr auto operator () ( Binary&& b, X&& x, Y&& y, Z&& ...z)
+        -> decltype(
+            (*this)( b, b(declval<X>(),declval<Y>()), declval<Z>()... )
+        )
+    {
+        return (*this)(
+            b,
+            b( forward<X>(x), forward<Y>(y) ),
+            forward<Z>(z)...
+        );
+    }
+} chainl{};
+
+/*
+ * chainr(b,x...) -- Apply b to x... from right to left.
+ * chainr(+,1,2,3) = 1 + (2+3)
+ */
+constexpr struct chainr {
+    template< class Binary, class X >
+    constexpr X operator () ( const Binary&, X&& x ) {
+        return forward<X>(x);
+    }
+
+    template< class Binary, class X, class Y, class ...Z >
+    constexpr auto operator () ( const Binary& b, X&& x, Y&& y, Z&& ...z)
+        -> decltype(
+                b( (*this)(b,declval<Y>(),declval<Z>()...), declval<X>() )
+        )
+    {
+        return b (
+            // Reverse the argument order.
+            (*this)( b, forward<Y>(y), forward<Z>(z)... ),
+            // The first gets applied last.
+            forward<X>(x)
+        );
+    }
+} chainr{};
+
 /* Forwarder<F>(x...) = f(x...) */
 template< class F > struct Forwarder {
     using function = Decay<F>;
@@ -33,6 +82,20 @@ template< class T > struct Initialize {
     template< class ...X >
     constexpr T operator () ( X&& ...x ) {
         return T{ forward<X>(x)... };
+    }
+};
+
+template< template<class...> class T > struct InitializeT {
+    template< class X, class ...Y >
+    constexpr T<X> operator () ( X&& x, Y&& ...y ) {
+        return T<X>{ forward<X>(x), forward<Y>(y)... };
+    }
+};
+
+template< template<class...> class T > struct TieT {
+    template< class ...X >
+    constexpr T<X&...> operator () ( X& ...x ) {
+        return T<X&...>( x... );
     }
 };
 
@@ -487,37 +550,6 @@ constexpr auto returnPair = MakeChainableT<std::pair>();
 
 template< size_t N, class P >
 using Nth = decltype( std::get<N>(declval<P>()) );
-
-/*
- * Function Pair.
- * pair_compose( f, g ) = \(x,y) -> (f x, g y) 
- */
-template< class F, class G > struct PairComposition {
-    F f = F();
-    G g = G();
-
-    constexpr PairComposition() {}
-
-    template< class _F, class _G >
-    constexpr PairComposition( _F&& f, _G&& g )
-        : f(forward<_F>(f)), g(forward<_G>(g))
-    {
-    }
-
-    template< class Fn, size_t N, class P >
-    using Nth = decltype( declval<Fn>()( declval<Nth<N,P>>() ) );
-
-    template< class P >
-    using Result = decltype( std::make_pair(declval<Nth<F,0,P>>(),
-                                            declval<Nth<G,1,P>>()) );
-
-    template< class P/*air*/ >
-    constexpr Result<P> operator() ( const P& p ) {
-        return std::make_pair( f(std::get<0>(p)), g(std::get<1>(p)) );
-    }
-};
-
-constexpr auto pairCompose = MakeChainableT<PairComposition>();
 
 template< class F, class G > struct FanComposition {
     F f = F();
