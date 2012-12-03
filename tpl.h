@@ -32,7 +32,11 @@ template<> struct IListBuilder<0> {
     using type = IndexList<0>;
 };
 
-template< size_t N > using BuildList = typename IListBuilder<N-1>::type;
+template< size_t N >
+using BuildList = typename IListBuilder<N-1>::type;
+
+template< class T >
+using TupleIndicies = BuildList< std::tuple_size<Decay<T>>::value >;
 
 constexpr auto pair  = MakeBinaryT<std::pair>();
 constexpr auto tuple = MakeT<std::tuple>();
@@ -55,6 +59,47 @@ constexpr auto repeat( const X& x )
 {
     return _repeat( x, BuildList<I>() );
 }
+
+constexpr struct call : Binary<call> {
+    using Binary<call>::operator();
+
+    template< size_t ...I, class F, class T >
+    static constexpr auto impl( IndexList<I...>, const F& f, T&& t )
+        -> decltype( f( std::get<I>(forward<T>(t))... ) )
+    {
+        return f( std::get<I>(forward<T>(t))... );
+    }
+
+    template< class F, class T, class IS = TupleIndicies<T> >
+    constexpr auto operator () ( const F& f, T&& t )
+        -> decltype( impl(IS(),f,forward<T>(t)) )
+    {
+        return impl( IS(), f, forward<T>(t) );
+    }
+} call{};
+
+template< size_t i, class TF, class ...TX >
+constexpr auto apRow( const TF& tf, TX&& ...tx )
+    -> decltype( std::get<i>(tf)( std::get<i>(forward<TX>(tx))... ) )
+{
+    return std::get<i>(tf)( std::get<i>(forward<TX>(tx))... );
+}
+
+constexpr struct ap {
+    template< size_t ...I, class TF, class ...T >
+    static constexpr auto impl( IndexList<I...>, const TF& tf, T&& ...t )
+        -> decltype( tuple( apRow<I>(tf,forward<T>(t)...)... ) )
+    {
+        return tuple( apRow<I>(tf,forward<T>(t)...)... );
+    }
+
+    template< class TF, class ...T, class I = TupleIndicies<TF> >
+    constexpr auto operator () ( const TF& tf, T&& ...t )
+        -> decltype( impl(I(),tf,forward<T>(t)...) )
+    {
+        return impl( I(), tf, forward<T>(t)... );
+    }
+} ap{};
 
 template< size_t i, class F, class ...T >
 constexpr auto zipRowWith( const F& f, T&& ...t )

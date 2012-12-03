@@ -254,6 +254,11 @@ int main()
 
         printf( "tpl::repeat<3>(3) = %s\n", show(repeat<3>(3)).c_str() );
 
+        printf( "call (+) {1,2} = %s\n",
+                show( call(add,tuple(1,2)) ).c_str() );
+        printf( "ap {+,*} {1,2} {3,2} = %s\n",
+                show( tpl::ap(tuple(add,mult),tuple(1,2),tuple(3,2)) ).c_str() );
+
         printf( "tpl::foldl (-) {1,2,3} = %s\n",
                 show( foldl(sub,tuple(1,2,3)) ).c_str() );
         printf( "tpl::foldr (-) {1,2,3} = %s\n",
