@@ -3,6 +3,8 @@
 
 #include "Pure.h"
 
+#include "tpl.h"
+
 namespace pure {
 
 namespace arrow {
@@ -98,57 +100,22 @@ constexpr struct Duplicate {
 template< class Func > struct Arrow<Func> {
     static constexpr Func arr( Func f ) { return f; }
 
-    /*
-     * Note: It would seem that an easier way to define this class might be to
-     * have it define only split, and define first, second, and fan in terms
-     * of that. This goes against Haskell's version, but I don't see a reason,
-     * currently, why it would not be just as generic and more convenient.
-     */
-
     /* split(f,g)(x,y) = { f(x), g(y) } */
-    static constexpr auto split = pairCompose;
+    static constexpr auto split = ncompose( tpl::ap, tpl::tuple );
 
     /*
      * first(f)(x,y)  = { f(x), y }
      * second(f)(x,y) = { x, f(y) }
      */
-    static constexpr auto first  = arrow::split.with( id );
-    static constexpr auto second = arrow::split( id );
+    static constexpr auto first  = tpl::Nth<0>();
+    static constexpr auto second = tpl::Nth<1>();
 
     /* fan(f,g)(x) = { f(x), g(x) } */
     static constexpr auto fan = fanCompose;
 };
 
-template< unsigned int N > struct Nth {
-    template< class X >
-    constexpr auto operator () ( X&& x )
-        -> decltype( std::get<N>(declval<X>()) )
-    {
-        return std::get<N>( forward<X>(x) );
-    }
-};
-
-template< class Binary > struct Uncurrier {
-    Binary b;
-
-    template< class P >
-    constexpr auto operator () ( P&& p )
-        -> decltype( b( get<0>(declval<P>()), get<1>(declval<P>()) ) )
-    {
-        return b( get<0>(forward<P>(p)), get<1>(forward<P>(p)) );
-    }
-};
-
-constexpr struct Uncurry {
-    template< class B >
-    constexpr Uncurrier<B> operator () ( B b ) {
-        return { move(b) };
-    }
-} _uncurry{};
-
-constexpr auto uncurry = rcloset( bcompose, Nth<0>(), Nth<1>() );
-
-//template< template<class...>class, class ... > struct Kleisli;
+/* uncurry : (a x b -> c) -> ({a,b} -> c) */
+constexpr auto uncurry = tpl::call;
 
 template< template<class...> class M, class F = Id >
 struct Kleisli : Forwarder<F> {

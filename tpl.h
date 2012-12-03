@@ -303,7 +303,9 @@ constexpr auto nth( const F& f, P&& p )
     return call( pair, _nth<N>(f, forward<P>(p)) );
 }
 
-template< size_t N > struct Nth {
+template< size_t N > struct Nth : Binary<Nth<N>> {
+    using Binary<Nth<N>>::operator();
+
     template< class F, class T >
     constexpr auto operator () ( const F& f, T&& t )
         -> decltype( nth<N>(f,forward<T>(t)) )
@@ -320,7 +322,9 @@ constexpr auto apRow( const TF& tf, TX&& ...tx )
 }
 
 /* ap( {f,g,h}, {x,y,z}, {a,b,c} ) = { f(x,a), g(y,b), h(z,c) } */
-constexpr struct ap {
+constexpr struct ap : Binary<ap> {
+    using Binary<ap>::operator();
+
     template< size_t ...I, class TF, class T, class ...U >
     static constexpr auto
     impl( IndexList<I...>, const TF& tf, T&& t, U&& ...u )

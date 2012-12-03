@@ -495,37 +495,6 @@ constexpr auto returnPair = MakeChainableT<std::pair>();
 template< size_t N, class P >
 using Nth = decltype( std::get<N>(declval<P>()) );
 
-/*
- * Function Pair.
- * pair_compose( f, g ) = \(x,y) -> (f x, g y) 
- */
-template< class F, class G > struct PairComposition {
-    F f = F();
-    G g = G();
-
-    constexpr PairComposition() {}
-
-    template< class _F, class _G >
-    constexpr PairComposition( _F&& f, _G&& g )
-        : f(forward<_F>(f)), g(forward<_G>(g))
-    {
-    }
-
-    template< class Fn, size_t N, class P >
-    using Nth = decltype( declval<Fn>()( declval<Nth<N,P>>() ) );
-
-    template< class P >
-    using Result = decltype( std::make_pair(declval<Nth<F,0,P>>(),
-                                            declval<Nth<G,1,P>>()) );
-
-    template< class P/*air*/ >
-    constexpr Result<P> operator() ( const P& p ) {
-        return std::make_pair( f(std::get<0>(p)), g(std::get<1>(p)) );
-    }
-};
-
-constexpr auto pairCompose = MakeChainableT<PairComposition>();
-
 template< class F, class G > struct FanComposition {
     F f = F();
     G g = G();
