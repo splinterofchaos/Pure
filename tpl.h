@@ -23,6 +23,18 @@ namespace tpl {
 constexpr auto pair  = MakeBinaryT<std::pair>();
 constexpr auto tuple = MakeT<std::tuple>();
 
+constexpr auto forwardTuple = ForwardT<std::tuple>();
+constexpr auto tie          = TieT<std::tuple>();
+
+template< class ...X >
+using Tuple = std::tuple< Decay<X>... >;
+
+template< class ...X >
+using Tie = decltype( tie(declval<X>()...) );
+
+template< class ...X >
+using ForwardTuple = std::tuple< X... >;
+
 template< class X > struct TTraits;
 
 template< class ...X > struct TTraits<std::tuple<X...>> {
@@ -107,24 +119,29 @@ using BuildList = typename IListBuilder<N>::type;
 template< class T >
 using TupleIndicies = BuildList< std::tuple_size<Decay<T>>::value >;
 
-template< size_t I, class X >
-X xOfI( const X& x ) {
-    return x;
-}
+template< size_t I, class X > const X& xOfI( const X& x ) { return x; }
+template< size_t I, class X >       X& xOfI(       X& x ) { return x; }
 
-template< class X, size_t ...I >
-constexpr auto _repeat( const X& x, IndexList<I...> )
-    -> decltype( tuple( xOfI<I>(x)... ) )
+template< class F, class X, size_t ...I >
+constexpr auto _repeat( F f, const X& x, IndexList<I...> )
+    -> decltype( f( xOfI<I>(x)... ) )
 {
-    return tuple( xOfI<I>(x)... );
+    return f( xOfI<I>(x)... );
 }
 
 /* repeat<N>(x) = {x,x,x...} */
 template< size_t N, class X >
 constexpr auto repeat( const X& x )
-    -> decltype( _repeat(x,BuildList<N>()) )
+    -> decltype( _repeat(tuple,x,BuildList<N>()) )
 {
-    return _repeat( x, BuildList<N>() );
+    return _repeat( tuple, x, BuildList<N>() );
+}
+
+template< size_t N, class X >
+constexpr auto repeatTie( X&& x )
+    -> decltype( _repeat(tie,declval<X>(),BuildList<N>()) )
+{
+    return _repeat( tie, forward<X>(x), BuildList<N>() );
 }
 
 template< size_t N > struct Repeat {
@@ -135,6 +152,16 @@ template< size_t N > struct Repeat {
         return repeat<N>( x );
     }
 };
+
+template< size_t N > struct RepeatTie {
+    template< class X >
+    constexpr auto operator () ( const X& x )
+        -> decltype( repeatTie<N>( x ) )
+    {
+        return repeatTie<N>( x );
+    }
+};
+
 
 template< class T >
 constexpr size_t size() {
@@ -530,9 +557,9 @@ constexpr struct fanPair {
 constexpr struct split {
     template< class T, class ...F >
     constexpr auto operator () ( T&& t, F&& ...f )
-        -> decltype( ap( std::forward_as_tuple(forward<F>(f)...), forward<T>(t) ) )
+        -> decltype( ap( forwardTuple(forward<F>(f)...), forward<T>(t) ) )
     {
-        return ap( std::forward_as_tuple(forward<F>(f)...), forward<T>(t) );
+        return ap( forwardTuple(forward<F>(f)...), forward<T>(t) );
     }
 } split{};
 

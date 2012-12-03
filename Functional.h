@@ -43,6 +43,13 @@ template< template<class...> class T > struct InitializeT {
     }
 };
 
+template< template<class...> class T > struct TieT {
+    template< class ...X >
+    constexpr T<X&...> operator () ( X& ...x ) {
+        return T<X&...>( x... );
+    }
+};
+
 /* MakeT<T>(x) = T<X>(x) */
 template< template<class...> class T > struct MakeT {
     template< class ...X, class R = T< Decay<X>... > >
