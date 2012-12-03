@@ -264,6 +264,9 @@ int main()
         printf( "init t = %s\n", show(init(t)).c_str() );
         printf( "tpl::repeat<3>(3) = %s\n", show(repeat<3>(3)).c_str() );
 
+        printf( "onNth<1> (+1) t = %s\n", show(nth<1>(add(1),t)).c_str() );
+        printf( "onNth<2> (+1) t = %s\n", show(nth<2>(add(1),t)).c_str() );
+
         printf( "call (+) {1,2} = %s\n",
                 show( call(add,tuple(1,2)) ).c_str() );
         printf( "ap {+,*} {1,2} {3,2} = %s\n",
@@ -273,8 +276,6 @@ int main()
                 show( foldl(sub,tuple(1,2,3)) ).c_str() );
         printf( "tpl::foldr (-) {1,2,3} = %s\n",
                 show( foldr(sub,tuple(1,2,3)) ).c_str() );
-        printf( "tpl::foldr (-) {2,3} = %s\n",
-                show( foldr(sub,tuple(2,3)) ).c_str() );
 
         auto ttt = tuple (
             tuple( tuple(1,2), tuple(tuple(4,5)), tuple(6) ), tuple(7,8,9)

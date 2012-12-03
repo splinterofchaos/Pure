@@ -71,24 +71,6 @@ constexpr auto repeat( const X& x )
     return _repeat( x, BuildList<I>() );
 }
 
-constexpr struct call : Binary<call> {
-    using Binary<call>::operator();
-
-    template< size_t ...I, class F, class T >
-    static constexpr auto impl( IndexList<I...>, const F& f, T&& t )
-        -> decltype( f( get<I>(forward<T>(t))... ) )
-    {
-        return f( get<I>(forward<T>(t))... );
-    }
-
-    template< class F, class T, class IS = TupleIndicies<T> >
-    constexpr auto operator () ( const F& f, T&& t )
-        -> decltype( impl(IS(),f,forward<T>(t)) )
-    {
-        return impl( IS(), f, forward<T>(t) );
-    }
-} call{};
-
 template< class T >
 constexpr size_t size() {
     return std::tuple_size<Decay<T>>::value;
@@ -111,35 +93,42 @@ constexpr struct last {
     }
 } last{};
 
-constexpr struct tail {
-    template< size_t ...I, class T >
-    constexpr auto impl( IndexList<0,I...>, T&& t )
-        -> decltype( tuple( get<I>(t)... ) )
-    {
-        return tuple( get<I>(t)... );
-    }
+template< size_t N, size_t ...I, class T >
+constexpr auto takeFrom( IndexList<I...>, T&& t )
+    -> decltype( tuple( get<I+N>(forward<T>(t))... ) )
+{
+    return tuple( get<I+N>(forward<T>(t))... );
+}
 
-    template< class T, class I = TupleIndicies<T> >
+template< size_t N, class T, class IS = BuildList<N> >
+constexpr auto take( T&& t )
+    -> decltype( takeFrom<0>( IS(), forward<T>(t) ) )
+{
+    return takeFrom<0>( IS(), forward<T>(t) );
+}
+
+template< size_t N, class T, class IS = BuildList<size<T>()-N> >
+constexpr auto drop( T&& t )
+    -> decltype( takeFrom<N>( IS(), forward<T>(t) ) )
+{
+    return takeFrom<N>( IS(), forward<T>(t) );
+}
+
+constexpr struct tail {
+    template< class T >
     constexpr auto operator () ( T&& t )
-        -> decltype( impl( I(), forward<T>(t) ) )
+        -> decltype( drop<1>( forward<T>(t) ) )
     {
-        return impl( I(), forward<T>(t) );
+        return drop<1>( forward<T>(t) );
     }
 } tail{};
 
 constexpr struct init {
-    template< size_t ...I, class T >
-    constexpr auto impl( IndexList<0,I...>, T&& t )
-        -> decltype( tuple( get<I-1>(t)... ) )
-    {
-        return tuple( get<I-1>(t)... );
-    }
-
-    template< class T, class I = TupleIndicies<T> >
+    template< class T, size_t N = size<T>() - 1 >
     constexpr auto operator () ( T&& t )
-        -> decltype( impl( I(), forward<T>(t) ) )
+        -> decltype( take<N>( forward<T>(t) ) )
     {
-        return impl( I(), forward<T>(t) );
+        return take<N>( forward<T>(t) );
     }
 } init{};
 
@@ -152,22 +141,39 @@ constexpr struct append {
     }
 } append{};
 
-constexpr struct toArray {
-    template< class R, size_t ...I, class T >
-    static constexpr R impl( IndexList<I...>, T&& t )
+constexpr struct call : Binary<call> {
+    using Binary<call>::operator();
+
+    template< size_t ...I, class F, class T >
+    static constexpr auto impl( IndexList<I...>, const F& f, T&& t )
+        -> decltype( f( get<I>(forward<T>(t))... ) )
     {
-        return {{ get<I>(forward<T>(t))... }};
+        return f( get<I>(forward<T>(t))... );
     }
 
-    template< class T, class X = Decay<Elem<0,T>>, size_t S = size<T>(),
-              class IS = TupleIndicies<T>,
-              class A = std::array<X,S> >
-    constexpr A operator () ( T&& t ) {
-        return impl<A>( IS(), forward<T>(t) );
+    template< class F, class T, class IS = TupleIndicies<T> >
+    constexpr auto operator () ( const F& f, T&& t )
+        -> decltype( impl(IS(),f,forward<T>(t)) )
+    {
+        return impl( IS(), f, forward<T>(t) );
     }
-} toArray{};
+} call{};
 
-constexpr auto toTuple = closure( call, tuple );
+
+template< size_t N, class F, class T >
+constexpr auto nth( const F& f, T&& t )
+    -> decltype( std::tuple_cat (
+        take<N>( forward<T>(t) ),
+        tuple( f(get<N>(forward<T>(t))) ),
+        drop<N+1>(forward<T>(t))
+    ) )
+{
+    return std::tuple_cat (
+        take<N>( forward<T>(t) ),
+        tuple( f(get<N>(forward<T>(t))) ),
+        drop<N+1>(forward<T>(t))
+    );
+}
 
 template< size_t i, class TF, class ...TX >
 constexpr auto apRow( const TF& tf, TX&& ...tx )
@@ -378,6 +384,23 @@ constexpr struct split {
         return ap( std::forward_as_tuple(forward<F>(f)...), forward<T>(t) );
     }
 } split{};
+
+constexpr struct toArray {
+    template< class R, size_t ...I, class T >
+    static constexpr R impl( IndexList<I...>, T&& t )
+    {
+        return {{ get<I>(forward<T>(t))... }};
+    }
+
+    template< class T, class X = Decay<Elem<0,T>>, size_t S = size<T>(),
+              class IS = TupleIndicies<T>,
+              class A = std::array<X,S> >
+    constexpr A operator () ( T&& t ) {
+        return impl<A>( IS(), forward<T>(t) );
+    }
+} toArray{};
+
+constexpr auto toTuple = closure( call, tuple );
 
 } // namespace tpl
 
