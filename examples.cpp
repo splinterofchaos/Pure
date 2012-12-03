@@ -270,8 +270,11 @@ int main()
         printf( "init t = %s\n", show(init(t)).c_str() );
         printf( "tpl::repeat<3>(3) = %s\n", show(repeat<3>(3)).c_str() );
 
-        printf( "onNth<1> (+1) t = %s\n", show(nth<1>(add(1),t)).c_str() );
-        printf( "onNth<2> (+1) t = %s\n", show(nth<2>(add(1),t)).c_str() );
+        printf( "nth<1> (+1) t = %s\n", show(nth<1>(add(1),t)).c_str() );
+        printf( "nth<2> (+1) t = %s\n", show(nth<2>(add(1),t)).c_str() );
+
+        printf( "nth<0> (+1) (1,2) = %s\n", show(nth<0>(add(1),tpl::pair(1,2))).c_str() );
+        printf( "nth<1> (+1) (1,2) = %s\n", show(nth<1>(add(1),tpl::pair(1,2))).c_str() );
 
         printf( "call (+) {1,2} = %s\n",
                 show( call(add,tuple(1,2)) ).c_str() );

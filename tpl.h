@@ -23,6 +23,50 @@ namespace tpl {
 constexpr auto pair  = MakeBinaryT<std::pair>();
 constexpr auto tuple = MakeT<std::tuple>();
 
+template< class X > struct TTraits;
+
+template< class ...X > struct TTraits<std::tuple<X...>> {
+    using type = std::tuple<X...>;
+
+    template< class ... Y >
+    using remap = std::tuple<Y...>;
+
+    static constexpr auto ctor = tuple;
+
+    enum { isTuple = true, isPair = false };
+};
+
+template< class X, class Y > struct TTraits<std::pair<X,Y>> {
+    using type = std::pair<X,Y>;
+
+    template< class A, class B >
+    using remap = std::pair<A,B>;
+
+    static constexpr auto ctor = pair;
+
+    enum { isTuple = false, isPair = true };
+};
+
+template< class T, class ...X >
+using remap = typename TTraits< Decay<T> >::template remap<X...>;
+
+template< class T, class ...X, class TT = TTraits<Decay<T>> >
+constexpr auto makeSimilar( X&& ...x )
+    -> decltype( TT::ctor( forward<X>(x)... ) )
+{
+    return TT::ctor( forward<X>(x)... );
+}
+
+template< class T >
+constexpr bool isTuple() {
+    return TTraits< Decay<T> >::isTuple;
+}
+
+template< class P >
+constexpr bool isPair() {
+    return TTraits< Decay<P> >::isPair;
+}
+
 template< size_t ... > struct LastIndex;
 
 template< size_t X > struct LastIndex<X> {
@@ -225,13 +269,11 @@ constexpr struct call : Binary<call> {
     }
 } call{};
 
-
-/* nth<N>(f,{x,n,y}) = { x, f(x), y } */
 template< size_t N, class F, class T >
-constexpr auto nth( const F& f, T&& t )
+constexpr auto _nth( const F& f, T&& t )
     -> decltype( std::tuple_cat (
-            take<N>( forward<T>(t) ),  tuple( f(get<N>(forward<T>(t))) ),
-            drop<N+1>(forward<T>(t))
+        take<N>( forward<T>(t) ),  tuple( f(get<N>(forward<T>(t))) ),
+        drop<N+1>(forward<T>(t))
     ) )
 {
     return std::tuple_cat (
@@ -239,6 +281,26 @@ constexpr auto nth( const F& f, T&& t )
         tuple( f(get<N>(forward<T>(t))) ),
         drop<N+1>(forward<T>(t))
     );
+}
+
+/* nth<N>(f,{x,n,y}) = { x, f(x), y } */
+template< size_t N, class F, class T >
+constexpr auto nth( const F& f, T&& t )
+    -> typename std::enable_if <
+        isTuple<T>(), decltype( _nth<N>(f,forward<T>(t)) )
+    >::type
+{
+    return _nth<N>( f, forward<T>(t) );
+}
+
+/* nth<N>(f,{x,n,y}) = { x, f(x), y } */
+template< size_t N, class F, class P >
+constexpr auto nth( const F& f, P&& p )
+    -> typename std::enable_if <
+        isPair<P>(), decltype( call( pair, _nth<N>(f, forward<P>(p)) ) )
+    >::type
+{
+    return call( pair, _nth<N>(f, forward<P>(p)) );
 }
 
 template< size_t N > struct Nth {
@@ -259,11 +321,12 @@ constexpr auto apRow( const TF& tf, TX&& ...tx )
 
 /* ap( {f,g,h}, {x,y,z}, {a,b,c} ) = { f(x,a), g(y,b), h(z,c) } */
 constexpr struct ap {
-    template< size_t ...I, class TF, class ...T >
-    static constexpr auto impl( IndexList<I...>, const TF& tf, T&& ...t )
-        -> decltype( tuple( apRow<I>(tf,forward<T>(t)...)... ) )
+    template< size_t ...I, class TF, class T, class ...U >
+    static constexpr auto
+    impl( IndexList<I...>, const TF& tf, T&& t, U&& ...u )
+        -> decltype( makeSimilar<T>( apRow<I>(tf,declval<T>(),declval<U>()...)... ) )
     {
-        return tuple( apRow<I>(tf,forward<T>(t)...)... );
+        return makeSimilar<T>( apRow<I>(tf,forward<T>(t),forward<U>(u)...)... );
     }
 
     template< class TF, class ...T, class I = TupleIndicies<TF> >
@@ -449,6 +512,15 @@ constexpr struct fan {
         return tuple( f(x)... );
     }
 } fan{};
+
+constexpr struct fanPair {
+    template< class X, class ...F >
+    constexpr auto operator () ( const X& x, const F& ...f )
+        -> decltype( pair( f(x)... ) )
+    {
+        return pair( f(x)... );
+    }
+} fanPair{};
 
 /* split( {x,y,z}, f g h ) = { f(x), g(y), z(h) }; */
 constexpr struct split {
