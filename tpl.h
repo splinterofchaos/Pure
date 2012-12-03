@@ -7,6 +7,17 @@
 
 namespace pure {
 
+template< unsigned int N > struct Get {
+    template< class X >
+    constexpr auto operator () ( X&& x )
+        -> decltype( std::get<N>(declval<X>()) )
+    {
+        return std::get<N>( std::forward<X>(x) );
+    }
+};
+
+using std::get;
+
 namespace tpl {
 
 template< size_t ... > struct LastIndex;
@@ -65,9 +76,9 @@ constexpr struct call : Binary<call> {
 
     template< size_t ...I, class F, class T >
     static constexpr auto impl( IndexList<I...>, const F& f, T&& t )
-        -> decltype( f( std::get<I>(forward<T>(t))... ) )
+        -> decltype( f( get<I>(forward<T>(t))... ) )
     {
-        return f( std::get<I>(forward<T>(t))... );
+        return f( get<I>(forward<T>(t))... );
     }
 
     template< class F, class T, class IS = TupleIndicies<T> >
@@ -80,9 +91,9 @@ constexpr struct call : Binary<call> {
 
 template< size_t i, class TF, class ...TX >
 constexpr auto apRow( const TF& tf, TX&& ...tx )
-    -> decltype( std::get<i>(tf)( std::get<i>(forward<TX>(tx))... ) )
+    -> decltype( std::get<i>(tf)( get<i>(forward<TX>(tx))... ) )
 {
-    return std::get<i>(tf)( std::get<i>(forward<TX>(tx))... );
+    return std::get<i>(tf)( get<i>(forward<TX>(tx))... );
 }
 
 constexpr struct ap {
@@ -103,9 +114,9 @@ constexpr struct ap {
 
 template< size_t i, class F, class ...T >
 constexpr auto zipRowWith( const F& f, T&& ...t )
-    -> decltype( f( std::get<i>(forward<T>(t))... ) )
+    -> decltype( f( get<i>(forward<T>(t))... ) )
 {
-    return f( std::get<i>(forward<T>(t))... );
+    return f( get<i>(forward<T>(t))... );
 }
 
 constexpr struct zipWith {
@@ -127,9 +138,9 @@ constexpr struct zipWith {
 
 template< size_t i, class ...T >
 constexpr auto zipRow( T&& ...t )
-    -> decltype( tuple( std::get<i>(forward<T>(t))... ) )
+    -> decltype( tuple( get<i>(forward<T>(t))... ) )
 {
-    return tuple( std::get<i>(forward<T>(t))... );
+    return tuple( get<i>(forward<T>(t))... );
 }
 
 constexpr auto zip = closure( zipWith, tuple );
@@ -207,7 +218,7 @@ constexpr struct fork {
     template< class XS, class ...P >
     Forked<XS,P...> operator () ( XS xs, P&& ...ps ) const {
         auto forks = fork_( xs, forward<P>(ps)... );
-        return std::tuple_cat( tuple(std::move(xs)), std::move(forks) );
+        return std::tuple_cat( tuple(move(xs)), move(forks) );
     }
 } fork{};
 
@@ -215,17 +226,17 @@ constexpr struct Map {
     template< class F, class ...X, size_t ...I >
     constexpr auto doMap( F f, const std::tuple<X...>& ts,
                           IndexList<I...> )
-        -> decltype( tuple( f(std::get<I>(ts))... ) )
+        -> decltype( tuple( f(get<I>(ts))... ) )
     {
-        return tuple( f(std::get<I>(ts))... );
+        return tuple( f(get<I>(ts))... );
     }
 
     template< class F, class ...X,
               class IList = BuildList<sizeof...(X)-1> >
     constexpr auto operator () ( F f, const std::tuple<X...>& ts  )
-        -> decltype( doMap(std::move(f),ts,IList()) )
+        -> decltype( doMap(move(f),ts,IList()) )
     {
-        return doMap( std::move(f), ts, IList() );
+        return doMap( move(f), ts, IList() );
     }
 } map{};
 
@@ -271,9 +282,9 @@ constexpr struct Chainr {
 constexpr struct Foldl {
     template< class Binary, class T, size_t ...I >
     constexpr auto doFold( Binary b, T&& ts, IndexList<I...> )
-        -> decltype( chainl(b,std::get<I>(declval<T>())...) )
+        -> decltype( chainl(b,get<I>(declval<T>())...) )
     {
-        return chainl( b, std::get<I>(forward<T>(ts))... );
+        return chainl( b, get<I>(forward<T>(ts))... );
     }
 
     template< class Binary, class T, size_t N = std::tuple_size<T>::value,
@@ -288,9 +299,9 @@ constexpr struct Foldl {
 constexpr struct Foldr {
     template< class Binary, class T, size_t ...I >
     constexpr auto doFold( Binary b, T&& ts, IndexList<I...> )
-        -> decltype( chainr(b,std::get<I>(declval<T>())...) )
+        -> decltype( chainr(b,get<I>(declval<T>())...) )
     {
-        return chainr( b, std::get<I>(forward<T>(ts))... );
+        return chainr( b, get<I>(forward<T>(ts))... );
     }
 
     template< class Binary, class T, size_t N = std::tuple_size<T>::value,

@@ -49,17 +49,6 @@ constexpr struct Prev {
     }
 } prev{};
 
-template< unsigned int N > struct Get {
-    template< class X >
-    constexpr auto operator () ( X&& x )
-        -> decltype( std::get<N>(declval<X>()) )
-    {
-        return std::get<N>( std::forward<X>(x) );
-    }
-};
-
-using std::get;
-
 namespace category {
 
     template< class I >
