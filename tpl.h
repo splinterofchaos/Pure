@@ -38,8 +38,17 @@ template< size_t ...i > struct IndexList {
     using Next = IndexList< i..., I+1 >;
 };
 
+template<> struct IndexList<> {
+    using Next = IndexList<>;
+};
+
+
 template< size_t n > struct IListBuilder {
     using type = typename IListBuilder< n-1 >::type::Next;
+};
+
+template<> struct IListBuilder<-1> {
+    using type = IndexList<>;
 };
 
 template<> struct IListBuilder<0> {
