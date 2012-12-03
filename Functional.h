@@ -36,6 +36,13 @@ template< class T > struct Initialize {
     }
 };
 
+template< template<class...> class T > struct InitializeT {
+    template< class X, class ...Y >
+    constexpr T<X> operator () ( X&& x, Y&& ...y ) {
+        return T<X>{ forward<X>(x), forward<Y>(y)... };
+    }
+};
+
 /* MakeT<T>(x) = T<X>(x) */
 template< template<class...> class T > struct MakeT {
     template< class ...X, class R = T< Decay<X>... > >

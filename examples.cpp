@@ -252,8 +252,16 @@ int main()
     {
         using namespace tpl;
 
-        printf( "tail {1,2,3,4,5} = %s\n", show(tail(tuple(1,2,3,4,5))).c_str() );
-        printf( "init {1,2,3,4,5} = %s\n", show(init(tuple(1,2,3,4,5))).c_str() );
+        auto t = tuple(1,2,3,4,5);
+
+        printf( "t = %s\n", show(t).c_str() );
+
+        auto arr = toArray( t );
+        printf( "toArray t = %s\n", show(arr).c_str() );
+        printf( "toTuple( toArray(t) ) = %s\n", show(toTuple(arr)).c_str() );
+
+        printf( "tail t = %s\n", show(tail(t)).c_str() );
+        printf( "init t = %s\n", show(init(t)).c_str() );
         printf( "tpl::repeat<3>(3) = %s\n", show(repeat<3>(3)).c_str() );
 
         printf( "call (+) {1,2} = %s\n",
@@ -267,6 +275,9 @@ int main()
                 show( foldr(sub,tuple(1,2,3)) ).c_str() );
         printf( "tpl::foldr (-) {2,3} = %s\n",
                 show( foldr(sub,tuple(2,3)) ).c_str() );
+
+        printf( "tpl::concat {{1,2,3},{4,5}} = %s\n",
+                show( concat(tuple(tuple(1,2,3),tuple(4,5))) ).c_str() );
 
         printf( "zip {1,'a','hi '} {2,'b',' '} {3,'c','there'} = %s\n",
                 show( zip( tuple(1,'a',"hi"), tuple(2,'b'," "),

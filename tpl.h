@@ -89,10 +89,9 @@ constexpr struct call : Binary<call> {
     }
 } call{};
 
-
 template< class T >
 constexpr size_t size() {
-    return std::tuple_size<T>::value();
+    return std::tuple_size<Decay<T>>::value;
 }
 
 template< class T >
@@ -152,6 +151,23 @@ constexpr struct append {
         return std::tuple_cat( forward<T>(t)... );
     }
 } append{};
+
+constexpr struct toArray {
+    template< class R, size_t ...I, class T >
+    static constexpr R impl( IndexList<I...>, T&& t )
+    {
+        return {{ get<I>(forward<T>(t))... }};
+    }
+
+    template< class T, class X = Decay<Elem<0,T>>, size_t S = size<T>(),
+              class IS = TupleIndicies<T>,
+              class A = std::array<X,S> >
+    constexpr A operator () ( T&& t ) {
+        return impl<A>( IS(), forward<T>(t) );
+    }
+} toArray{};
+
+constexpr auto toTuple = closure( call, tuple );
 
 template< size_t i, class TF, class ...TX >
 constexpr auto apRow( const TF& tf, TX&& ...tx )
@@ -326,38 +342,24 @@ constexpr struct Chainr {
 } chainr{};
 
 constexpr struct Foldl {
-    template< class Binary, class T, size_t ...I >
-    constexpr auto doFold( Binary b, T&& ts, IndexList<I...> )
-        -> decltype( chainl(b,get<I>(declval<T>())...) )
-    {
-        return chainl( b, get<I>(forward<T>(ts))... );
-    }
-
-    template< class Binary, class T, size_t N = std::tuple_size<T>::value,
-              class IList = BuildList<N> >
+    template< class Binary, class T >
     constexpr auto operator () ( Binary&& b, T&& ts  )
-        -> decltype( doFold(declval<Binary>(),declval<T>(),IList()) )
+        -> decltype( call( closure(chainl,forward<Binary>(b)), forward<T>(ts) ) )
     {
-        return doFold( forward<Binary>(b), forward<T>(ts), IList() );
+        return call( closure(chainl,forward<Binary>(b)), forward<T>(ts) );
     }
 } foldl{};
 
 constexpr struct Foldr {
-    template< class Binary, class T, size_t ...I >
-    constexpr auto doFold( Binary b, T&& ts, IndexList<I...> )
-        -> decltype( chainr(b,get<I>(declval<T>())...) )
-    {
-        return chainr( b, get<I>(forward<T>(ts))... );
-    }
-
-    template< class Binary, class T, size_t N = std::tuple_size<T>::value,
-              class IList = BuildList<N> >
+    template< class Binary, class T >
     constexpr auto operator () ( Binary&& b, T&& ts  )
-        -> decltype( doFold(declval<Binary>(),declval<T>(),IList()) )
+        -> decltype( call( closure(chainr,forward<Binary>(b)), forward<T>(ts) ) )
     {
-        return doFold( forward<Binary>(b), forward<T>(ts), IList() );
+        return call( closure(chainr,forward<Binary>(b)), forward<T>(ts) );
     }
 } foldr{};
+
+constexpr auto concat = closure( foldl, append );
 
 } // namespace tpl
 
