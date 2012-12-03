@@ -80,6 +80,15 @@ constexpr auto repeat( const X& x )
     return _repeat( x, BuildList<I>() );
 }
 
+template< size_t N > struct Repeat {
+    template< class X >
+    constexpr auto operator () ( const X& x )
+        -> decltype( repeat<N>( x ) )
+    {
+        return repeat<N>( x );
+    }
+};
+
 template< class T >
 constexpr size_t size() {
     return std::tuple_size<Decay<T>>::value;
@@ -116,12 +125,30 @@ constexpr auto take( T&& t )
     return takeFrom<0>( IS(), forward<T>(t) );
 }
 
+template< size_t N > struct Take {
+    template< class T >
+    constexpr auto operator () ( T&& t )
+        -> decltype( take<N>( forward<T>(t) ) )
+    {
+        return take<N>( forward<T>(t) );
+    }
+};
+
 template< size_t N, class T, class IS = BuildList<size<T>()-N> >
 constexpr auto drop( T&& t )
     -> decltype( takeFrom<N>( IS(), forward<T>(t) ) )
 {
     return takeFrom<N>( IS(), forward<T>(t) );
 }
+
+template< size_t N > struct Drop {
+    template< class T >
+    constexpr auto operator () ( T&& t )
+        -> decltype( drop<N>( forward<T>(t) ) )
+    {
+        return drop<N>( forward<T>(t) );
+    }
+};
 
 constexpr struct tail {
     template< class T >
@@ -204,6 +231,15 @@ constexpr auto nth( const F& f, T&& t )
         drop<N+1>(forward<T>(t))
     );
 }
+
+template< size_t N > struct Nth {
+    template< class F, class T >
+    constexpr auto operator () ( const F& f, T&& t )
+        -> decltype( nth<N>(f,forward<T>(t)) )
+    {
+        return nth<N>(f,forward<T>(t));
+    }
+};
 
 template< size_t i, class TF, class ...TX >
 constexpr auto apRow( const TF& tf, TX&& ...tx )
