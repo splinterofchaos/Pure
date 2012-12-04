@@ -452,53 +452,33 @@ constexpr struct Foldr {
 /* concat( {{1,2},{3},{4,5}} ) = {1,2,3,4,5} */
 constexpr auto concat = closure( foldl, append );
 
-template< class _X, class X = Decay<_X> >
+template< class X > struct TupleOrPair {
+    enum { value = isTuple<X>() or isPair<X>() };
+};
+
+template< class X >
 static constexpr bool tupleOrPair() {
-    return isTuple<X>() or isPair<X>();
+    return TupleOrPair<X>::value;
 }
-
-template< bool b, class T, class F >
-struct SelectF {
-    template< class ...X >
-    constexpr Result<T,X...> operator () ( X&& ...x ) {
-        return T()( forward<X>(x)... );
-    }
-};
-
-template< class T, class F >
-struct SelectF<false,T,F> {
-    template< class ...X >
-    constexpr Result<F,X...> operator () ( X&& ...x ) {
-        return F()( forward<X>(x)... );
-    }
-};
 
 /* 
  * Make the tuple one level more shallow.
  * level( {a,{b},{{c}}} ) = {a,b,{c}} 
  */
 constexpr struct Level {
-    // Lift X to a tuple, unless it already is one.
-    static constexpr struct impl {
-        template< class X,
-                  class F = SelectF< tupleOrPair<X>(), Id, decltype(tuple) > >
-        constexpr auto operator () ( X&& x )
-            -> Result<F,X>
-        {
-            return F()( forward<X>(x) );
-        }
-    } impl{};
+    // Convert to a tuple, if not one already.
+    static constexpr auto select = selectF< TupleOrPair >( id, tuple );
 
-    // List each element and append.
+    // Convert each element and append.
     template< class T >
     constexpr auto operator () ( T&& t )
-        -> decltype( concat( zipWith( impl, forward<T>(t) ) ) )
+        -> decltype( concat( zipWith( select, forward<T>(t) ) ) )
     {
         // Example:
-        // input:        {  1,  {2}, {{3}} }  
-        // zipped:       { {1}, {2}, {{3}} }
-        // concatenated: {  1,   2,   {3}  }
-        return concat( zipWith( impl, forward<T>(t) ) );
+        // input:        {  0,   1,  {2}, {{3}} }  
+        // zipped:       { {0}, {1}, {2}, {{3}} }
+        // concatenated: {  0,   1,   2,   {3}  }
+        return concat( zipWith( select, forward<T>(t) ) );
     }
 } level{};
 
@@ -525,7 +505,7 @@ template< class T > constexpr bool recursiveTuple() {
  * flatten( {1,{2},{{3}}} = {1,2,3}
  */
 constexpr struct Flatten {
-    static constexpr struct Rec {
+    static constexpr struct {
         template< class T >
         constexpr auto operator () ( T&& t ) 
             -> Result< Flatten, Result<Level,T> >
@@ -533,15 +513,17 @@ constexpr struct Flatten {
             // One level at a time.
             return Flatten()( level(forward<T>(t)) );
         }
-    } rec{};
+    } level1{};
 
-    // Recursively flatten by one layer until there are no recursive tuples.
-    template< class T, 
-              class F = SelectF< recursiveTuple<T>(), Rec, Id > >
+    // Flatten by one layer if tuple is recursive.
+    static constexpr auto select = selectF< RecursiveTuple >( level1, id );
+
+    // Recursively level until t is flat.
+    template< class T >
     constexpr auto operator () ( T&& t ) 
-        -> Result<F,T>
+        -> Result< decltype(select), T >
     {
-        return F()( forward<T>(t) );
+        return select( forward<T>(t) );
     }
 } flatten{};
 

@@ -5,6 +5,7 @@
 
 namespace pure {
 
+
 /*
  * chainl(b,x...) -- Apply b to x... from left to right.
  * chainl(+,1,2,3) = (1+2) + 3
@@ -926,5 +927,42 @@ constexpr struct Min : Chainable<Min> {
         return a < b ? a : b;
     }
 } min{};
+
+template< bool b >
+struct If {
+    template< class X, class Y >
+    constexpr X operator () ( X&& x, const Y& ) {
+        return forward<X>(x);
+    }
+};
+
+template<>
+struct If<false> {
+    template< class X, class Y >
+    constexpr Y operator () ( const X&, Y&& y ) {
+        return forward<Y>(y);
+    }
+};
+
+template< template<class...> class P/*redicate*/, class T, class F >
+struct SelectF {
+    T t = T();
+    F f = F();
+
+    constexpr SelectF( T t, F f ) : t(move(t)), f(move(f)) { }
+
+    template< class ...X, class Fn = If< P<Decay<X>...>::value > >
+    constexpr auto operator () ( X&& ...x )
+        -> decltype( Fn()(t,f)( forward<X>(x)... ) )
+    {
+        return Fn()(t,f)( forward<X>(x)... );
+    }
+};
+
+template< template<class...> class P/*redicate*/, class T, class F,
+          class S = SelectF<P,T,F> >
+constexpr S selectF( T t, F f ) {
+    return S( move(t), move(f) );
+}
 
 } // namespace pure.
