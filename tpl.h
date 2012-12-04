@@ -461,26 +461,25 @@ static constexpr bool tupleOrPair() {
     return TupleOrPair<X>::value;
 }
 
+// If given a tuple, return it. If not, make a tuple!
+constexpr auto makeTupleIfNot = selectF<TupleOrPair>(id,tuple);
+
 /* 
  * Make the tuple one level more shallow.
  * level( {a,{b},{{c}}} ) = {a,b,{c}} 
+ *
+ * Make each element a tuple (unless it already is one)
+ * and then concatenates them together.
+ *
+ * Example:
+ *     input:        {  0,   1,  {2}, {{3}} }  
+ *     after zip:    { {0}, {1}, {2}, {{3}} }
+ *     concatenated: {  0,   1,   2,   {3}  }
  */
-constexpr struct Level {
-    // Convert to a tuple, if not one already.
-    static constexpr auto select = selectF< TupleOrPair >( id, tuple );
-
-    // Convert each element and append.
-    template< class T >
-    constexpr auto operator () ( T&& t )
-        -> decltype( concat( zipWith( select, forward<T>(t) ) ) )
-    {
-        // Example:
-        // input:        {  0,   1,  {2}, {{3}} }  
-        // zipped:       { {0}, {1}, {2}, {{3}} }
-        // concatenated: {  0,   1,   2,   {3}  }
-        return concat( zipWith( select, forward<T>(t) ) );
-    }
-} level{};
+constexpr auto level = compose (
+    concat, 
+    closure( zipWith, makeTupleIfNot )
+);
 
 template< class T, class ...U > struct AnyIsTuple {
     enum { value = isTuple<T>() or AnyIsTuple<U...>::value };
@@ -508,7 +507,7 @@ constexpr struct Flatten {
     static constexpr struct {
         template< class T >
         constexpr auto operator () ( T&& t ) 
-            -> Result< Flatten, Result<Level,T> >
+            -> Result< Flatten, Result<decltype(level),T> >
         {
             // One level at a time.
             return Flatten()( level(forward<T>(t)) );
@@ -518,7 +517,7 @@ constexpr struct Flatten {
     // Flatten by one layer if tuple is recursive.
     static constexpr auto select = selectF< RecursiveTuple >( level1, id );
 
-    // Recursively level until t is flat.
+    // Recursively level t until flat.
     template< class T >
     constexpr auto operator () ( T&& t ) 
         -> Result< decltype(select), T >
