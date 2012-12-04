@@ -2,21 +2,32 @@
 #pragma once
 
 #include <utility>
+#include <string>
 
 #include "Functional.h"
 
 namespace pure {
 
-template< unsigned int N > struct Get {
-    template< class X >
-    constexpr auto operator () ( X&& x )
-        -> decltype( std::get<N>(declval<X>()) )
-    {
-        return std::get<N>( std::forward<X>(x) );
-    }
+template< size_t i, class T > struct AssertInTupleRange {
+    enum { size = std::tuple_size<T>::value };
+    static_assert( i < size, "Index larger than tuple size." );
 };
 
-using std::get;
+template< size_t i, class T, class Assert = AssertInTupleRange<i,Decay<T>> >
+constexpr auto get( T&& t )
+    -> decltype( Assert(), std::get<i>(declval<T>()) )
+{
+    return std::get<i>( forward<T>(t) );
+}
+
+template< size_t i > struct Get {
+    template< class T >
+    constexpr auto operator () ( T&& t )
+        -> decltype( get<i>(declval<T>()) )
+    {
+        return get<i>( forward<T>(t) );
+    }
+};
 
 namespace tpl {
 
@@ -229,7 +240,7 @@ template< size_t N > struct RepeatTie {
 constexpr struct reverse {
     template< size_t ...I, size_t S = sizeof...(I)-1, class T >
     static constexpr auto impl( IndexList<I...>, T&& t )
-        -> decltype( tuple( std::get<S-I>(forward<T>(t))... ) )
+        -> std::tuple< Decay<Elem<S-I,T>>... >
     {
         return tuple( std::get<S-I>(forward<T>(t))... );
     }
