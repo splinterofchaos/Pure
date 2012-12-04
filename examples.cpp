@@ -263,6 +263,17 @@ int main()
         printf( "toTuple( toArray(t) ) = %s\n", show(arrayToTuple(arr)).c_str() );
         printf( "reverse t = %s\n", show(reverse(t)).c_str() );
 
+        auto rec = tuple( tuple(1,tuple(2,3)),tuple(4,5) );
+        //auto uneven = tuple( 1, 2, tuple(3) );
+        auto uneven = tuple( 1, 2, tuple(3,(4)) );
+        printf( "flatten %s = %s\n", show(rec).c_str(),
+                show( flatten(rec) ).c_str() );
+
+        //printf( "append {1} {2} ... = %s\n",
+        //        show (
+        //            append(tuple(),tuple(1),tuple(2),tuple(3),tuple(4),tuple(5),tuple(6),tuple(7),tuple(8),tuple(9),tuple(10),tuple(1),tuple(2),tuple(3),tuple(4),tuple(5),tuple(6),tuple(7),tuple(8),tuple(9),tuple(10),tuple(1),tuple(2),tuple(3),tuple(4),tuple(5),tuple(6),tuple(7),tuple(8),tuple(9),tuple(10),tuple(1),tuple(2),tuple(3),tuple(4),tuple(5),tuple(6),tuple(7),tuple(8),tuple(9),tuple(10),tuple(1),tuple(2),tuple(3),tuple(4),tuple(5),tuple(6),tuple(7),tuple(8),tuple(9),tuple(10),tuple(1),tuple(2),tuple(3),tuple(4),tuple(5),tuple(6),tuple(7),tuple(8),tuple(9),tuple(10),tuple(1),tuple(2),tuple(3),tuple(4),tuple(5),tuple(6),tuple(7),tuple(8),tuple(9),tuple(10),tuple(1),tuple(2),tuple(3),tuple(4),tuple(5),tuple(6),tuple(7),tuple(8),tuple(9),tuple(10),tuple(1),tuple(2),tuple(3),tuple(4),tuple(5),tuple(6),tuple(7),tuple(8),tuple(9),tuple(10),tuple(1),tuple(2),tuple(3),tuple(4),tuple(5),tuple(6),tuple(7),tuple(8),tuple(9),tuple(10),tuple(1),tuple(2),tuple(3),tuple(4),tuple(5),tuple(6),tuple(7),tuple(8),tuple(9),tuple(10),tuple(1),tuple(2),tuple(3),tuple(4),tuple(5),tuple(6),tuple(7),tuple(8),tuple(9),tuple(10))
+        //        ).c_str() );
+
         printf( "take 0 t = %s\n", show( take<0>(t) ).c_str() );
         printf( "take 5 t = %s\n", show( take<5>(t) ).c_str() );
         printf( "drop 0 t = %s\n", show( drop<0>(t) ).c_str() );

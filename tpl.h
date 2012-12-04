@@ -44,7 +44,9 @@ template< class ...X > using Tuple = std::tuple< Decay<X>... >;
 template< class ...X > using Tie   = decltype( tie(declval<X>()...) );
 template< class ...X > using ForwardTuple = std::tuple< X... >;
 
-template< class X > struct TTraits; // Tuple Traits.
+template< class X > struct TTraits { // Tuple Traits.
+    enum { isTuple = false, isPair = false };
+};
 
 template< class ...X > struct TTraits<std::tuple<X...>> {
     using type = std::tuple<X...>;
@@ -88,7 +90,7 @@ constexpr auto makeSimilar( X&& ...x )
 }
 
 template< class T > constexpr size_t size() {
-    return std::tuple_size<Decay<T>>::value;
+    return std::tuple_size< Decay<T> >::value;
 }
 
 template< class T > constexpr size_t size( const T& ) {
@@ -406,7 +408,7 @@ constexpr struct zipWith {
     }
 
     template< class F, class T, class ...U,
-              class IS = BuildList<std::tuple_size<T>::value> >
+              class IS = TupleIndicies<T> >
     constexpr auto operator () ( const F& f, T&& t, U&& ...u )
         -> decltype( _zip(IS(),f,declval<T>(),declval<U>()...) )
     {
@@ -449,6 +451,99 @@ constexpr struct Foldr {
 
 /* concat( {{1,2},{3},{4,5}} ) = {1,2,3,4,5} */
 constexpr auto concat = closure( foldl, append );
+
+template< class _X, class X = Decay<_X> >
+static constexpr bool tupleOrPair() {
+    return isTuple<X>() or isPair<X>();
+}
+
+template< bool b, class T, class F >
+struct SelectF {
+    template< class ...X >
+    constexpr Result<T,X...> operator () ( X&& ...x ) {
+        return T()( forward<X>(x)... );
+    }
+};
+
+template< class T, class F >
+struct SelectF<false,T,F> {
+    template< class ...X >
+    constexpr Result<F,X...> operator () ( X&& ...x ) {
+        return F()( forward<X>(x)... );
+    }
+};
+
+/* 
+ * Make the tuple one level more shallow.
+ * level( {a,{b},{{c}}} ) = {a,b,{c}} 
+ */
+constexpr struct Level {
+    // Lift X to a tuple, unless it already is one.
+    static constexpr struct impl {
+        template< class X,
+                  class F = SelectF< tupleOrPair<X>(), Id, decltype(tuple) > >
+        constexpr auto operator () ( X&& x )
+            -> Result<F,X>
+        {
+            return F()( forward<X>(x) );
+        }
+    } impl{};
+
+    // List each element and append.
+    template< class T >
+    constexpr auto operator () ( T&& t )
+        -> decltype( concat( zipWith( impl, forward<T>(t) ) ) )
+    {
+        // Example:
+        // input:        {  1,  {2}, {{3}} }  
+        // zipped:       { {1}, {2}, {{3}} }
+        // concatenated: {  1,   2,   {3}  }
+        return concat( zipWith( impl, forward<T>(t) ) );
+    }
+} level{};
+
+template< class T, class ...U > struct AnyIsTuple {
+    enum { value = isTuple<T>() or AnyIsTuple<U...>::value };
+};
+
+template< class T > struct AnyIsTuple<T> {
+    enum { value = isTuple<T>() };
+};
+
+template< class ...X > struct RecursiveTuple;
+
+template< class ...X > struct RecursiveTuple< std::tuple<X...> > {
+    enum { value = AnyIsTuple<X...>::value };
+};
+
+template< class T > constexpr bool recursiveTuple() {
+    return RecursiveTuple< Decay<T> >::value;
+}
+
+/* 
+ * Completely flatten a tuple.
+ * flatten( {1,{2},{{3}}} = {1,2,3}
+ */
+constexpr struct Flatten {
+    static constexpr struct Rec {
+        template< class T >
+        constexpr auto operator () ( T&& t ) 
+            -> Result< Flatten, Result<Level,T> >
+        {
+            // One level at a time.
+            return Flatten()( level(forward<T>(t)) );
+        }
+    } rec{};
+
+    // Recursively flatten by one layer until there are no recursive tuples.
+    template< class T, 
+              class F = SelectF< recursiveTuple<T>(), Rec, Id > >
+    constexpr auto operator () ( T&& t ) 
+        -> Result<F,T>
+    {
+        return F()( forward<T>(t) );
+    }
+} flatten{};
 
 /* nth -- Apply f to the nth element of t. */
 // Helper
