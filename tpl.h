@@ -100,6 +100,33 @@ template< class T > constexpr size_t size( const T& ) {
 template< size_t i, class T >
 using Elem = decltype( get<i>(declval<T>()) );
 
+template< class X > struct TupleOrPair {
+    enum { value = isTuple<X>() or isPair<X>() };
+};
+
+template< class X >
+static constexpr bool tupleOrPair() {
+    return TupleOrPair<X>::value;
+}
+
+template< class T, class ...U > struct AnyIsTuple {
+    enum { value = isTuple<T>() or AnyIsTuple<U...>::value };
+};
+
+template< class T > struct AnyIsTuple<T> {
+    enum { value = isTuple<T>() };
+};
+
+template< class ...X > struct RecursiveTuple;
+
+template< class ...X > struct RecursiveTuple< std::tuple<X...> > {
+    enum { value = AnyIsTuple<X...>::value };
+};
+
+template< class T > constexpr bool recursiveTuple() {
+    return RecursiveTuple< Decay<T> >::value;
+}
+
 
 /* INDEXING */
 
@@ -239,6 +266,7 @@ template< size_t N > struct RepeatTie {
     }
 };
 
+/* reverse : {a...} -> {...a} */
 constexpr struct reverse {
     template< size_t ...I, size_t S = sizeof...(I)-1, class T >
     static constexpr auto impl( IndexList<I...>, T&& t )
@@ -300,15 +328,7 @@ template< size_t N > struct Drop {
     }
 };
 
-/* Drop the first element, or take the rest. */
-constexpr struct tail {
-    template< class T >
-    constexpr auto operator () ( T&& t )
-        -> decltype( drop<1>( forward<T>(t) ) )
-    {
-        return drop<1>( forward<T>(t) );
-    }
-} tail{};
+constexpr auto tail = Drop<1>();
 
 /* Drop the last element. */
 constexpr struct init {
@@ -346,11 +366,8 @@ constexpr struct call : Binary<call> {
 
 constexpr auto arrayToTuple = closure( call, tuple );
 
-/*
- * append two or more tuples.
- * Ex: append( {1,2}, {3,4}, {5} ) = {1,2,3,4,5}
- */
-constexpr struct append {
+/* append : {a...} x {b...} x ... -> {a..., b..., ...} */
+constexpr struct Append {
     template< class ...T >
     constexpr auto operator () ( T&& ...t )
         -> decltype( std::tuple_cat( forward<T>(t)... ) )
@@ -359,9 +376,9 @@ constexpr struct append {
     }
 } append{};
 
-/* cons( {1,2}, 3 ) = {1,2,3} */
-constexpr struct cons : Chainable<cons> {
-    using Chainable<cons>::operator();
+/* cons : {a...} x b -> {a...,b} */
+constexpr struct Cons : Chainable<Cons> {
+    using Chainable<Cons>::operator();
 
     template< class T, class X >
     constexpr auto operator () ( T t, X&& x )
@@ -371,9 +388,9 @@ constexpr struct cons : Chainable<cons> {
     }
 } cons{};
 
-/* rcons( {2,3}, 1 ) = {1,2,3} */
-constexpr struct rcons : Chainable<rcons> {
-    using Chainable<rcons>::operator();
+/* rcons : {b...} x a -> {a,b...} */
+constexpr struct RCons : Chainable<RCons> {
+    using Chainable<RCons>::operator();
 
     template< class T, class X >
     constexpr auto operator () ( T t, X&& x )
@@ -387,11 +404,11 @@ constexpr struct rcons : Chainable<rcons> {
  * Zip each tuple together with f.
  *
  * zipWith : (a -> b) x {a...} -> {b...}
- * zipWith : (a x b -> c) x {a...} x {b...} -> {c...}
  * zipWith( f, {x,y}, {a,b} ) = { f(x,a), f(y,b) }
  */
 
 // Helper
+// zipRow : (a -> b) x {...,a,...} -> {...,b,...}
 template< size_t i, class F, class ...T >
 constexpr auto zipRowWith( const F& f, T&& ...t )
     -> decltype( f( get<i>(forward<T>(t))... ) )
@@ -399,7 +416,9 @@ constexpr auto zipRowWith( const F& f, T&& ...t )
     return f( get<i>(forward<T>(t))... );
 }
 
-constexpr struct zipWith {
+constexpr struct ZipWith : Binary<ZipWith> {
+    using Binary<ZipWith>::operator();
+
     template< size_t ...I, class F, class ...T >
     static constexpr auto _zip (IndexList<I...>, const F& f, T&& ...t )
         -> decltype( tuple(zipRowWith<I>(f,declval<T>()...)...) )
@@ -429,37 +448,12 @@ constexpr auto zip = closure( zipWith, tuple );
 
 /* APLICATION */
 
-/*fold(b,{x...}) = chain( b, x... ) */
+/* fold : (a -> a -> b) x {a...} -> {b...} */
+constexpr auto foldl = compose( call, chainl );
+constexpr auto foldr = compose( call, chainr );
 
-constexpr struct Foldl {
-    template< class Binary, class T >
-    constexpr auto operator () ( Binary&& b, T&& ts  )
-        -> decltype( call( closure(chainl,forward<Binary>(b)), forward<T>(ts) ) )
-    {
-        return call( closure(chainl,forward<Binary>(b)), forward<T>(ts) );
-    }
-} foldl{};
-
-constexpr struct Foldr {
-    template< class Binary, class T >
-    constexpr auto operator () ( Binary&& b, T&& ts  )
-        -> decltype( call( closure(chainr,forward<Binary>(b)), forward<T>(ts) ) )
-    {
-        return call( closure(chainr,forward<Binary>(b)), forward<T>(ts) );
-    }
-} foldr{};
-
-/* concat( {{1,2},{3},{4,5}} ) = {1,2,3,4,5} */
+/* concat : { {a...}, {b...}, ... } -> { a..., b..., ... } */
 constexpr auto concat = closure( foldl, append );
-
-template< class X > struct TupleOrPair {
-    enum { value = isTuple<X>() or isPair<X>() };
-};
-
-template< class X >
-static constexpr bool tupleOrPair() {
-    return TupleOrPair<X>::value;
-}
 
 // If given a tuple, return it. If not, make a tuple!
 constexpr auto makeTupleIfNot = selectF<TupleOrPair>(id,tuple);
@@ -477,27 +471,8 @@ constexpr auto makeTupleIfNot = selectF<TupleOrPair>(id,tuple);
  *     concatenated: {  0,   1,   2,   {3}  }
  */
 constexpr auto level = compose (
-    concat, 
-    closure( zipWith, makeTupleIfNot )
+    concat, zipWith(makeTupleIfNot)
 );
-
-template< class T, class ...U > struct AnyIsTuple {
-    enum { value = isTuple<T>() or AnyIsTuple<U...>::value };
-};
-
-template< class T > struct AnyIsTuple<T> {
-    enum { value = isTuple<T>() };
-};
-
-template< class ...X > struct RecursiveTuple;
-
-template< class ...X > struct RecursiveTuple< std::tuple<X...> > {
-    enum { value = AnyIsTuple<X...>::value };
-};
-
-template< class T > constexpr bool recursiveTuple() {
-    return RecursiveTuple< Decay<T> >::value;
-}
 
 /* 
  * Completely flatten a tuple.
@@ -588,8 +563,7 @@ constexpr auto apRow( const TF& tf, TX&& ...tx )
  * treating the other tuples as arguments.
  *
  * ap : {(a -> b)...} x {a...} -> {b...}
- * ap : {(a x b -> c)...} x {a...} x {b...} -> {c...}
- * ap( {f}, {x}, {a} ) = { f(x,a) }
+ * ap( {f,g}, {x,a}, {y,b} ) = { f(x,y), g(a,b) }
  */
 constexpr struct ap : Binary<ap> {
     using Binary<ap>::operator();
@@ -610,7 +584,7 @@ constexpr struct ap : Binary<ap> {
     }
 } ap{};
 
-/* fan(x,f,g,h) = { f(x), g(x), g(x) } */
+/* fan : a x (a -> b)... -> {b...} */
 constexpr struct fan {
     template< class X, class ...F >
     constexpr auto operator () ( const X& x, const F& ...f )
@@ -629,7 +603,7 @@ constexpr struct fanPair {
     }
 } fanPair{};
 
-/* split( {x,y,z}, f g h ) = { f(x), g(y), z(h) }; */
+/* split : {a...} x (a -> b)... -> {b...} */
 constexpr struct split {
     template< class T, class ...F >
     constexpr auto operator () ( T&& t, F&& ...f )
@@ -640,7 +614,7 @@ constexpr struct split {
 } split{};
 
 /*
- * fork(xs,pred0,pred1,...,predn)
+ * fork : [a] x (a -> bool)... -> {[a]...}
  *
  * Returns a tuple, {leftovers,xs0,xs1,...,xsn}, where xsN is every x from xs
  * such that predN(x) is true. leftovers contains every x for which no

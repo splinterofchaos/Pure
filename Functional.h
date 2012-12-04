@@ -6,55 +6,6 @@
 namespace pure {
 
 
-/*
- * chainl(b,x...) -- Apply b to x... from left to right.
- * chainl(+,1,2,3) = (1+2) + 3
- */
-constexpr struct chainl {
-    template< class Binary, class X >
-    constexpr X operator () ( const Binary&, X&& x ) {
-        return forward<X>(x);
-    }
-
-    template< class Binary, class X, class Y, class ...Z >
-    constexpr auto operator () ( Binary&& b, X&& x, Y&& y, Z&& ...z)
-        -> decltype(
-            (*this)( b, b(declval<X>(),declval<Y>()), declval<Z>()... )
-        )
-    {
-        return (*this)(
-            b,
-            b( forward<X>(x), forward<Y>(y) ),
-            forward<Z>(z)...
-        );
-    }
-} chainl{};
-
-/*
- * chainr(b,x...) -- Apply b to x... from right to left.
- * chainr(+,1,2,3) = 1 + (2+3)
- */
-constexpr struct chainr {
-    template< class Binary, class X >
-    constexpr X operator () ( const Binary&, X&& x ) {
-        return forward<X>(x);
-    }
-
-    template< class Binary, class X, class Y, class ...Z >
-    constexpr auto operator () ( const Binary& b, X&& x, Y&& y, Z&& ...z)
-        -> decltype(
-                b( (*this)(b,declval<Y>(),declval<Z>()...), declval<X>() )
-        )
-    {
-        return b (
-            // Reverse the argument order.
-            (*this)( b, forward<Y>(y), forward<Z>(z)... ),
-            // The first gets applied last.
-            forward<X>(x)
-        );
-    }
-} chainr{};
-
 /* Forwarder<F>(x...) = f(x...) */
 template< class F > struct Forwarder {
     using function = Decay<F>;
@@ -215,6 +166,59 @@ template< class D > struct Binary {
         return RPart<D,X>( D(), move(x) );
     }
 };
+
+/*
+ * chainl(b,x...) -- Apply b to x... from left to right.
+ * chainl(+,1,2,3) = (1+2) + 3
+ */
+constexpr struct Chainl : Binary<Chainl> {
+    using Binary<Chainl>::operator();
+
+    template< class F, class X >
+    constexpr X operator () ( const F&, X&& x ) {
+        return forward<X>(x);
+    }
+
+    template< class F, class X, class Y, class ...Z >
+    constexpr auto operator () ( F&& b, X&& x, Y&& y, Z&& ...z)
+        -> decltype(
+            (*this)( b, b(declval<X>(),declval<Y>()), declval<Z>()... )
+        )
+    {
+        return (*this)(
+            b,
+            b( forward<X>(x), forward<Y>(y) ),
+            forward<Z>(z)...
+        );
+    }
+} chainl{};
+
+/*
+ * chainr(b,x...) -- Apply b to x... from right to left.
+ * chainr(+,1,2,3) = 1 + (2+3)
+ */
+constexpr struct Chainr : Binary<Chainr> {
+    using Binary<Chainr>::operator();
+    template< class F, class X >
+    constexpr X operator () ( const F&, X&& x ) {
+        return forward<X>(x);
+    }
+
+    template< class F, class X, class Y, class ...Z >
+    constexpr auto operator () ( const F& b, X&& x, Y&& y, Z&& ...z)
+        -> decltype(
+                b( (*this)(b,declval<Y>(),declval<Z>()...), declval<X>() )
+        )
+    {
+        return b (
+            // Reverse the argument order.
+            (*this)( b, forward<Y>(y), forward<Z>(z)... ),
+            // The first gets applied last.
+            forward<X>(x)
+        );
+    }
+} chainr{};
+
 
 /* ConstructBinary<T>(x,y) = T<X,Y>(x,y) */
 template< template<class...> class T >
