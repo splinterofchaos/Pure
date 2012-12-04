@@ -308,6 +308,32 @@ constexpr struct init {
 } init{};
 
 /*
+ * Apply f to t's members.
+ *
+ * call : (a x b... -> c) x {a,b...} -> c
+ * call( f, {x,y,z} ) = f(x,y,z)
+ */
+constexpr struct call : Binary<call> {
+    using Binary<call>::operator();
+
+    template< size_t ...I, class F, class T >
+    static constexpr auto impl( IndexList<I...>, const F& f, T&& t )
+        -> decltype( f( get<I>(forward<T>(t))... ) )
+    {
+        return f( get<I>(forward<T>(t))... );
+    }
+
+    template< class F, class T, class IS = TupleIndicies<T> >
+    constexpr auto operator () ( const F& f, T&& t )
+        -> decltype( impl(IS(),f,forward<T>(t)) )
+    {
+        return impl( IS(), f, forward<T>(t) );
+    }
+} call{};
+
+constexpr auto arrayToTuple = closure( call, tuple );
+
+/*
  * append two or more tuples.
  * Ex: append( {1,2}, {3,4}, {5} ) = {1,2,3,4,5}
  */
@@ -390,32 +416,6 @@ constexpr auto zip = closure( zipWith, tuple );
 
 /* APLICATION */
 
-/*
- * Apply f to t's members.
- *
- * call : (a x b... -> c) x {a,b...} -> c
- * call( f, {x,y,z} ) = f(x,y,z)
- */
-constexpr struct call : Binary<call> {
-    using Binary<call>::operator();
-
-    template< size_t ...I, class F, class T >
-    static constexpr auto impl( IndexList<I...>, const F& f, T&& t )
-        -> decltype( f( get<I>(forward<T>(t))... ) )
-    {
-        return f( get<I>(forward<T>(t))... );
-    }
-
-    template< class F, class T, class IS = TupleIndicies<T> >
-    constexpr auto operator () ( const F& f, T&& t )
-        -> decltype( impl(IS(),f,forward<T>(t)) )
-    {
-        return impl( IS(), f, forward<T>(t) );
-    }
-} call{};
-
-constexpr auto toTuple = closure( call, tuple );
-
 /*fold(b,{x...}) = chain( b, x... ) */
 
 constexpr struct Foldl {
@@ -440,7 +440,7 @@ constexpr struct Foldr {
 constexpr auto concat = closure( foldl, append );
 
 /* nth -- Apply f to the nth element of t. */
-// nth helper
+// Helper
 template< size_t N, class F, class T >
 constexpr auto _nth( const F& f, T&& t )
     -> decltype( std::tuple_cat (
@@ -451,7 +451,7 @@ constexpr auto _nth( const F& f, T&& t )
     // The tuple needs to be cut apart and repackaged because f may not return
     // the same as what it gets.
     return std::tuple_cat (
-        take<N>( forward<T>(t) ),          // Befor the nths,
+        take<N>( forward<T>(t) ),          // Before the nths,
         tuple( f(get<N>(forward<T>(t))) ), // the nts,
         drop<N+1>(forward<T>(t))           // and after.
     );
