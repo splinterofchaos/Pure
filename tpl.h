@@ -211,32 +211,8 @@ using BuildList = typename IListBuilder<N>::type;
 template< class T >
 using TupleIndicies = BuildList< std::tuple_size<Decay<T>>::value >;
 
-constexpr struct toArray {
-    template< class R, size_t ...I, class T >
-    static constexpr R impl( IndexList<I...>, T&& t )
-    {
-        return {{ get<I>(forward<T>(t))... }};
-    }
 
-    template< class T, class X = Decay<Elem<0,T>>, size_t S = size<T>(),
-              class IS = TupleIndicies<T>,
-              class A = std::array<X,S> >
-    constexpr A operator () ( T&& t ) {
-        return impl<A>( IS(), forward<T>(t) );
-    }
-} toArray{};
-
-
-/* LIST-LIKE ACCESS */
-
-constexpr auto head = Get<0>();
-
-constexpr struct last {
-    template< class T, size_t S = size<T>() >
-    constexpr Elem<S-1,T> operator () ( T&& t ) {
-        return get<S-1>( forward<T>(t) );
-    }
-} last{};
+/* APPLICATION */
 
 // Helper: Ignore I, return x.
 template< size_t I, class X > const X& xOfI( const X& x ) { return x; }
@@ -357,6 +333,34 @@ struct ApplyTupleBy : Binary<ApplyTupleBy<Fi>> {
         return applyTupleBy<Fi>( forward<F>(f), forward<T>(t) );
     }
 };
+
+
+
+/* LIST-LIKE ACCESS */
+
+constexpr struct toArray {
+    template< class R, size_t ...I, class T >
+    static constexpr R impl( IndexList<I...>, T&& t )
+    {
+        return {{ get<I>(forward<T>(t))... }};
+    }
+
+    template< class T, class X = Decay<Elem<0,T>>, size_t S = size<T>(),
+              class IS = TupleIndicies<T>,
+              class A = std::array<X,S> >
+    constexpr A operator () ( T&& t ) {
+        return impl<A>( IS(), forward<T>(t) );
+    }
+} toArray{};
+
+constexpr auto head = Get<0>();
+
+constexpr struct last {
+    template< class T, size_t S = size<T>() >
+    constexpr Elem<S-1,T> operator () ( T&& t ) {
+        return get<S-1>( forward<T>(t) );
+    }
+} last{};
 
 /* Make a tuple of N X's. */
 template< size_t N, class X, class I = BuildList<N> >
@@ -540,9 +544,6 @@ constexpr auto zipRow( T&& ...t )
 /* zip( {x,y}, {a,b} ) = { (x,a), (y,b) } */
 constexpr auto zip = closure( zipWith, tuple );
 
-
-/* APLICATION */
-
 /* fold : (a -> a -> b) x {a...} -> {b...} */
 constexpr auto foldl = compose( apply, chainl );
 constexpr auto foldr = compose( apply, chainr );
@@ -568,6 +569,33 @@ constexpr auto makeTupleIfNot = selectF<TupleOrPair>(id,tuple);
 constexpr auto level = compose (
     concat, zipWith(makeTupleIfNot)
 );
+
+
+
+/* STACK-LIKE ACCESS */
+
+/* rot : { a, b... } -> { b..., a } */
+constexpr auto rot  = bcompose( cons, tail, head );
+
+/* rrot : { a..., b } -> { b, a... } */
+constexpr auto rrot = bcompose( rcons, init, last );
+
+/* dup : { a..., b } -> { a..., b, b } */
+constexpr auto dup = bcompose( cons, id, last );
+
+constexpr struct Swap {
+    template< size_t S > using Init = Take< S - 2 >;
+
+    template< class T, size_t S = size<T>() >
+    constexpr auto operator () ( T&& t )
+        -> decltype( append( take<S-2>( forward<T>(t) ), reverse(drop<S-2>(forward<T>(t)) ) ) )
+    {
+        return append( take<S-2>( forward<T>(t) ), reverse(drop<S-2>(forward<T>(t)) ) );
+    }
+} swap{};
+
+/* APLICATION */
+
 
 /* 
  * Completely flatten a tuple.

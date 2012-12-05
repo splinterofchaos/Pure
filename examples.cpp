@@ -279,18 +279,11 @@ int main()
         printf( "flatten %s = %s\n", show(rec).c_str(),
                 show( flatten(rec) ).c_str() );
 
-        printf( "take 0 t = %s\n", show( take<0>(t) ).c_str() );
-        printf( "take 5 t = %s\n", show( take<5>(t) ).c_str() );
-        printf( "drop 0 t = %s\n", show( drop<0>(t) ).c_str() );
-        printf( "drop 5 t = %s\n", show( drop<5>(t) ).c_str() );
+        printf( "rot t = %s\n", show(tpl::rot(t)).c_str() );
+        printf( "dup t = %s\n", show(tpl::dup(t)).c_str() );
+        printf( "swap t = %s\n", show(tpl::swap(t)).c_str() );
         printf( "tail t = %s\n", show(tail(t)).c_str() );
         printf( "init t = %s\n", show(init(t)).c_str() );
-        printf( "tpl::repeat<3>(3) = %s\n", show(repeat<3>(3)).c_str() );
-
-        printf( "nth<1> (+1) t = %s\n", show(nth<1>(add(1),t)).c_str() );
-        printf( "nth<2> (+1) t = %s\n", show(nth<2>(add(1),t)).c_str() );
-
-        printf( "nth<0> (+1) (1,2) = %s\n", show(nth<0>(add(1),tpl::pair(1,2))).c_str() );
         printf( "nth<1> (+1) (1,2) = %s\n", show(nth<1>(add(1),tpl::pair(1,2))).c_str() );
 
         printf( "apply (+) {1,2} = %s\n",
@@ -302,10 +295,6 @@ int main()
                 show( foldl(sub,tuple(1,2,3)) ).c_str() );
         printf( "tpl::foldr (-) {1,2,3} = %s\n",
                 show( foldr(sub,tuple(1,2,3)) ).c_str() );
-
-        auto ttt = tuple (
-            tuple( tuple(1,2), tuple(tuple(4,5)), tuple(6) ), tuple(7,8,9)
-        );
 
         printf( "zip {1,'a','hi '} {2,'b',' '} {3,'c','there'} = %s\n",
                 show( zip( tuple(1,'a',"hi"), tuple(2,'b'," "),
