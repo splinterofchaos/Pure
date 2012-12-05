@@ -75,6 +75,44 @@ struct IFromTuple< P, std::tuple<X...> > {
     enum { value = IFromType<P,0,X...>::value };
 };
 
+template< class X > struct IOfType {
+    template< class Y > struct SameType {
+        enum { value = std::is_same< Decay<X>, Decay<Y> >::value };
+    };
+
+    template< class T >
+    using type = IFromTuple< SameType, T >;
+
+    template< class T >
+    constexpr size_t get() {
+        return type< Decay<T> >::value;
+    }
+};
+
+template< class X, class T >
+constexpr size_t iOfType() {
+    return IOfType<X>().get<T>();
+}
+
+template< class X > struct IOfSimilar {
+    template< class Y > struct Similar {
+        enum { value = std::is_convertible<X,Y>::value };
+    };
+
+    template< class T >
+    using type = IFromTuple< Similar, T >;
+
+    template< class T >
+    constexpr size_t get() {
+        return type< Decay<T> >::value;
+    }
+};
+
+template< class X, class T >
+constexpr size_t iOfSimilar() {
+    return IOfSimilar<X>().get<T>();
+}
+
 /*
  * Find the index, i, of the type for which P<i> is true,
  * and forward the tuple to F<i>
@@ -840,6 +878,24 @@ template< size_t N > struct Nth : Binary<Nth<N>> {
         return nth<N>(f,forward<T>(t));
     }
 };
+
+/* Apply the nth where get<n>(t) is an X. */
+template< class X, class F, class T,
+          size_t i = iOfType<X,T>(), class Fi = Nth<i> >
+constexpr auto xth( F&& f, T&& t )
+    -> decltype( Fi()( forward<F>(f), forward<T>(t) ) )
+{
+    return Fi()( forward<F>(f), forward<T>(t) );
+}
+
+/* Apply the nth where get<n>(t) is similar to X. */
+template< class X, class F, class T,
+          size_t i = iOfSimilar<X,T>(), class Fi = Nth<i> >
+constexpr auto sth( F&& f, T&& t )
+    -> decltype( Fi()( forward<F>(f), forward<T>(t) ) )
+{
+    return Fi()( forward<F>(f), forward<T>(t) );
+}
 
 /*
  * Apply every function from the first tuple,

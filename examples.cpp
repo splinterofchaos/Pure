@@ -276,6 +276,11 @@ int main()
                 show(gett<float>(tuple(5,"hello",4.2f))).c_str() );
         printf( "gets<float> {5,'hello',4.2} = %s\n",
                 show(gets<float>(tuple(5,"hello",4.2f))).c_str() );
+        printf( "nth<1> (+1) (1,2) = %s\n", show(nth<1>(add(1),tpl::pair(1,2))).c_str() );
+        printf( "xth<float> (+1) {5,'hello',4.2} = %s\n",
+                show(xth<float>(add(1),tuple(5,"hello",4.2f))).c_str() );
+        printf( "sth<float> (+1) {5,'hello',4.2} = %s\n",
+                show(sth<float>(add(1),tuple(5,"hello",4.2f))).c_str() );
 
         auto arr = toArray( t );
         printf( "toArray t = %s\n", show(arr).c_str() );
@@ -294,7 +299,6 @@ int main()
         printf( "tuck t = %s\n", show(tpl::tuck(t)).c_str() );
         printf( "tail t = %s\n", show(tail(t)).c_str() );
         printf( "init t = %s\n", show(init(t)).c_str() );
-        printf( "nth<1> (+1) (1,2) = %s\n", show(nth<1>(add(1),tpl::pair(1,2))).c_str() );
 
         printf( "apply (+) {1,2} = %s\n",
                 show( apply(add,tuple(1,2)) ).c_str() );
