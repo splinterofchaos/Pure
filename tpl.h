@@ -446,15 +446,38 @@ template< size_t N > struct Drop {
 
 constexpr auto tail = Drop<1>();
 
-/* Drop the last element. */
-constexpr struct init {
-    template< class T, size_t N = size<T>() - 1 >
+/* Drop the last N elements. */
+template< size_t N = 1, class T, size_t M = size<T>() - N >
+constexpr auto init( T&& t )
+    -> decltype( take<M>( forward<T>(t) ) )
+{
+    return take<M>( forward<T>(t) );
+}
+
+template< size_t N = 1, class T, size_t M = size<T>() - N >
+constexpr auto rinit( T&& t )
+    -> decltype( drop<M>( forward<T>(t) ) )
+{
+    return drop<M>( forward<T>(t) );
+}
+
+template< size_t N = 1 > struct Init {
+    template< class T >
     constexpr auto operator () ( T&& t )
-        -> decltype( take<N>( forward<T>(t) ) )
+        -> decltype( init<N>( forward<T>(t) ) )
     {
-        return take<N>( forward<T>(t) );
+        return init<N>( forward<T>(t) );
     }
-} init{};
+};
+
+template< size_t N = 1 > struct RInit {
+    template< class T >
+    constexpr auto operator () ( T&& t )
+        -> decltype( rinit<N>( forward<T>(t) ) )
+    {
+        return rinit<N>( forward<T>(t) );
+    }
+};
 
 /*
  * Apply f to t's members.
@@ -578,21 +601,17 @@ constexpr auto level = compose (
 constexpr auto rot  = bcompose( cons, tail, head );
 
 /* rrot : { a..., b } -> { b, a... } */
-constexpr auto rrot = bcompose( rcons, init, last );
+constexpr auto rrot = bcompose( rcons, Init<1>(), last );
 
 /* dup : { a..., b } -> { a..., b, b } */
 constexpr auto dup = bcompose( cons, id, last );
 
-constexpr struct Swap {
-    template< size_t S > using Init = Take< S - 2 >;
-
-    template< class T, size_t S = size<T>() >
-    constexpr auto operator () ( T&& t )
-        -> decltype( append( take<S-2>( forward<T>(t) ), reverse(drop<S-2>(forward<T>(t)) ) ) )
-    {
-        return append( take<S-2>( forward<T>(t) ), reverse(drop<S-2>(forward<T>(t)) ) );
-    }
-} swap{};
+/* swap : { a..., b, c } -> { a..., c, b } */
+constexpr auto swap = bcompose (
+    append,                        // t = { a..., b, c }
+    Init<2>(),                     // t -> { a... }
+    compose( reverse, RInit<2>() ) // t -> { b, c } -> { c, b }
+);
 
 /* APLICATION */
 
