@@ -246,6 +246,56 @@ template< size_t i > struct XOfI : Id {
     constexpr XOfI() : Id() { }
 };
 
+template< template<size_t> class Fi, size_t i, class F, class ...T >
+constexpr auto applyRowBy( const F& f, T&& ...t )
+    -> decltype( f( Fi<i>()(forward<T>(t))... ) )
+{
+    return f( Fi<i>()(forward<T>(t))... );
+}
+
+template< size_t i, class F, class ...T >
+constexpr auto applyRow( F&& f, T&& ...t )
+    -> decltype( forward<F>(f)( get<i>(forward<T>(t))... ) )
+{
+    return forward<F>(f)( get<i>(forward<T>(t))... );
+}
+
+template< template<size_t> class Fi, size_t ...i, class R, class F, class ...T >
+constexpr auto applyRowsBy( const R& r, const F& f, T&& ...t )
+    -> decltype( r( applyRowBy<Fi,i>(f,forward<T>(t)...)... ) )
+{
+    return r( applyRowBy<Fi,i>(f,forward<T>(t)...)... );
+}
+
+template< size_t ...i, class R, class F, class ...T >
+constexpr auto applyRows( const R& r, const F& f, T&& ...t )
+    -> decltype( r( applyRow<i>(f,forward<T>(t)...)... ) )
+{
+    return r( applyRow<i>(f,forward<T>(t)...)... );
+}
+
+template< template<size_t> class Fi, size_t ...i, class R, class F, class ...T >
+constexpr auto applyIndexedRowsBy( IndexList<i...>, const R& r, const F& f, T&& ...t )
+    -> decltype( applyRowBy<Fi,i...>( r, f, forward<T>(t)... ) )
+{
+    return applyRowBy<Fi,i...>( r, f, forward<T>(t)... );
+}
+
+template< size_t ...i, class R, class F, class ...T >
+constexpr auto applyIndexedRows( IndexList<i...>, const R& r, const F& f, T&& ...t )
+    -> decltype( applyRows<i...>( r, f, forward<T>(t)... ) )
+{
+    return applyRows<i...>( r, f, forward<T>(t)... );
+}
+
+template< size_t ...i, class R, class F, class T, class ...U,
+          class IS = TupleIndicies<T> >
+constexpr auto applyTupleRows( const R& r, const F& f, T&& t, U&& ...u )
+    -> decltype( applyIndexedRows<i...>(IS(),r,f,forward<T>(t),forward<U>(u)...) )
+{
+    return applyIndexedRows<i...>( IS(), r, f, forward<T>(t), forward<U>(u)... );
+}
+
 template< template<size_t> class Fi, size_t ...i, class F, class X >
 constexpr auto applyIndiciesBy( F&& f, X&& x )
     -> decltype( forward<F>(f)( Fi<i>()(forward<X>(x))... ) )
@@ -456,32 +506,14 @@ constexpr struct RCons : Chainable<RCons> {
  * zipWith : (a -> b) x {a...} -> {b...}
  * zipWith( f, {x,y}, {a,b} ) = { f(x,a), f(y,b) }
  */
-
-// Helper
-// zipRow : (a -> b) x {...,a,...} -> {...,b,...}
-template< size_t i, class F, class ...T >
-constexpr auto zipRowWith( const F& f, T&& ...t )
-    -> decltype( f( get<i>(forward<T>(t))... ) )
-{
-    return f( get<i>(forward<T>(t))... );
-}
-
 constexpr struct ZipWith : Binary<ZipWith> {
     using Binary<ZipWith>::operator();
 
-    template< size_t ...I, class F, class ...T >
-    static constexpr auto _zip (IndexList<I...>, const F& f, T&& ...t )
-        -> decltype( tuple(zipRowWith<I>(f,declval<T>()...)...) )
+    template< class F, class ...T >
+    constexpr auto operator () ( const F& f, T&& ...t )
+        -> decltype( applyTupleRows( tuple, f, forward<T>(t)... ) )
     {
-        return tuple( zipRowWith<I>( f, forward<T>(t)... )... );
-    }
-
-    template< class F, class T, class ...U,
-              class IS = TupleIndicies<T> >
-    constexpr auto operator () ( const F& f, T&& t, U&& ...u )
-        -> decltype( _zip(IS(),f,declval<T>(),declval<U>()...) )
-    {
-        return _zip( IS(), f, forward<T>(t), forward<U>(u)... );
+        return applyTupleRows( tuple, f, forward<T>(t)... );
     }
 } zipWith{};
 
