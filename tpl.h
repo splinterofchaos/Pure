@@ -75,13 +75,15 @@ struct IFromTuple< P, std::tuple<X...> > {
     enum { value = IFromType<P,0,X...>::value };
 };
 
-template< class X > struct IOfType {
-    template< class Y > struct SameType {
-        enum { value = std::is_same< Decay<X>, Decay<Y> >::value };
-    };
+template< class X > struct Type {
+    template< class Y > struct Same    : std::is_same<X,Y> { };
+    template< class Y > struct Similar : std::is_convertible<X,Y> { };
+    template< class Y > struct Base    : std::is_base_of<X,Y> { };
+};
 
+template< class X > struct IOfType {
     template< class T >
-    using type = IFromTuple< SameType, T >;
+    using type = IFromTuple< Type<X>::template Same, T >;
 
     template< class T >
     constexpr size_t get() {
@@ -95,12 +97,8 @@ constexpr size_t iOfType() {
 }
 
 template< class X > struct IOfSimilar {
-    template< class Y > struct Similar {
-        enum { value = std::is_convertible<X,Y>::value };
-    };
-
     template< class T >
-    using type = IFromTuple< Similar, T >;
+    using type = IFromTuple< Type<X>::template Similar, T >;
 
     template< class T >
     constexpr size_t get() {
@@ -130,17 +128,11 @@ struct SelectI {
 
 /* gett - Get the first element of type X. */
 template< class X > struct GetT {
-    constexpr GetT() {}
-
-    template< class Y > struct SameType {
-        enum { value = std::is_same< Decay<X>, Decay<Y> >::value };
-    };
-
-    template< class T, class Find = SelectI<SameType,Get> >
+    template< class T, class G = Get<iOfType<X,T>()> >
     constexpr auto operator () ( T&& t )
-        -> decltype( Find()( forward<T>(t) ) )
+        -> decltype( G()( forward<T>(t) ) )
     {
-        return Find()( forward<T>(t) );
+        return G()( forward<T>(t) );
     }
 };
 
@@ -153,13 +145,7 @@ constexpr auto gett( T&& t )
 
 /* gets - Get the first element similar to X. */
 template< class X > struct GetS {
-    constexpr GetS() {}
-
-    template< class Y > struct Convertable {
-        enum { value = std::is_convertible<X,Y>::value };
-    };
-
-    template< class T, class Find = SelectI<Convertable,Get> >
+    template< class T, class Find = SelectI<Type<X>::template Similar,Get> >
     constexpr auto operator () ( T&& t )
         -> decltype( Find()( forward<T>(t) ) )
     {
