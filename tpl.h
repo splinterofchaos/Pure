@@ -299,7 +299,7 @@ constexpr auto applyIndicies( F&& f, T&& t )
 
 template< size_t ...i, class F, class T >
 constexpr auto applyIndexList( IndexList<i...>, F&& f, T&& t )
-    -> Result< F, Elem<i,T>... >
+    -> decltype( forward<F>(f)( get<i>(forward<T>(t))... ) )
 {
     return forward<F>(f)( get<i>(forward<T>(t))... );
 }
@@ -622,8 +622,32 @@ constexpr auto over = bcompose( cons, id, RGet<1>() );
 /* tuck : { a..., b, c } -> { a..., c, b, c } */
 constexpr auto tuck = bcompose( cons, swap, last );
 
-/* APLICATION */
+template< size_t N, class F, class T >
+constexpr auto applyNary( F&& f, T&& t )
+    -> decltype( cons( init<N>(forward<T>(t)),
+                       applyTuple(forward<F>(f),rinit<N>(forward<T>(t))) ) )
+{
+    return cons( init<N>(forward<T>(t)),
+                 applyTuple(forward<F>(f),rinit<N>(forward<T>(t))) );
+}
 
+template< size_t N > struct ApplyNary : Binary<ApplyNary<N>> {
+    using Binary<ApplyNary<N>>::operator();
+
+    template< class F, class T >
+    constexpr auto operator () ( F&& f, T&& t )
+        -> decltype( applyNary<N>( forward<F>(f), forward<T>(t) ) )
+    {
+        return applyNary<N>( forward<F>(f), forward<T>(t) );
+    }
+};
+
+constexpr auto applyUnary  = ApplyNary<1>();
+constexpr auto applyBinary = ApplyNary<2>();
+
+
+
+/* APLICATION */
 
 /* 
  * Completely flatten a tuple.

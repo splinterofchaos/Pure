@@ -269,6 +269,8 @@ int main()
         auto t = tuple(1,2,3,4,5);
 
         printf( "t = %s\n", show(t).c_str() );
+        printf( "applyBinary (+) t = %s\n",
+                show( applyBinary(add,t) ).c_str() );
 
         auto arr = toArray( t );
         printf( "toArray t = %s\n", show(arr).c_str() );
