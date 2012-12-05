@@ -613,6 +613,15 @@ constexpr auto swap = bcompose (
     compose( reverse, RInit<2>() ) // t -> { b, c } -> { c, b }
 );
 
+/* nip : { a..., b, c } -> { a..., c } */
+constexpr auto nip = bcompose( cons, Init<2>(), last );
+
+/* over : { a..., b, c } -> { a..., b, c, b } */
+constexpr auto over = bcompose( cons, id, RGet<1>() );
+
+/* tuck : { a..., b, c } -> { a..., c, b, c } */
+constexpr auto tuck = bcompose( cons, swap, last );
+
 /* APLICATION */
 
 

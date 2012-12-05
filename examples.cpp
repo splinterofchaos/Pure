@@ -282,6 +282,9 @@ int main()
         printf( "rot t = %s\n", show(tpl::rot(t)).c_str() );
         printf( "dup t = %s\n", show(tpl::dup(t)).c_str() );
         printf( "swap t = %s\n", show(tpl::swap(t)).c_str() );
+        printf( "nip t = %s\n", show(tpl::nip(t)).c_str() );
+        printf( "over t = %s\n", show(tpl::over(t)).c_str() );
+        printf( "tuck t = %s\n", show(tpl::tuck(t)).c_str() );
         printf( "tail t = %s\n", show(tail(t)).c_str() );
         printf( "init t = %s\n", show(init(t)).c_str() );
         printf( "nth<1> (+1) (1,2) = %s\n", show(nth<1>(add(1),tpl::pair(1,2))).c_str() );
