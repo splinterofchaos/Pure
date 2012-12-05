@@ -20,12 +20,30 @@ constexpr auto get( T&& t )
     return std::get<i>( forward<T>(t) );
 }
 
+template< size_t i, class T, size_t S = std::tuple_size<Decay<T>>::value - 1,
+          size_t j = S - i,
+          class Assert = AssertInTupleRange<j,Decay<T>> >
+constexpr auto rget( T&& t )
+    -> decltype( Assert(), get<j>(declval<T>()) )
+{
+    return get<j>( forward<T>(t) );
+}
+
 template< size_t i > struct Get {
     template< class T >
     constexpr auto operator () ( T&& t )
         -> decltype( get<i>(declval<T>()) )
     {
         return get<i>( forward<T>(t) );
+    }
+};
+
+template< size_t i > struct RGet {
+    template< class T >
+    constexpr auto operator () ( T&& t )
+        -> decltype( rget<i>(declval<T>()) )
+    {
+        return rget<i>( forward<T>(t) );
     }
 };
 
@@ -306,24 +324,11 @@ template< size_t N > struct RepeatTie {
 
 /* reverse : {a...} -> {...a} */
 constexpr struct reverse {
-    template< size_t S > struct Inverse {
-        template< size_t i >
-        using F = Get< S - i >;
-    };
-
-    template< size_t ...I, size_t S = sizeof...(I)-1, class T >
-    static constexpr auto impl( IndexList<I...>, T&& t )
-        -> std::tuple< Decay<Elem<S-I,T>>... >
-    {
-        return tuple( std::get<S-I>(forward<T>(t))... );
-    }
-
-    template< class T, class I = typename Inverse< size<T>() >::F >
+    template< class T >
     constexpr auto operator () ( T&& t )
-        -> decltype( impl( IS(), forward<T>(t) ) )
+        -> decltype( applyTupleBy<RGet>( tuple, forward<T>(t) ) )
     {
-        
-        return applyTuple
+        return applyTupleBy<RGet>( tuple, forward<T>(t) );
     }
 } reverse{};
 
