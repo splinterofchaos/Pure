@@ -272,6 +272,9 @@ int main()
         printf( "applyBinary (+) t = %s\n",
                 show( applyBinary(add,t) ).c_str() );
 
+        printf( "gett<float> {5,'hello',4.2} = %s\n",
+                show(gett<float>(tuple(5,"hello",4.2f))).c_str() );
+
         auto arr = toArray( t );
         printf( "toArray t = %s\n", show(arr).c_str() );
         printf( "toTuple( toArray(t) ) = %s\n", show(arrayToTuple(arr)).c_str() );

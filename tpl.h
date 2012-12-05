@@ -49,6 +49,72 @@ template< size_t i > struct RGet {
 
 namespace tpl {
 
+/*
+ * IFromType::value = the index of the first type for which P<X> is true.
+ * P is assumed to also use the ::value idiom.
+ */
+template< template<class...> class P, size_t i, class X, class ...Y >
+struct IFromType {
+    // Don't use enum here; GCC gives a hideous warning
+    // for mixing enum and non-enum type expressions.
+    static constexpr bool done = P<X>::value;
+    static constexpr size_t value = done ? i
+        : IFromType< P, i+1, Y... >::value;
+};
+
+template< template<class...> class P, size_t i, class X >
+struct IFromType<P,i,X> {
+    static constexpr size_t value = P<X>::value ? i : -1;
+};
+
+template< template<class...> class P, class ...X >
+struct IFromTuple;
+
+template< template<class...> class P, class ...X >
+struct IFromTuple< P, std::tuple<X...> > {
+    enum { value = IFromType<P,0,X...>::value };
+};
+
+/*
+ * Find the index, i, of the type for which P<i> is true,
+ * and forward the tuple to F<i>
+ */
+template< template<class...> class P/*redicate*/,
+          template<size_t> class F >
+struct SelectI {
+    template< class T, size_t i = IFromTuple<P,Decay<T>>::value >
+    constexpr auto operator () ( T&& t )
+        -> decltype( F<i>()( forward<T>(t) ) )
+    {
+        return F<i>()( forward<T>(t) );
+    }
+};
+
+/* gett - Get the first element of type X. */
+template< class X > struct GetT {
+    constexpr GetT() {}
+
+    template< class Y > struct SameType {
+        enum { value = std::is_same< Decay<X>, Decay<Y> >::value };
+    };
+
+    template< class T, class Find = SelectI<SameType,Get> >
+    constexpr auto operator () ( T&& t )
+        -> decltype( Find()( forward<T>(t) ) )
+    {
+        return Find()( forward<T>(t) );
+    }
+};
+
+template< class X, class T >
+constexpr auto gett( T&& t )
+    -> decltype( GetT<X>()(forward<T>(t)) )
+{
+    return GetT<X>()( forward<T>(t) );
+}
+
+
+
 /* CONSTRUCTION AND TRAITS */
 
 constexpr auto pair  = MakeBinaryT<std::pair>();
