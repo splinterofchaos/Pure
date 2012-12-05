@@ -113,6 +113,29 @@ constexpr auto gett( T&& t )
     return GetT<X>()( forward<T>(t) );
 }
 
+/* gets - Get the first element similar to X. */
+template< class X > struct GetS {
+    constexpr GetS() {}
+
+    template< class Y > struct Convertable {
+        enum { value = std::is_convertible<X,Y>::value };
+    };
+
+    template< class T, class Find = SelectI<Convertable,Get> >
+    constexpr auto operator () ( T&& t )
+        -> decltype( Find()( forward<T>(t) ) )
+    {
+        return Find()( forward<T>(t) );
+    }
+};
+
+template< class X, class T >
+constexpr auto gets( T&& t )
+    -> decltype( GetS<X>()(forward<T>(t)) )
+{
+    return GetS<X>()( forward<T>(t) );
+}
+
 
 
 /* CONSTRUCTION AND TRAITS */

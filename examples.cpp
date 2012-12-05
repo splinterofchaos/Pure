@@ -274,6 +274,8 @@ int main()
 
         printf( "gett<float> {5,'hello',4.2} = %s\n",
                 show(gett<float>(tuple(5,"hello",4.2f))).c_str() );
+        printf( "gets<float> {5,'hello',4.2} = %s\n",
+                show(gets<float>(tuple(5,"hello",4.2f))).c_str() );
 
         auto arr = toArray( t );
         printf( "toArray t = %s\n", show(arr).c_str() );
