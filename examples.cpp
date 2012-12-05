@@ -251,9 +251,14 @@ unique_ptr<int> addM2( const unique_ptr<int>& a, const unique_ptr<int>& b ) {
 
 using SSS = std::tuple<std::string,std::string,std::string>;
 
-std::tuple<SSS,SSS,SSS> sss___sss() {
+SSS sss___sss() {
     using namespace tpl;
-    return repeat<3>(reverse(SSS("hi","ho","hum")));
+    return tpl::reverse(SSS("hi","ho","hum"));
+}
+
+SSS sss___compare() {
+    using namespace tpl;
+    return SSS("hi","ho","hum");
 }
 
 int main()

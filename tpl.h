@@ -344,6 +344,7 @@ constexpr struct init {
  * Apply f to t's members.
  *
  * call : (a x b... -> c) x {a,b...} -> c
+ * call : (a x b x c... -> d) x {a,b...} x c... -> d
  * call( f, {x,y,z} ) = f(x,y,z)
  */
 constexpr struct call : Binary<call> {
@@ -500,6 +501,33 @@ constexpr struct Flatten {
         return select( forward<T>(t) );
     }
 } flatten{};
+
+/* surround : {a...} x {c...} x b -> { a..., b, c... } */
+constexpr struct Surround {
+    template< class Pre, class X, class Post >
+    constexpr auto operator () ( Pre&& pre, Post&& post, X&& x )
+        -> decltype( append (
+            forward<Pre>(pre),
+            tuple( forward<X>(x) ),
+            forward<Post>(post)
+        ) )
+
+    {
+        return append (
+            forward<Pre>(pre),
+            tuple( forward<X>(x) ),
+            forward<Post>(post)
+        );
+    }
+} surround{};
+
+/* Cut out the nth element, returning {before,after} */
+template< size_t i, class T >
+constexpr auto cutOut( T&& t )
+    -> decltype( pair( take<i>(forward<T>(t)), drop<i+1>(forward<T>(t)) ) )
+{
+    return pair( take<i>(forward<T>(t)), drop<i+1>(forward<T>(t)) );
+}
 
 /* nth -- Apply f to the nth element of t. */
 // Helper
