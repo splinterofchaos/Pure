@@ -224,28 +224,66 @@ constexpr struct last {
 template< size_t I, class X > const X& xOfI( const X& x ) { return x; }
 template< size_t I, class X >       X& xOfI(       X& x ) { return x; }
 
-template< class F, class X, size_t ...I >
-constexpr auto _repeat( F f, const X& x, IndexList<I...> )
-    -> decltype( f( xOfI<I>(x)... ) )
+template< size_t i > struct XOfI : Id {
+    constexpr XOfI() : Id() { }
+};
+
+template< template<size_t> class Fi, size_t ...i, class F, class X >
+constexpr auto applyIndiciesBy( F&& f, X&& x )
+    -> decltype( forward<F>(f)( Fi<i>()(forward<X>(x))... ) )
 {
-    // For each I, return x.
-    return f( xOfI<I>(x)... );
+    return forward<F>(f)( Fi<i>()(forward<X>(x))... );
+}
+
+template< template<size_t> class Fi, size_t ...i, class F, class X >
+constexpr auto applyIndexListBy( IndexList<i...>, F&& f, X&& x )
+    -> decltype( applyIndiciesBy<Fi,i...>(forward<F>(f),forward<X>(x)) )
+{
+    return applyIndiciesBy<Fi,i...>(forward<F>(f),forward<X>(x));
+}
+
+template< size_t ...i, class F, class T >
+constexpr auto applyIndicies( F&& f, T&& t ) 
+    -> Result< F, Elem<i,T>... >
+{
+    return forward<F>(f)( get<i>(forward<T>(t))... );
+}
+
+template< size_t ...i, class F, class T >
+constexpr auto applyIndexList( IndexList<i...>, F&& f, T&& t )
+    -> Result< F, Elem<i,T>... >
+{
+    return forward<F>(f)( get<i>(forward<T>(t))... );
+}
+
+template< class F, class T, class I = TupleIndicies<T> >
+constexpr auto applyTuple( F&& f, T&& t )
+    -> decltype( applyIndexList( I(), forward<F>(f), forward<T>(t) ) )
+{
+    return applyIndexList( I(), forward<F>(f), forward<T>(t) );
+}
+
+template< template<size_t> class Fi, class F, class T, class I = TupleIndicies<T> >
+constexpr auto applyTupleBy( F&& f, T&& t )
+    -> decltype( applyIndexListBy<Fi>( I(), forward<F>(f), forward<T>(t) ) )
+{
+    return applyIndexListBy<Fi>( I(), forward<F>(f), forward<T>(t) );
 }
 
 /* Make a tuple of N X's. */
-template< size_t N, class X >
+template< size_t N, class X, class I = BuildList<N> >
 constexpr auto repeat( const X& x )
-    -> decltype( _repeat(tuple,x,BuildList<N>()) )
+    -> decltype( applyIndexListBy<XOfI>( I(), tuple, x ) )
 {
-    return _repeat( tuple, x, BuildList<N>() );
+    return applyIndexListBy<XOfI>( I(), tuple, x );
 }
 
 /* Make a tuple of N references to x. */
-template< size_t N, class X >
+template< size_t N, class X, class I = BuildList<N> >
 constexpr auto repeatTie( X&& x )
-    -> decltype( _repeat(tie,declval<X>(),BuildList<N>()) )
+    -> decltype( applyIndexListBy<XOfI>( I(), tie, x ) )
 {
-    return _repeat( tie, forward<X>(x), BuildList<N>() );
+    return applyIndexListBy<XOfI>( I(), tie, x );
 }
 
 template< size_t N > struct Repeat {
@@ -268,6 +306,11 @@ template< size_t N > struct RepeatTie {
 
 /* reverse : {a...} -> {...a} */
 constexpr struct reverse {
+    template< size_t S > struct Inverse {
+        template< size_t i >
+        using F = Get< S - i >;
+    };
+
     template< size_t ...I, size_t S = sizeof...(I)-1, class T >
     static constexpr auto impl( IndexList<I...>, T&& t )
         -> std::tuple< Decay<Elem<S-I,T>>... >
@@ -275,11 +318,12 @@ constexpr struct reverse {
         return tuple( std::get<S-I>(forward<T>(t))... );
     }
 
-    template< class T, class IS = TupleIndicies<T> >
+    template< class T, class I = typename Inverse< size<T>() >::F >
     constexpr auto operator () ( T&& t )
         -> decltype( impl( IS(), forward<T>(t) ) )
     {
-        return impl( IS(), forward<T>(t) );
+        
+        return applyTuple
     }
 } reverse{};
 
