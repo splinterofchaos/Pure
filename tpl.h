@@ -659,14 +659,6 @@ template< size_t N > struct Nth : Binary<Nth<N>> {
     }
 };
 
-// ap helper.
-template< size_t i, class TF, class ...TX >
-constexpr auto apRow( const TF& tf, TX&& ...tx )
-    -> decltype( std::get<i>(tf)( get<i>(forward<TX>(tx))... ) )
-{
-    return std::get<i>(tf)( get<i>(forward<TX>(tx))... );
-}
-
 /*
  * Apply every function from the first tuple,
  * treating the other tuples as arguments.
@@ -677,19 +669,11 @@ constexpr auto apRow( const TF& tf, TX&& ...tx )
 constexpr struct ap : Binary<ap> {
     using Binary<ap>::operator();
 
-    template< size_t ...I, class TF, class T, class ...U >
-    static constexpr auto
-    impl( IndexList<I...>, const TF& tf, T&& t, U&& ...u )
-        -> decltype( makeSimilar<T>( apRow<I>(tf,declval<T>(),declval<U>()...)... ) )
-    {
-        return makeSimilar<T>( apRow<I>(tf,forward<T>(t),forward<U>(u)...)... );
-    }
-
-    template< class TF, class ...T, class I = TupleIndicies<TF> >
+    template< class TF, class TT = TTraits<TF>, class ...T >
     constexpr auto operator () ( const TF& tf, T&& ...t )
-        -> decltype( impl(I(),tf,forward<T>(t)...) )
+        -> decltype( applyTupleRows(TT::ctor,id,tf,forward<T>(t)...) )
     {
-        return impl( I(), tf, forward<T>(t)... );
+        return applyTupleRows( TT::ctor, id, tf, forward<T>(t)... );
     }
 } ap{};
 
@@ -767,14 +751,14 @@ constexpr struct Fork_ : Binary<Fork_> {
     // If nothing matched, send x to the leftovers.
     template< size_t N, class X, class Dsts, class Preds >
     static auto doSendWhen( const X&, Dsts&, const Preds& )
-        -> EnableWhen< N >= std::tuple_size<Dsts>::value >
+        -> EnableWhen< N >= size<Dsts>() >
     {
         return false; // No match.
     }
 
     template< size_t N, class X, class Dsts, class Preds >
     static auto doSendWhen( X& x, Dsts& dsts, const Preds& preds )
-        -> EnableWhen< (N < std::tuple_size<Dsts>::value) >
+        -> EnableWhen<( N < size<Dsts>() )>
     {
         if( std::get<N>(preds)(x) ) {
             std::get<N>(dsts).push_back( std::move(x) );
