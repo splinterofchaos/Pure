@@ -293,8 +293,8 @@ int main()
         printf( "nth<0> (+1) (1,2) = %s\n", show(nth<0>(add(1),tpl::pair(1,2))).c_str() );
         printf( "nth<1> (+1) (1,2) = %s\n", show(nth<1>(add(1),tpl::pair(1,2))).c_str() );
 
-        printf( "call (+) {1,2} = %s\n",
-                show( call(add,tuple(1,2)) ).c_str() );
+        printf( "apply (+) {1,2} = %s\n",
+                show( apply(add,tuple(1,2)) ).c_str() );
         printf( "ap {+,*} {1,2} {3,2} = %s\n",
                 show( tpl::ap(tuple(add,mult),tuple(1,2),tuple(3,2)) ).c_str() );
 

@@ -343,12 +343,12 @@ constexpr struct init {
 /*
  * Apply f to t's members.
  *
- * call : (a x b... -> c) x {a,b...} -> c
- * call : (a x b x c... -> d) x {a,b...} x c... -> d
- * call( f, {x,y,z} ) = f(x,y,z)
+ * apply : (a x b... -> c) x {a,b...} -> c
+ * apply : (a x b x c... -> d) x {a,b...} x c... -> d
+ * apply( f, {x,y,z} ) = f(x,y,z)
  */
-constexpr struct call : Binary<call> {
-    using Binary<call>::operator();
+constexpr struct Apply : Binary<Apply> {
+    using Binary<Apply>::operator();
 
     template< size_t ...I, class F, class T >
     static constexpr auto impl( IndexList<I...>, const F& f, T&& t )
@@ -363,9 +363,9 @@ constexpr struct call : Binary<call> {
     {
         return impl( IS(), f, forward<T>(t) );
     }
-} call{};
+} apply{};
 
-constexpr auto arrayToTuple = closure( call, tuple );
+constexpr auto arrayToTuple = closure( apply, tuple );
 
 /* append : {a...} x {b...} x ... -> {a..., b..., ...} */
 constexpr struct Append {
@@ -450,8 +450,8 @@ constexpr auto zip = closure( zipWith, tuple );
 /* APLICATION */
 
 /* fold : (a -> a -> b) x {a...} -> {b...} */
-constexpr auto foldl = compose( call, chainl );
-constexpr auto foldr = compose( call, chainr );
+constexpr auto foldl = compose( apply, chainl );
+constexpr auto foldr = compose( apply, chainr );
 
 /* concat : { {a...}, {b...}, ... } -> { a..., b..., ... } */
 constexpr auto concat = closure( foldl, append );
@@ -560,11 +560,11 @@ constexpr auto nth( const F& f, T&& t )
 template< size_t N, class F, class P >
 constexpr auto nth( const F& f, P&& p )
     -> typename std::enable_if <
-        isPair<P>(), decltype( call( pair, _nth<N>(f, forward<P>(p)) ) )
+        isPair<P>(), decltype( apply( pair, _nth<N>(f, forward<P>(p)) ) )
     >::type
 {
     // Inlines to pair(fst,snd).
-    return call( pair, _nth<N>(f, forward<P>(p)) );
+    return apply( pair, _nth<N>(f, forward<P>(p)) );
 }
 
 template< size_t N > struct Nth : Binary<Nth<N>> {

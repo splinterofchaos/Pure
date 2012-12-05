@@ -115,7 +115,7 @@ template< class Func > struct Arrow<Func> {
 };
 
 /* uncurry : (a x b -> c) -> ({a,b} -> c) */
-constexpr auto uncurry = tpl::call;
+constexpr auto uncurry = tpl::apply;
 
 template< template<class...> class M, class F = Id >
 struct Kleisli : Forwarder<F> {
