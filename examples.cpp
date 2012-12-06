@@ -318,6 +318,23 @@ int main()
                     zipWith( add, tuple(5,std::string("com"),1),
                                   tuple(5,"p",1), tuple(5,"uter",1) )
                 ).c_str() );
+        printf( "map (+) {1,2} {1,2} = %s\n",
+                show (
+//                    map( zipWith(map(add,tuple(1,2))), tuple(1,2) )
+                      mapTuple( map(add,tuple(1,2)), tuple(1,2) )
+//                    tpl::ap( map(add,tuple(1,2)), tuple(1,2) )
+//                    apply( closure(split,tuple(1,2)), map(add,tuple(1,2)) )
+//                    map( rclosure(fan,map(add,tuple(1,2))), tuple(1,2) )
+                ).c_str() );
+
+        printf( "map (+) {1,2} {1,2} = %s\n",
+                show (
+//                    map( zipWith(map(add,tuple(1,2))), tuple(1,2) )
+                      map( add, tuple(1,2), tuple(1,2) )
+//                    tpl::ap( map(add,tuple(1,2)), tuple(1,2) )
+//                    apply( closure(split,tuple(1,2)), map(add,tuple(1,2)) )
+//                    map( rclosure(fan,map(add,tuple(1,2))), tuple(1,2) )
+                ).c_str() );
 
         printf( "fan 10 (+1) (*10) = %s\n",
                 show( fan(10,add(1),mult(10)) ).c_str() );

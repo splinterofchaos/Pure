@@ -887,7 +887,7 @@ constexpr struct ap : Binary<ap> {
 } ap{};
 
 /* fan : a x (a -> b)... -> {b...} */
-constexpr struct fan {
+constexpr struct Fan {
     template< class X, class ...F >
     constexpr auto operator () ( const X& x, const F& ...f )
         -> decltype( tuple( f(x)... ) )
@@ -895,6 +895,52 @@ constexpr struct fan {
         return tuple( f(x)... );
     }
 } fan{};
+
+constexpr struct Map : Binary<Map> {
+    using Binary<Map>::operator();
+
+    template< class F, class T >
+    constexpr auto operator () ( F&& f, T&& t )
+        -> decltype( zipWith( forward<F>(f), forward<T>(t) ) )
+    {
+        return zipWith( forward<F>(f), forward<T>(t) );
+    }
+
+    static constexpr auto prepend  = ncompose( rcons, compose(zipWith,closet) );
+    static constexpr auto fanWith  = ncompose( ncompose( apply(fan) ), prepend );
+
+    template< class F, class T, class U >
+    constexpr auto operator () ( const F& f, const T& t, const U& u )
+        -> decltype( (*this)(fanWith(f,t),u) )
+    {
+        return (*this)( fanWith(f,t), u );
+    }
+} map{};
+
+
+constexpr struct MapTuple {
+    static constexpr struct Impl {
+        template< class TF, class X >
+        constexpr auto operator () ( const TF& tf, const X& x )
+            -> decltype( apply( fan, rcons(tf,x) ) )
+        {
+            return apply( fan, rcons(tf,x) );
+        }
+    } impl{};
+
+    template< class TF, class T >
+    constexpr auto operator () ( const TF& tf, const T& t )
+        -> decltype ( 
+            map(ncompose(apply(fan),rcons(tf)),t) 
+        )
+    {
+        return map (
+            ncompose( apply(fan), rcons(tf) ),
+            t
+        );
+    }
+} mapTuple{};
+
 
 constexpr struct fanPair {
     template< class X, class ...F >
