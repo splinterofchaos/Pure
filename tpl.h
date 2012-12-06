@@ -894,7 +894,50 @@ constexpr struct Fan {
     {
         return tuple( f(x)... );
     }
+
+    template< class X, class ...F >
+    constexpr auto operator () ( const X& x, const std::tuple<F...>& tf )
+        -> decltype( apply( (*this), rcons(tf,x) ) )
+    {
+        return apply( (*this), rcons(tf,x) );
+    }
 } fan{};
+
+constexpr auto tcloset = compose( zipWith, closet );
+
+constexpr auto concatZip = ncompose( concat, zipWith );
+
+constexpr struct CrossImpl : Chainable<CrossImpl> {
+    using Chainable<CrossImpl>::operator();
+
+    template< class T, class U >
+    constexpr auto operator () ( const T& t, const U& u )
+        -> decltype( concatZip( rcloset(fan,tcloset(cons,t)), u ) )
+    {
+        return concatZip( rcloset(fan,tcloset(cons,t)), u );
+    }
+} crossImpl{};
+
+constexpr struct Cross {
+    template< class T >
+    constexpr T operator () ( T&& t ) {
+        return forward<T>(t);
+    }
+
+    static constexpr auto prepend  = ncompose( rcons, compose(zipWith,closet) );
+    static constexpr auto fanWith  = ncompose( ncompose( apply(fan) ), prepend );
+
+    static constexpr auto closeT = closure( tcloset, tuple );
+    static constexpr auto consT = closure( tcloset, cons );
+
+    template< class T, class U, class ...V >
+    constexpr auto operator () ( const T& t, const U& u, const V& ...v )
+        //-> decltype( concat( zipWith( fanWith(cons,(*this)(t,u)), v ) ) )
+        -> decltype( crossImpl( zipWith(tuple,t), u, v... ) )
+    {
+        return crossImpl( zipWith(tuple,t), u, v... );
+    }
+} cross{};
 
 constexpr struct Map : Binary<Map> {
     using Binary<Map>::operator();
@@ -909,11 +952,11 @@ constexpr struct Map : Binary<Map> {
     static constexpr auto prepend  = ncompose( rcons, compose(zipWith,closet) );
     static constexpr auto fanWith  = ncompose( ncompose( apply(fan) ), prepend );
 
-    template< class F, class T, class U >
-    constexpr auto operator () ( const F& f, const T& t, const U& u )
-        -> decltype( (*this)(fanWith(f,t),u) )
+    template< class F, class T, class U, class ...V >
+    constexpr auto operator () ( const F& f, const T& t, const U& u, const V& ...v )
+        -> decltype( zipWith( apply(f), cross(t,u,v...) ) )
     {
-        return (*this)( fanWith(f,t), u );
+        return zipWith( apply(f), cross(t,u,v...) );
     }
 } map{};
 

@@ -327,14 +327,11 @@ int main()
 //                    map( rclosure(fan,map(add,tuple(1,2))), tuple(1,2) )
                 ).c_str() );
 
-        printf( "map (+) {1,2} {1,2} = %s\n",
-                show (
-//                    map( zipWith(map(add,tuple(1,2))), tuple(1,2) )
-                      map( add, tuple(1,2), tuple(1,2) )
-//                    tpl::ap( map(add,tuple(1,2)), tuple(1,2) )
-//                    apply( closure(split,tuple(1,2)), map(add,tuple(1,2)) )
-//                    map( rclosure(fan,map(add,tuple(1,2))), tuple(1,2) )
-                ).c_str() );
+        auto u = tuple(1,2);
+        printf( "map (+) {1,2} {1,2} = %s\n", show( map(add,u,u) ).c_str() );
+        printf( "                {1,2} x {1,2} = %s\n", show( cross(u,u) ).c_str() );
+        printf( "        {1,2} x {1,2} x {1,2} = %s\n", show( cross(u,u,u) ).c_str() );
+        printf( "map (+) {1,2} x {1,2} x {1,2} = %s\n", show( map(add,u,u,u) ).c_str() );
 
         printf( "fan 10 (+1) (*10) = %s\n",
                 show( fan(10,add(1),mult(10)) ).c_str() );
