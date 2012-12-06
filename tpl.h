@@ -417,8 +417,17 @@ constexpr auto applyIndexList( IndexList<i...>, F&& f, T&& t )
     return forward<F>(f)( get<i>(forward<T>(t))... );
 }
 
-constexpr struct ApplyTuple : Binary<ApplyTuple> {
-    using Binary<ApplyTuple>::operator();
+
+/*
+ * Apply f to t's members.
+ *
+ * apply : (a x b... -> c) x {a,b...} -> c
+ * apply : (a x b x c... -> d) x {a,b...} x c... -> d
+ * apply( f, {x,y,z} ) = f(x,y,z)
+ */
+// In full, this is tpl::apply.
+constexpr struct Apply : Binary<Apply> {
+    using Binary<Apply>::operator();
 
     template< class F, class T, class I = TupleIndicies<T> >
     constexpr auto operator () ( F&& f, T&& t )
@@ -426,24 +435,24 @@ constexpr struct ApplyTuple : Binary<ApplyTuple> {
     {
         return applyIndexList( I(), forward<F>(f), forward<T>(t) );
     }
-} applyTuple{};
+} apply{};
 
 template< template<size_t> class Fi, class F, class T, class I = TupleIndicies<T> >
-constexpr auto applyTupleBy( F&& f, T&& t )
+constexpr auto applyBy( F&& f, T&& t )
     -> decltype( applyIndexListBy<Fi>( I(), forward<F>(f), forward<T>(t) ) )
 {
     return applyIndexListBy<Fi>( I(), forward<F>(f), forward<T>(t) );
 }
 
 template< template<size_t> class Fi >
-struct ApplyTupleBy : Binary<ApplyTupleBy<Fi>> {
-    using Binary<ApplyTupleBy<Fi>>::operator();
+struct ApplyBy : Binary<ApplyBy<Fi>> {
+    using Binary<ApplyBy<Fi>>::operator();
 
     template< class F, class T >
     constexpr auto operator () ( F&& f, T&& t )
-        -> decltype( applyTupleBy<Fi>( forward<F>(f), forward<T>(t) ) )
+        -> decltype( applyBy<Fi>( forward<F>(f), forward<T>(t) ) )
     {
-        return applyTupleBy<Fi>( forward<F>(f), forward<T>(t) );
+        return applyBy<Fi>( forward<F>(f), forward<T>(t) );
     }
 };
 
@@ -510,7 +519,7 @@ template< size_t N > struct RepeatTie {
 };
 
 /* reverse : {a...} -> {...a} */
-constexpr auto reverse = ApplyTupleBy<RGet>()( tuple );
+constexpr auto reverse = ApplyBy<RGet>()( tuple );
 
 /*
  * Take each value, with the offset, N.
@@ -591,31 +600,6 @@ template< size_t N = 1 > struct RInit {
         return rinit<N>( forward<T>(t) );
     }
 };
-
-/*
- * Apply f to t's members.
- *
- * apply : (a x b... -> c) x {a,b...} -> c
- * apply : (a x b x c... -> d) x {a,b...} x c... -> d
- * apply( f, {x,y,z} ) = f(x,y,z)
- */
-constexpr struct Apply : Binary<Apply> {
-    using Binary<Apply>::operator();
-
-    template< size_t ...I, class F, class T >
-    static constexpr auto impl( IndexList<I...>, const F& f, T&& t )
-        -> decltype( f( get<I>(forward<T>(t))... ) )
-    {
-        return f( get<I>(forward<T>(t))... );
-    }
-
-    template< class F, class T, class IS = TupleIndicies<T> >
-    constexpr auto operator () ( const F& f, T&& t )
-        -> decltype( impl(IS(),f,forward<T>(t)) )
-    {
-        return impl( IS(), f, forward<T>(t) );
-    }
-} apply{};
 
 constexpr auto arrayToTuple = closure( apply, tuple );
 
@@ -738,10 +722,10 @@ constexpr auto tuck = bcompose( cons, swap, last );
 template< size_t N, class F, class T >
 constexpr auto applyNary( F&& f, T&& t )
     -> decltype( cons( init<N>(forward<T>(t)),
-                       applyTuple(forward<F>(f),rinit<N>(forward<T>(t))) ) )
+                       apply(forward<F>(f),rinit<N>(forward<T>(t))) ) )
 {
     return cons( init<N>(forward<T>(t)),
-                 applyTuple(forward<F>(f),rinit<N>(forward<T>(t))) );
+                 apply(forward<F>(f),rinit<N>(forward<T>(t))) );
 }
 
 template< size_t N > struct ApplyNary : Binary<ApplyNary<N>> {
@@ -897,6 +881,7 @@ constexpr struct ap : Binary<ap> {
     constexpr auto operator () ( const TF& tf, T&& ...t )
         -> decltype( applyTupleRows(TT::ctor,id,tf,forward<T>(t)...) )
     {
+        // Note: id fi ti... = fi( ti... )
         return applyTupleRows( TT::ctor, id, tf, forward<T>(t)... );
     }
 } ap{};

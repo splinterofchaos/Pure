@@ -39,7 +39,7 @@ string to_string( const std::tuple<X...>& t );
 constexpr struct Serialize {
     template< class X >
     std::string operator () ( const X& x ) const {
-        return demangle( typeid(x).name() ) + ":" + std::to_string(x);
+        return "(" + demangle( typeid(x).name() ) + ":" + std::to_string(x) + ")";
     }
 } serialize{};
 
@@ -49,15 +49,15 @@ template< class ...X >
 string to_string( const std::tuple<X...>& t )
 {
     using namespace pure;
-    return "<" + foldl (
+    return "{ " + foldl (
         compose( add, add.with(", ") ),
         zipWith( serialize, t )
-    ) + ">";
+    ) + "}";
 }
 
 } // namespace std
 
 int main() {
-    auto t = tuple(1,2,"hi",5.2);
+    auto t = tuple(1,2,"hi",tuple(5.2,"joe"));
     std::cout << std::to_string(t) << std::endl;
 }
