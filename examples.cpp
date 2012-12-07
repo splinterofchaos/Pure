@@ -269,8 +269,6 @@ int main()
         auto t = tuple(1,2,3,4,5);
 
         printf( "t = %s\n", show(t).c_str() );
-        printf( "applyBinary (+) t = %s\n",
-                show( applyBinary(add,t) ).c_str() );
 
         printf( "gett<float> {5,'hello',4.2} = %s\n",
                 show(gett<float>(tuple(5,"hello",4.2f))).c_str() );
@@ -282,23 +280,15 @@ int main()
         printf( "sth<float> (+1) {5,'hello',4.2} = %s\n",
                 show(sth<float>(add(1),tuple(5,"hello",4.2f))).c_str() );
 
-        auto arr = toArray( t );
-        printf( "toArray t = %s\n", show(arr).c_str() );
-        printf( "toTuple( toArray(t) ) = %s\n", show(arrayToTuple(arr)).c_str() );
-        printf( "reverse t = %s\n", show(reverse(t)).c_str() );
-
         auto rec = tuple( tuple(1,tuple(2,3)),tuple(4,5) );
         printf( "flatten %s = %s\n", show(rec).c_str(),
                 show( flatten(rec) ).c_str() );
 
         printf( "rot t = %s\n", show(tpl::rot(t)).c_str() );
         printf( "dup t = %s\n", show(tpl::dup(t)).c_str() );
-        printf( "swap t = %s\n", show(tpl::swap(t)).c_str() );
-        printf( "nip t = %s\n", show(tpl::nip(t)).c_str() );
         printf( "over t = %s\n", show(tpl::over(t)).c_str() );
-        printf( "tuck t = %s\n", show(tpl::tuck(t)).c_str() );
-        printf( "tail t = %s\n", show(tail(t)).c_str() );
-        printf( "init t = %s\n", show(init(t)).c_str() );
+        printf( "applyBinary (+) t = %s\n",
+                show( applyBinary(add,t) ).c_str() );
 
         printf( "apply (+) {1,2} = %s\n",
                 show( apply(add,tuple(1,2)) ).c_str() );
@@ -310,28 +300,13 @@ int main()
         printf( "tpl::foldr (-) {1,2,3} = %s\n",
                 show( foldr(sub,tuple(1,2,3)) ).c_str() );
 
-        printf( "zip {1,'a','hi '} {2,'b',' '} {3,'c','there'} = %s\n",
-                show( zip( tuple(1,'a',"hi"), tuple(2,'b'," "),
-                           tuple(3,'c',"there") ) ).c_str() );
-        printf( "zipWith (+) {5,'com',1} {5,'p',1} {5,'uter',1} = %s\n",
-                show (
-                    zipWith( add, tuple(5,std::string("com"),1),
-                                  tuple(5,"p",1), tuple(5,"uter",1) )
-                ).c_str() );
-        printf( "map (+) {1,2} {1,2} = %s\n",
-                show (
-//                    map( zipWith(map(add,tuple(1,2))), tuple(1,2) )
-                      mapTuple( map(add,tuple(1,2)), tuple(1,2) )
-//                    tpl::ap( map(add,tuple(1,2)), tuple(1,2) )
-//                    apply( closure(split,tuple(1,2)), map(add,tuple(1,2)) )
-//                    map( rclosure(fan,map(add,tuple(1,2))), tuple(1,2) )
-                ).c_str() );
-
         auto u = tuple(1,2);
-        printf( "map (+) {1,2} {1,2} = %s\n", show( map(add,u,u) ).c_str() );
-        printf( "                {1,2} x {1,2} = %s\n", show( cross(u,u) ).c_str() );
+        printf( "        {1,2} x {1,2} = %s\n", show( cross(u,u) ).c_str() );
+        printf( "map (+) {1,2} x {1,2} = %s\n", show( map(add,u,u) ).c_str() );
         printf( "        {1,2} x {1,2} x {1,2} = %s\n", show( cross(u,u,u) ).c_str() );
         printf( "map (+) {1,2} x {1,2} x {1,2} = %s\n", show( map(add,u,u,u) ).c_str() );
+        printf( "zip {1,2} x {1,2} x {1,2} = %s\n", show( zip(u,u,u) ).c_str() );
+        printf( "zipWith (+) {1,2} x {1,2} x {1,2} = %s\n", show( zipWith(add,u,u,u) ).c_str() );
 
         printf( "fan 10 (+1) (*10) = %s\n",
                 show( fan(10,add(1),mult(10)) ).c_str() );
@@ -340,8 +315,8 @@ int main()
 
         std::vector<int> xs = { 1, 2, 3, 4, 5, 6, 7 },
             evens, thirds, odds;
-        std::tie(xs,evens,thirds,odds) =
-            fork( xs, even, eq(0)^mod.with(3), fnot(even) );
+        std::tie( xs, evens, thirds,            odds       ) =
+            fork( xs, even,  eq(0)^mod.with(3), fnot(even) );
         printf( "evens = %s\nthirds = %s\nodds = %s\nrest = %s\n" ,
                 show(evens).c_str(), show(thirds).c_str(),
                 show(odds).c_str(),  show(xs).c_str() );
@@ -360,10 +335,7 @@ int main()
                 show( tail(evens) ).c_str(), show( init(evens) ).c_str() );
         printf( "\tinits es = %s\n", show( inits(evens) ).c_str() );
         printf( "\treverse es = %s\n", show( pure::list::reverse(evens) ).c_str() );
-        printf( "\tisPrefixOf [2,4] es = %s\n", show( prefix({2,4},evens) ).c_str() );
         printf( "\telem 2 es = %s\n",   show( elem(  2,evens) ).c_str() );
-        printf( "\tdelete 4 es = %s\n", show( erase( 4,evens) ).c_str() );
-        printf( "\tinsert 5 es = %s\n", show( insert(5,evens) ).c_str() );
         printf( "\tdeleteFirstBy (==) es [2,6] = %s\n",
                 show( eraseFirst( std::equal_to<int>(),evens,vector<int>{1,2,6} ) ).c_str() );
         printf( "\tpermutations (take 3 es) = %s\n",
@@ -420,12 +392,6 @@ int main()
                 show( nub(string("footoonopor")) ).c_str() );
         printf( "\"footo\" `union` \"onopor\" = %s\n",
                 show( sunion(string("footo"),string("onopor")) ).c_str() );
-        printf( "\"footo\" // \"onopor\" = %s\n",
-                show( difference(string("footo"),string("onopor")) ).c_str() );
-        printf( "\"footo\" `intersect` \"onopor\" = %s\n",
-                show( intersect(string("footo"),string("onopor")) ).c_str() );
-        printf( "intersectBy (<) \"footo\" \"onopor\" = %s\n",
-                show( intersectIf(pure::greater,string("footo"),string("onopor")) ).c_str() );
 
         // isspace is a macro, so we need to wrap it to pass it.
         auto is_space = [](char c){ return isspace(c); };
