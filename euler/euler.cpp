@@ -226,6 +226,7 @@ Largest<X> returnLargest( X x ) {
 }
 
 namespace pure {
+    namespace monoid {
     template< class X > struct Monoid< Largest<X> > {
         template< class Larg >
         static constexpr Larg mempty() { return Larg(); }
@@ -234,6 +235,7 @@ namespace pure {
             return a > b ? a : b;
         }
     };
+    }
 }
 
 #include "../Fold.h"
