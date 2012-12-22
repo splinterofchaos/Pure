@@ -5,54 +5,6 @@
 
 namespace pure {
 
-/*
- * chainl(b,x...) -- Apply b to x... from left to right.
- * chainl(+,1,2,3) = (1+2) + 3
- */
-constexpr struct chainl {
-    template< class Binary, class X >
-    constexpr X operator () ( const Binary&, X&& x ) {
-        return forward<X>(x);
-    }
-
-    template< class Binary, class X, class Y, class ...Z >
-    constexpr auto operator () ( Binary&& b, X&& x, Y&& y, Z&& ...z)
-        -> decltype(
-            (*this)( b, b(declval<X>(),declval<Y>()), declval<Z>()... )
-        )
-    {
-        return (*this)(
-            b,
-            b( forward<X>(x), forward<Y>(y) ),
-            forward<Z>(z)...
-        );
-    }
-} chainl{};
-
-/*
- * chainr(b,x...) -- Apply b to x... from right to left.
- * chainr(+,1,2,3) = 1 + (2+3)
- */
-constexpr struct chainr {
-    template< class Binary, class X >
-    constexpr X operator () ( const Binary&, X&& x ) {
-        return forward<X>(x);
-    }
-
-    template< class Binary, class X, class Y, class ...Z >
-    constexpr auto operator () ( const Binary& b, X&& x, Y&& y, Z&& ...z)
-        -> decltype(
-                b( (*this)(b,declval<Y>(),declval<Z>()...), declval<X>() )
-        )
-    {
-        return b (
-            // Reverse the argument order.
-            (*this)( b, forward<Y>(y), forward<Z>(z)... ),
-            // The first gets applied last.
-            forward<X>(x)
-        );
-    }
-} chainr{};
 
 /* Forwarder<F>(x...) = f(x...) */
 template< class F > struct Forwarder {
@@ -214,6 +166,59 @@ template< class D > struct Binary {
         return RPart<D,X>( D(), move(x) );
     }
 };
+
+/*
+ * chainl(b,x...) -- Apply b to x... from left to right.
+ * chainl(+,1,2,3) = (1+2) + 3
+ */
+constexpr struct Chainl : Binary<Chainl> {
+    using Binary<Chainl>::operator();
+
+    template< class F, class X >
+    constexpr X operator () ( const F&, X&& x ) {
+        return forward<X>(x);
+    }
+
+    template< class F, class X, class Y, class ...Z >
+    constexpr auto operator () ( F&& b, X&& x, Y&& y, Z&& ...z)
+        -> decltype(
+            (*this)( b, b(declval<X>(),declval<Y>()), declval<Z>()... )
+        )
+    {
+        return (*this)(
+            b,
+            b( forward<X>(x), forward<Y>(y) ),
+            forward<Z>(z)...
+        );
+    }
+} chainl{};
+
+/*
+ * chainr(b,x...) -- Apply b to x... from right to left.
+ * chainr(+,1,2,3) = 1 + (2+3)
+ */
+constexpr struct Chainr : Binary<Chainr> {
+    using Binary<Chainr>::operator();
+    template< class F, class X >
+    constexpr X operator () ( const F&, X&& x ) {
+        return forward<X>(x);
+    }
+
+    template< class F, class X, class Y, class ...Z >
+    constexpr auto operator () ( const F& b, X&& x, Y&& y, Z&& ...z)
+        -> decltype(
+                b( (*this)(b,declval<Y>(),declval<Z>()...), declval<X>() )
+        )
+    {
+        return b (
+            // Reverse the argument order.
+            (*this)( b, forward<Y>(y), forward<Z>(z)... ),
+            // The first gets applied last.
+            forward<X>(x)
+        );
+    }
+} chainr{};
+
 
 /* ConstructBinary<T>(x,y) = T<X,Y>(x,y) */
 template< template<class...> class T >
@@ -926,5 +931,42 @@ constexpr struct Min : Chainable<Min> {
         return a < b ? a : b;
     }
 } min{};
+
+template< bool b >
+struct If {
+    template< class X, class Y >
+    constexpr X operator () ( X&& x, const Y& ) {
+        return forward<X>(x);
+    }
+};
+
+template<>
+struct If<false> {
+    template< class X, class Y >
+    constexpr Y operator () ( const X&, Y&& y ) {
+        return forward<Y>(y);
+    }
+};
+
+template< template<class...> class P/*redicate*/, class T, class F >
+struct SelectF {
+    T t = T();
+    F f = F();
+
+    constexpr SelectF( T t, F f ) : t(move(t)), f(move(f)) { }
+
+    template< class ...X, class Fn = If< P<Decay<X>...>::value > >
+    constexpr auto operator () ( X&& ...x )
+        -> decltype( Fn()(t,f)( forward<X>(x)... ) )
+    {
+        return Fn()(t,f)( forward<X>(x)... );
+    }
+};
+
+template< template<class...> class P/*redicate*/, class T, class F,
+          class S = SelectF<P,T,F> >
+constexpr S selectF( T t, F f ) {
+    return S( move(t), move(f) );
+}
 
 } // namespace pure.

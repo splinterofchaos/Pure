@@ -41,7 +41,9 @@ constexpr struct Id {
     constexpr X operator () ( X&& x ) { return forward<X>(x); }
 
     template< class F, class ...X >
-    constexpr Result<F,X...> operator () ( F&& f, X&& ...x ) {
+    constexpr auto operator () ( F&& f, X&& ...x )
+        -> decltype( forward<F>(f)( forward<X>(x)... ) )
+    {
         return forward<F>(f)( forward<X>(x)... );
     }
 } id{};
