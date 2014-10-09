@@ -1,4 +1,13 @@
 
+PLEASE USE FTL INSTEAD (https://github.com/beark/ftl)
+
+This project has not been maintained for quite some time and I don't have any
+plans to work on it. FTL has slightly more modern code, a more sane internal
+design, and even if it hasn't seen an update for quite a while, should 
+probably be prefered. That being said, I do believe I've implemented a few
+things in Pure not in FTL, but they can be ported, and FTL has a few things
+missing from Pure such as sum types.
+
 INTODUCTION 
 
 Pure is an experimental library to reimplement Haskell in C++. There are many
